@@ -11,6 +11,18 @@ export interface TelegramMessage {
   sendCount?: number;
 }
 
+// --- E-C1 Shadow Integration Imports ---
+import { featureFlagManager } from './feature-flag-manager';
+import { OutboxService } from './outbox';
+
+let sharedOutboxService: OutboxService | null = null;
+function getOutboxService(): OutboxService {
+  if (!sharedOutboxService) {
+    sharedOutboxService = new OutboxService();
+  }
+  return sharedOutboxService;
+}
+
 export async function sendInvoiceToTelegram(
   botToken: string,
   chatId: string,
@@ -18,6 +30,7 @@ export async function sendInvoiceToTelegram(
   template: string
 ): Promise<boolean> {
   try {
+    const outboxState = featureFlagManager.getMultiStageFlagState('outbox_enabled');
     // Determine resend indicator
     const resendIndicator = message.isResend 
       ? ` (ارسال مجدد - ${message.sendCount || 1})` 
@@ -41,6 +54,26 @@ export async function sendInvoiceToTelegram(
       .replace(/{portal_link}/g, productionPortalLink)
       .replace(/{invoice_number}/g, message.invoiceNumber)
       .replace(/{resend_indicator}/g, resendIndicator);
+
+    // --- Phase C Shadow Mode: enqueue instead of direct send when flag ON ---
+    if (outboxState === 'on') {
+      try {
+        const outboxService = getOutboxService();
+        await outboxService.enqueueMessage({
+          type: 'TELEGRAM_MESSAGE',
+            payload: {
+              recipient: chatId,
+              message: messageText,
+              options: { parse_mode: 'HTML', disable_web_page_preview: true, botToken }
+            }
+        });
+        console.log(`📨 E-C1: Enqueued telegram message for invoice ${message.invoiceNumber} (shadow outbox)`);
+        return true; // Enqueue success considered success in shadow
+      } catch (enqueueErr) {
+        console.warn('⚠️ E-C1: Enqueue failed, falling back to direct send', enqueueErr);
+        // fallback to direct send below
+      }
+    }
 
     const telegramApiUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
     
@@ -78,8 +111,11 @@ export async function sendBulkInvoicesToTelegram(
     const sent = await sendInvoiceToTelegram(botToken, chatId, message, template);
     if (sent) {
       success++;
-      // Add delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Add delay to avoid rate limiting (only when direct send path; enqueue path does not need delay)
+      const outboxState = featureFlagManager.getMultiStageFlagState('outbox_enabled');
+      if (outboxState !== 'on') {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
     } else {
       failed++;
     }

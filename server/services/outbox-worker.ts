@@ -1,5 +1,5 @@
 // Phase C: E-C1 Telegram Outbox Worker
-// Purpose: پردازش پیام‌های outbox با exponential backoff strategy
+// Purpose: پردازش پیام‌های outbox با exponential backoff strategy + latency metrics + health tracking
 
 import { OutboxService } from './outbox';
 import { FeatureFlagManager } from './feature-flag-manager';
@@ -18,6 +18,7 @@ export class OutboxWorker {
   private intervalId: NodeJS.Timeout | null = null;
   private readonly PROCESSING_INTERVAL = 10000; // 10 seconds
   private readonly BATCH_SIZE = 5;
+  private lastBatchProcessedAt: Date | null = null;
 
   constructor(
     outboxService: OutboxService,
@@ -30,6 +31,17 @@ export class OutboxWorker {
   }
 
   /**
+   * بررسی فعال بودن پرچم چندمرحله‌ای outbox
+   */
+  private isOutboxEnabled(): boolean {
+    try {
+      return this.featureFlagManager.getMultiStageFlagState('outbox_enabled') === 'on';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * شروع پردازش پیام‌های outbox
    */
   async start(): Promise<void> {
@@ -38,9 +50,8 @@ export class OutboxWorker {
       return;
     }
 
-    const isEnabled = await this.featureFlagManager.isEnabled('outbox_enabled');
-    if (!isEnabled) {
-      console.log('Outbox worker disabled by feature flag');
+    if (!this.isOutboxEnabled()) {
+      console.log('Outbox worker disabled by multi-stage flag');
       return;
     }
 
@@ -54,7 +65,7 @@ export class OutboxWorker {
         await this.processMessages();
       } catch (error) {
         console.error('Error in OutboxWorker processing:', error);
-        await this.recordMetric('OUTBOX_WORKER_ERROR', { error: error.message });
+        await this.recordMetric('OUTBOX_WORKER_ERROR', { error: (error as any).message });
       }
     }, this.PROCESSING_INTERVAL);
   }
@@ -81,8 +92,7 @@ export class OutboxWorker {
    * پردازش دسته‌ای پیام‌های آماده
    */
   private async processMessages(): Promise<void> {
-    const isEnabled = await this.featureFlagManager.isEnabled('outbox_enabled');
-    if (!isEnabled) {
+    if (!this.isOutboxEnabled()) {
       await this.stop();
       return;
     }
@@ -101,15 +111,17 @@ export class OutboxWorker {
     const processPromises = readyMessages.map(message => 
       this.processMessage(message).catch(error => {
         console.error(`Failed to process message ${message.id}:`, error);
-        return { success: false, messageId: message.id, error: error.message };
+        return { success: false, messageId: message.id, error: (error as any).message };
       })
     );
 
     const results = await Promise.allSettled(processPromises);
     
     const successCount = results.filter(r => 
-      r.status === 'fulfilled' && r.value && r.value.success
+      r.status === 'fulfilled' && r.value && (r.value as any).success
     ).length;
+
+    this.lastBatchProcessedAt = new Date();
 
     await this.recordMetric('OUTBOX_BATCH_PROCESSING_COMPLETED', {
       totalMessages: readyMessages.length,
@@ -123,12 +135,11 @@ export class OutboxWorker {
    */
   private async processMessage(message: any): Promise<{ success: boolean; messageId: number; error?: string }> {
     const startTime = Date.now();
+    const createdAt = message.createdAt ? new Date(message.createdAt).getTime() : startTime;
     
     try {
-      // علامت‌گذاری به عنوان در حال پردازش
       await this.outboxService.markAsProcessing(message.id);
 
-      // پردازش بر اساس نوع پیام
       switch (message.type) {
         case 'TELEGRAM_MESSAGE':
           await this.processTelegramMessage(message);
@@ -143,44 +154,57 @@ export class OutboxWorker {
           throw new Error(`Unsupported message type: ${message.type}`);
       }
 
-      // علامت‌گذاری به عنوان ارسال شده
       await this.outboxService.markAsSent(message.id);
 
       const processingTime = Date.now() - startTime;
+      const endToEndLatency = Date.now() - createdAt;
+      const bucket = this.classifyLatency(endToEndLatency);
+
       await this.recordMetric('OUTBOX_MESSAGE_PROCESSED_SUCCESS', {
         messageId: message.id,
         type: message.type,
-        processingTimeMs: processingTime
+        processingTimeMs: processingTime,
+        endToEndLatencyMs: endToEndLatency,
+        latencyBucket: bucket
+      });
+
+      await this.recordMetric('OUTBOX_MESSAGE_LATENCY', {
+        messageId: message.id,
+        ms: endToEndLatency,
+        bucket
       });
 
       return { success: true, messageId: message.id };
 
-    } catch (error) {
+    } catch (error: any) {
       const processingTime = Date.now() - startTime;
-      
       await this.outboxService.markAsFailed(message.id, error.message);
-      
       await this.recordMetric('OUTBOX_MESSAGE_PROCESSED_FAILURE', {
         messageId: message.id,
         type: message.type,
         error: error.message,
         processingTimeMs: processingTime
       });
-
       return { success: false, messageId: message.id, error: error.message };
     }
   }
 
   /**
-   * پردازش پیام تلگرام
+   * طبقه‌بندی latency برای تحلیل KPI
    */
+  private classifyLatency(ms: number): string {
+    if (ms < 1000) return '<1s';
+    if (ms < 3000) return '1-3s';
+    if (ms < 5000) return '3-5s';
+    if (ms < 10000) return '5-10s';
+    return '>=10s';
+  }
+
   private async processTelegramMessage(message: any): Promise<void> {
     const { payload } = message;
-    
     if (!payload.recipient || !payload.message) {
       throw new Error('Invalid telegram message payload: missing recipient or message');
     }
-
     await this.telegramAPI.sendMessage(
       payload.recipient,
       payload.message,
@@ -188,25 +212,14 @@ export class OutboxWorker {
     );
   }
 
-  /**
-   * پردازش پیام ایمیل (پیاده‌سازی آینده)
-   */
-  private async processEmailMessage(message: any): Promise<void> {
-    // TODO: پیاده‌سازی ارسال ایمیل
+  private async processEmailMessage(_message: any): Promise<void> {
     throw new Error('Email processing not implemented yet');
   }
 
-  /**
-   * پردازش webhook (پیاده‌سازی آینده)
-   */
-  private async processWebhookMessage(message: any): Promise<void> {
-    // TODO: پیاده‌سازی webhook
+  private async processWebhookMessage(_message: any): Promise<void> {
     throw new Error('Webhook processing not implemented yet');
   }
 
-  /**
-   * ثبت متریک در guard metrics system
-   */
   private async recordMetric(eventType: string, context: Record<string, any> = {}): Promise<void> {
     try {
       await db.insert(guardMetricsEvents).values({
@@ -220,13 +233,14 @@ export class OutboxWorker {
   }
 
   /**
-   * دریافت وضعیت worker
+   * وضعیت worker شامل آخرین زمان پردازش batch
    */
-  getStatus(): { isRunning: boolean; processingInterval: number; batchSize: number } {
+  getStatus(): { isRunning: boolean; processingInterval: number; batchSize: number; lastBatchProcessedAt: string | null } {
     return {
       isRunning: this.isRunning,
       processingInterval: this.PROCESSING_INTERVAL,
-      batchSize: this.BATCH_SIZE
+      batchSize: this.BATCH_SIZE,
+      lastBatchProcessedAt: this.lastBatchProcessedAt ? this.lastBatchProcessedAt.toISOString() : null
     };
   }
 }

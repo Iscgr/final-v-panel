@@ -3,7 +3,7 @@
 
 import { db } from '../db';
 import { outbox, guardMetricsEvents } from '../../shared/schema';
-import { eq, and, lte, or, inArray } from 'drizzle-orm';
+import { eq, and, lte, or, inArray, gte, sql } from 'drizzle-orm';
 
 export interface OutboxMessage {
   type: 'TELEGRAM_MESSAGE' | 'EMAIL' | 'WEBHOOK';
@@ -45,7 +45,7 @@ export class OutboxService {
       await this.recordMetric('OUTBOX_MESSAGE_ENQUEUED', { type: message.type });
       
       return inserted.id;
-    } catch (error) {
+    } catch (error: any) {
       await this.recordMetric('OUTBOX_ENQUEUE_ERROR', { error: error.message });
       throw new Error(`Failed to enqueue message: ${error.message}`);
     }
@@ -122,7 +122,7 @@ export class OutboxService {
       await db.update(outbox)
         .set({ 
           status: 'CANCELLED',
-          errorLast: error,
+            errorLast: error,
           retryCount: newRetryCount
         })
         .where(eq(outbox.id, messageId));
@@ -154,7 +154,7 @@ export class OutboxService {
   }
 
   /**
-   * دریافت آمار outbox برای KPI monitoring
+   * دریافت آمار outbox برای KPI monitoring (کلی)
    */
   async getMetrics(): Promise<OutboxMetrics> {
     const results = await db.select({
@@ -168,7 +168,7 @@ export class OutboxService {
     const pendingMessages = results.filter(r => r.status === 'PENDING' || r.status === 'FAILED').length;
     
     const successRate = totalMessages > 0 ? (sentMessages / totalMessages) * 100 : 0;
-    const avgRetryCount = results.reduce((sum, r) => sum + (r.retryCount || 0), 0) / totalMessages || 0;
+    const avgRetryCount = totalMessages > 0 ? (results.reduce((sum, r) => sum + (r.retryCount || 0), 0) / totalMessages) : 0;
 
     return {
       totalMessages,
@@ -178,6 +178,67 @@ export class OutboxService {
       successRate,
       avgRetryCount
     };
+  }
+
+  /**
+   * Rolling window metrics (failure_rate / avg_retry) برای بازه دقیقه‌ای
+   */
+  async getWindowMetrics(windowMinutes: number = 60): Promise<any> {
+    const cutoff = new Date(Date.now() - windowMinutes * 60000);
+    const rows = await db.select({
+      status: outbox.status,
+      retryCount: outbox.retryCount,
+      createdAt: outbox.createdAt
+    }).from(outbox).where(gte(outbox.createdAt, cutoff));
+
+    const totalWindowMessages = rows.length;
+    const sent = rows.filter(r => r.status === 'SENT').length;
+    const cancelled = rows.filter(r => r.status === 'CANCELLED').length;
+    const pending = rows.filter(r => r.status === 'PENDING' || r.status === 'FAILED' || r.status === 'PROCESSING').length;
+
+    const successRateWindow = totalWindowMessages > 0 ? (sent / totalWindowMessages) * 100 : 0;
+    const failureRateWindow = totalWindowMessages > 0 ? (cancelled / totalWindowMessages) * 100 : 0;
+    const avgRetryWindow = totalWindowMessages > 0 ? (rows.reduce((s, r) => s + (r.retryCount || 0), 0) / totalWindowMessages) : 0;
+
+    return {
+      windowMinutes,
+      from: cutoff.toISOString(),
+      to: new Date().toISOString(),
+      totalWindowMessages,
+      sentWindowMessages: sent,
+      cancelledWindowMessages: cancelled,
+      pendingWindowMessages: pending,
+      successRateWindow,
+      failureRateWindow,
+      avgRetryWindow
+    };
+  }
+
+  /**
+   * Latency percentiles (P50/P95) derived from guard_metrics_events OUTBOX_MESSAGE_LATENCY events
+   * Uses Postgres percentile_cont for accuracy. Window in minutes.
+   */
+  async getLatencyPercentiles(windowMinutes: number = 60): Promise<{ windowMinutes: number; p50: number | null; p95: number | null; sampleSize: number; }> {
+    try {
+      const interval = `${windowMinutes} minutes`;
+      const result: any = await db.execute(sql`SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL ${interval};`);
+      const row = (result as any).rows?.[0];
+      return {
+        windowMinutes,
+        p50: row && row.p50 !== null ? Number(row.p50) : null,
+        p95: row && row.p95 !== null ? Number(row.p95) : null,
+        sampleSize: row ? Number(row.cnt) : 0
+      };
+    } catch (e) {
+      await this.recordMetric('OUTBOX_LATENCY_PERCENTILE_ERROR', { error: (e as any).message });
+      return { windowMinutes, p50: null, p95: null, sampleSize: 0 };
+    }
   }
 
   /**
