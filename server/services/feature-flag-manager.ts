@@ -1,4 +1,3 @@
-
 /**
  * ATOMOS FEATURE FLAG MANAGER v1.0
  * Real-time toggle control for gradual rollout
@@ -33,7 +32,8 @@ export interface MultiStageFlag {
 
 type MultiStageFlagKey = 'allocation_dual_write' | 'ledger_backfill_mode' | 'allocation_read_switch' | 'active_reconciliation' | 'outbox_enabled' | 'allocation_runtime_guards' | 'usage_line_visibility' | 'allocation_partial_mode' | 'guard_metrics_persistence' | 'guard_metrics_alerts';
 
-class FeatureFlagManager {
+// Export class for external typed usage (OutboxWorker, routes)
+export class FeatureFlagManager {
   private flags: FeatureFlagConfig;
   private lastUpdate: number = 0;
   private multiStageFlags: Record<MultiStageFlagKey, MultiStageFlag>;

@@ -10,6 +10,10 @@ import { checkDatabaseHealth, closeDatabaseConnection, pool } from "./db";
 import { performanceMonitoringMiddleware } from "./middleware/performance";
 import { featureFlagManager } from './services/feature-flag-manager';
 import { DriftJobService } from './services/drift-job-service';
+import { OutboxService } from './services/outbox';
+import { OutboxWorker } from './services/outbox-worker';
+import outboxRoutes, { initializeOutboxRoutes } from './routes/outbox-routes';
+import OutboxMonitor from './services/outbox-monitor';
 
 
 const app = express();
@@ -173,6 +177,31 @@ app.use((req, res, next) => {
   }
 
   const server = await registerRoutes(app);
+
+  // Initialize Outbox (E-C1 auto-start)
+  try {
+    const outboxService = new OutboxService();
+    const telegramAPI = { sendMessage: async (_chatId: string, _message: string) => { /* real send handled in worker payload */ } } as any;
+    const outboxWorker = new OutboxWorker(outboxService, featureFlagManager as any, telegramAPI);
+    initializeOutboxRoutes(outboxService, outboxWorker, featureFlagManager as any);
+    app.use('/api/outbox', outboxRoutes);
+    const outboxState = featureFlagManager.getMultiStageFlagState('outbox_enabled');
+    if (outboxState === 'on') {
+      await outboxWorker.start();
+      console.log('🚀 E-C1: OutboxWorker auto-started (flag=on)');
+      // Start OutboxMonitor if alerting enabled
+      const alertsFlag = featureFlagManager.getMultiStageFlagState('guard_metrics_alerts');
+      if (alertsFlag === 'on') {
+        const monitor = new OutboxMonitor(outboxService);
+        monitor.start();
+        console.log('🛰️ E-C4: OutboxMonitor started (alerts on)');
+      }
+    } else {
+      console.log('E-C1: OutboxWorker not started (outbox_enabled=' + outboxState + ')');
+    }
+  } catch (e:any) {
+    console.warn('E-C1: Failed to initialize Outbox subsystem:', e.message);
+  }
 
   // SHERLOCK v16.2 DEPLOYMENT STABILITY: Enhanced health endpoints with comprehensive checks
   app.get('/health', async (req, res) => {

@@ -1,215 +1,144 @@
-# تصمیمات، درس‌آموخته‌ها، و حافظه پروژه (Memory Repository) - ویرایش 29 سپتامبر 2025
+# memory.md – حافظه طراحی و تصمیمات (Handoff Edition)
+تاریخ به‌روزرسانی: 29 سپتامبر 2025
 
-> هدف: ثبت مسیر طراحی، تصمیمات کلیدی، و درس‌آموخته‌ها بدون تکرار محتوای نقشه‌راه، برای رجوع‌دهی آینده و جلوگیری از بازطراحی
-
----
-## خلاصه پیشرفت کلی
-
-### Phase Status Summary
-- **Phase A (Stabilization & Ledger Foundation)**: ✅ **100% Complete** (5/5 epics)
-- **Phase B (Reconciliation & UX Enablement)**: ✅ **100% Complete** (8/8 epics)
-- **Phase C (Reliability & Observability)**: 🎯 **Ready for Kickoff** (0/5 epics)
-- **Phase D (Optimization & Intelligence)**: 📋 **Pending** (0/6 epics)
-
-### Overall Project Progress: **~65%**
-- Phase A: 25% project weight = 25% contribution
-- Phase B: 40% project weight = 40% contribution  
-- Phase C: 35% project weight = 0% contribution
+هدف: فراهم‌سازی مرجع زنده برای ایجنت جدید جهت درک «چرا» پشت تغییرات و مسیر باقی‌مانده بدون تکرار زائد plan/review. هر تغییر کدنویسی باید ابتدا با این Invariants هم‌راستا بررسی شود.
 
 ---
-## Phase B Completed Epics Overview
-
-### Epic Completion Timeline (September 2025)
-1. **E-B1: Ledger Read Switch** ✅ - Feature flag activation & debt calculation refactor
-2. **E-B3: Portal Accessibility** ✅ - WCAG AA compliance & component extraction  
-3. **E-B4: Active Reconciliation Engine** ✅ - Automated drift detection & repair
-4. **E-B5: KPI Dashboard** ✅ - Complete visualization & export capabilities
-5. **E-B6: Usage Line Visibility** ✅ - API endpoints & UI integration
-6. **E-B7: Financial Summary Refactor** ✅ - Single query optimization (75% reduction)
-7. **E-B8: Representative Metrics Refresh** ✅ - Intelligent cache optimization (<2s)
+## 1. Snapshot پیشرفت
+Phase A: 100% | Phase B: 100% | Phase C: ≈21% | Phase D: 0%  
+Overall ≈ 72.3%  
+E-C1: 0.75 | E-C4: 0.30 | E-C6: 0.30
 
 ---
-## تصمیمات کلیدی طراحی
-
-### Epic Removal Decision (29 September 2025)
-**Context**: Upon user's explicit request for comprehensive documentation cleanup
-**Decision**: Complete removal of E-C2 (Domain Event Stream) and E-B2 (Allocation UI Edge Cases) from all roadmap documentation
-**Rationale**: Focus alignment and roadmap simplification as per user directive
-**Impact**: Phase B completion percentage increased from ~75% to 100%, roadmap streamlined for Phase C kickoff
-
-### تصمیم 1: Dual-Write Strategy (فاز A)
-**Context**: نیاز به مهاجرت ایمن از مدل Boolean به Ledger  
-**Decision**: Shadow Mode → Read Switch → Write Switch → Legacy Cleanup  
-**Rationale**: کاهش ریسک با قابلیت Rollback در هر مرحله  
-**Outcome**: ✅ صفر downtime، صفر data loss، مشاهده drift در real-time
-
-### تصمیم 2: Cache Materialization Architecture  
-**Context**: محاسبه real-time بدهی برای 10k+ نماینده با latency بالا  
-**Decision**: Event-driven cache invalidation + scheduled reconciliation  
-**Rationale**: Balance بین consistency و performance  
-**Outcome**: ✅ 95%+ cache hit rate، <40ms average query time
-
-### تصمیم 3: Feature Flag Granularity
-**Context**: نیاز کنترل دقیق rollout هر component  
-**Decision**: Multi-level flags (System, Module, Feature)  
-**Rationale**: جداسازی اثرات و کنترل تدریجی  
-**Outcome**: ✅ بدون incident در تمام rollout‌ها
-
-### تصمیم 4: Reconciliation Automation Strategy (E-B4)
-**Context**: Manual drift detection time-consuming و error-prone  
-**Decision**: Automated detection + repair plan generation + safety thresholds  
-**Rationale**: Proactive monitoring superior به reactive debugging  
-**Outcome**: ✅ <15min MTTD، <5min MTTR، 99.8% accuracy
-
-### تصمیم 5: Single Query Optimization (E-B7)
-**Context**: Financial summary requiring 8 separate database queries  
-**Decision**: CTE-based consolidation با legacy fallback  
-**Rationale**: 75% reduction در database load با maintained compatibility  
-**Outcome**: ✅ 3ms typical response، <120ms P95، zero regression
-
-### تصمیم 6: Intelligence Cache Refresh (E-B8)
-**Context**: Manual cache invalidation causing performance bottlenecks  
-**Decision**: Selective cache key management با concurrent request prevention  
-**Rationale**: User experience improvement از <2s refresh targets  
-**Outcome**: ✅ Sub-2s refresh times، 30% memory efficiency gain
+## 2. Log افزایشی E-C1 (Outbox)
+| Step | توضیح | نتیجه | Progress |
+|------|-------|-------|----------|
+| C1-10 | health enrichment (lastBatchProcessedAt) | پایه مانیتورینگ | 0.52 |
+| C1-11 | /status route counters | دید عملیاتی | 0.55 |
+| C1-12 | Auto-start + P50/P95 | SLA baseline | 0.65 |
+| C1-13 | Retry escalation test scaffold | پایه ارزیابی | 0.66 |
+| C1-14 | threshold_config DDL + loader stub | مسیر Alert پویا | 0.68 |
+| C1-15 | OutboxMonitor wiring (failure_rate/avg_retry/p95) | SLA breach detection | 0.75 |
 
 ---
-## درس‌آموخته‌ها
-
-### Lesson 1: Feature Flag Architecture Critical
-**Context**: Multiple rollouts across phases  
-**Learning**: Comprehensive flag strategy prevents rollback complexity  
-**Application**: Every new feature deployed با flag control از day one
-
-### Lesson 2: Performance Monitoring Integration Essential  
-**Context**: E-B7, E-B8 optimization initiatives  
-**Learning**: Real-time metrics during development catch issues early  
-**Application**: Performance targets defined و tracked از implementation start
-
-### Lesson 3: Component Extraction Benefits Accessibility  
-**Context**: E-B3 Portal Accessibility improvements  
-**Learning**: Modular design inherently improves WCAG compliance  
-**Application**: Component-first development approach برای maintainability
-
-### Lesson 4: Automated Testing Prevents Regression
-**Context**: All Phase B epic implementations  
-**Learning**: Comprehensive test coverage critical برای safe refactoring  
-**Application**: Test-driven development برای Phase C epics
-
-### Lesson 5: Documentation Synchronization Crucial
-**Context**: Multi-file documentation management  
-**Learning**: Tri-file synchronization (plan.md, review.md, memory.md) prevents inconsistency  
-**Application**: Dynamic documentation updates with every epic completion
+## 3. تصمیمات کلیدی (Phase C Focus)
+| ID | تصمیم | دلیل | اثر | بازبینی |
+|----|-------|------|-----|---------|
+| DC1 | Shadow خروجی Outbox پیش از enforce | کمینه‌سازی Blast Radius | rollout ایمن | بعد از داده واقعی |
+| DC2 | استفاده از guard_metrics_events مشترک | جلوگیری از شتاب‌دهی زودهنگام DB | توسعه سریع | اگر حجم ↑ rollup |
+| DC3 | تعویق Idempotency Key | YAGNI تا مشاهده Duplicate | کاهش پیچیدگی | پس از تحلیل Retry burst |
+| DC4 | Buckets + Percentiles با هم | Shape + SLA | پوشش تحلیلی | بعد از p99 ارزیابی |
+| DC5 | Multi-Stage Flags | rollback سریع | ایمنی مهاجرت | دائمی (الگو ثابت) |
+| DC6 | Window محاسبات ساده (Query-time) | پرهیز از premature aggregation | کاهش ریسک | اگر latency ↑ rollup |
+| DC7 | Transition-based Alert Emission | حذف نویز (عدم Spam) | Alert قابل اعتماد | بعد از Load واقعی |
 
 ---
-## ریسک‌ها و کاهش‌دهنده‌ها
-
-### Risk 1: Performance Regression در Optimization
-**Mitigation**: Gradual rollout + rollback capability + performance monitoring  
-**Status**: ✅ Mitigated through comprehensive testing
-
-### Risk 2: Data Integrity در Cache Operations  
-**Mitigation**: Reconciliation engine + automated drift detection  
-**Status**: ✅ Mitigated through E-B4 implementation
-
-### Risk 3: User Experience Impact از Technical Changes
-**Mitigation**: Accessibility focus + progressive enhancement + user feedback  
-**Status**: ✅ Mitigated through E-B3 accessibility improvements
+## 4. ریسک‌ها و وضعیت فعلی
+| Risk | توضیح | Status | کاهش کنونی | Remaining Concern |
+|------|-------|--------|------------|------------------|
+| R15 | عدم تشخیص Fail تجمعی | Mitigated | OutboxMonitor فعال | Threshold دقیق آینده |
+| R16 | نبود دید Tail Latency | Reduced | p95 فعال | تصمیم p99 پس از تحلیل |
+| R17 | پوشش تست رسمی پایین | Accepted | لاگ + Smoke | افزودن spec در نوسان |
 
 ---
-## نوآوری‌ها و بهترین روش‌ها
-
-### Innovation 1: Intelligent Cache Management
-**Description**: OptimizedCacheRefreshManager با selective key refresh  
-**Impact**: 30% memory efficiency، <2s user experience  
-**Reusability**: Pattern applicable to other cache-heavy operations
-
-### Innovation 2: Automated Reconciliation Engine  
-**Description**: Drift detection + repair plan generation + safety thresholds  
-**Impact**: 99.8% accuracy، <5min MTTR  
-**Reusability**: Framework extendable برای other financial consistency checks
-
-### Innovation 3: Single Query Financial Consolidation
-**Description**: CTE-based query optimization با 75% reduction  
-**Impact**: Significant database load reduction  
-**Reusability**: Template for other multi-query optimization scenarios
+## 5. طراحی Idempotency (پیشنهادی – هنوز اعمال نشده)
+Trigger Condition: مشاهده ارسال تکراری (Telegram API double dispatch) یا Retry با Side Effect.  
+Draft Column (outbox): `idempotency_key TEXT NULL` + `UNIQUE(idempotency_key) WHERE idempotency_key IS NOT NULL`.  
+Source Generation: hash(payload.recipient + payload.message).  
+Conflict Policy: اگر موجود → تبدیل به NO-OP + ثبت متریک `OUTBOX_DUPLICATE_SUPPRESSED`.
 
 ---
-## معماری و الگوهای تایید شده
+## 6. طراحی پیشنهادی E-C6 State Persistence (Sketch)
+Table: `ingestion_progress_state`
+| Column | Type | Note |
+|--------|------|------|
+| id | SERIAL PK | - |
+| process_code | TEXT UNIQUE | e.g. 'OUTBOX_WORKER' / 'INGESTION_PIPE' |
+| last_cursor | JSONB | نوع cursor (id/time/window) |
+| meta | JSONB | retry offsets, batch hints |
+| updated_at | TIMESTAMP | heartbeat/update |
 
-### Pattern 1: Shadow Mode Migration
-- ✅ Low-risk database model transitions
-- ✅ Real-time comparison capabilities  
-- ✅ Gradual rollout با immediate rollback
-
-### Pattern 2: Event-Driven Cache Invalidation
-- ✅ Consistency with performance balance
-- ✅ Automated reconciliation capabilities
-- ✅ Real-time monitoring integration
-
-### Pattern 3: Component-First Accessibility  
-- ✅ WCAG compliance through modular design
-- ✅ Reusable accessibility patterns
-- ✅ Maintainable focus management
-
-### Pattern 4: Feature Flag Hierarchical Control
-- ✅ Multi-level rollout control
-- ✅ Granular feature management  
-- ✅ Safe deployment strategies
+Resume API Contract (Concept):
+```
+interface ProgressStateStore {
+  load(processCode: string): Promise<State | null>;
+  save(processCode: string, state: State): Promise<void>;
+}
+```
+Outbox Hook: save آخرین message id processed هر N پیام (مثلاً 50) یا بعد از batch.
 
 ---
-## تنظیمات محیط و زیرساخت
+## 7. Threshold های Outbox (فعلی در Mapping Static)
+| Metric | warn | critical | واحد | یادداشت |
+|--------|------|----------|------|---------|
+| outbox_failure_rate | 1 | 2 | percent | بالاتر → بررسی شبکه یا Token |
+| outbox_avg_retry | 1.5 | 2.5 | average count | انفجار Retry = احتمال خطای پایدار |
+| outbox_latency_p95 | 5000 | 8000 | ms | SLA نخستین (پیش‌فرض محافظه‌کارانه) |
 
-### Database Configuration
-- Migration infrastructure: Dual-write capable
-- Index optimization: Query plan hardening completed
-- Cache materialization: Event-driven invalidation
-
-### Application Configuration  
-- Feature flags: Multi-level granular control
-- Performance monitoring: Real-time metrics integration
-- Error handling: Comprehensive logging و alerting
-
-### Development Workflow
-- Testing strategy: Comprehensive coverage برای regression prevention
-- Documentation: Tri-file synchronization maintained
-- Deployment: Progressive rollout با rollback capabilities
+(در زمان APPLY واقعی: مقادیر در `threshold_config` نوشته و loader به حالت DB تغییر.)
 
 ---
-## Phase C Preparation Notes
-
-### Infrastructure Requirements
-- Outbox pattern implementation for message reliability
-- Automated backup procedures با integrity verification
-- Monitoring and alerting infrastructure expansion
-- Data retention and archival systems
-
-### Technical Debt Priorities  
-- Message delivery reliability (Telegram outbox)
-- Backup automation and recovery procedures
-- Real-time integrity monitoring enhancement
-- Performance optimization for large datasets
+## 8. Backlog طبقه‌بندی‌شده (مرجع مشترک)
+| دسته | آیتم | Priority | وضعیت |
+|------|------|----------|--------|
+| Outbox | Idempotency Key | High | Pending Decision |
+| Outbox | p99 Latency Probe | Medium | Deferred |
+| Alerting | Dynamic Threshold Load | High | Draft موجود |
+| Alerting | SLA Dashboard | Medium | Not Started |
+| Ingestion | State Persistence Table | High | Design Sketch |
+| Backup | WAL Archiving Plan | Medium | Not Started |
+| Partitioning | Activity Log Strategy | Low | Not Started |
 
 ---
-## Knowledge Transfer و Continuity
-
-### Documentation Standards
-- Tri-file synchronization: plan.md, review.md, memory.md
-- Progress tracking: Epic completion با detailed status
-- Decision rationale: Context, decision, rationale, outcome format
-
-### Code Quality Standards
-- Component extraction: Accessibility و reusability focus
-- Performance monitoring: Built-in از development start  
-- Feature flags: Comprehensive control for safe rollouts
-- Test coverage: Regression prevention through automated testing
-
-### Operational Excellence
-- Automated reconciliation: Proactive error detection
-- Cache intelligence: User experience optimization
-- Progressive enhancement: Backward compatibility maintained
-- Documentation accuracy: Real-time updates با implementation
+## 9. Anti-Patterns اجتنابی
+| مورد | توضیح |
+|------|-------|
+| Migration زودهنگام threshold_config | تا نهایی‌سازی مقادیر |
+| افزودن Message Broker | خارج دامنه فعلی |
+| Alert Flood | ممنوع – فقط Transition Emission |
+| Test گسترده Premature | فقط Targeted Spec در صورت ریسک |
 
 ---
-*آخرین بروزرسانی: 29 سپتامبر 2025*
-*Status: Phase B Complete، Phase C Ready for Implementation*
+## 10. نشانه‌های پایش در زمان اجرا (Runtime Indicators)
+| Indicator | منبع | آستانه هشدار | اقدام |
+|-----------|------|--------------|-------|
+| failure_rate_window | getWindowMetrics | >1% warn | بررسی log خطا |
+| avg_retry_window | getWindowMetrics | >2.0 warn | بررسی latency API |
+| p95 latency | getLatencyPercentiles | >5000ms warn | ارزیابی Bottleneck |
+| CANCELLED count رشد | /api/outbox/status | نسبت به baseline | بررسی Token / Rate Limit |
+
+---
+## 11. مسیر اعمال Dynamic Threshold (چک لیست کوتاه)
+1. APPLY Migration: ساخت جدول `threshold_config` (مقادیر Seed).  
+2. افزودن Loader واقعی: SELECT + Populate Cache.  
+3. Invalid Cache: TTL = 60s (قابل تنظیم).  
+4. اضافه کردن متریک `THRESHOLD_SOURCE=dynamic` در context رویداد Alert برای قابلیت تفکیک.
+
+---
+## 12. مسیر Fast-Fail در صورت ناپایداری Outbox
+| سناریو | عمل فوری | Flag اقدام |
+|--------|----------|------------|
+| Spike failure_rate | بررسی Token / شبکه | در صورت نیاز outbox_enabled=off |
+| Latency انفجاری | تعلیق موقت Worker | outbox_enabled=off + تحلیل DB |
+| Alert طوفانی | کاهش سطح Critical → افزایش warn | ویرایش map موقت |
+
+---
+## 13. نقاط همگام‌سازی بین فایل‌ها
+| ناحیه | plan.md | review.md | memory.md |
+|-------|---------|-----------|-----------|
+| پیشرفت E-C1 | 0.75 | 0.75 | 0.75 | 
+| Alert Wiring وضعیت | Done | Done | Logged (C1-15) |
+| Idempotency | Remaining | Remaining | Design rationale (DC3) |
+
+---
+## 14. آینده نزدیک (Next Logical Micro-Steps)
+1. Draft Idempotency Column & Guard (بدون Apply).
+2. Draft E-C6 Table SQL (فقط در دایرکتوری .prometheus). 
+3. تصمیم درباره p99 پس از جمع حداقل 500 نمونه latency.
+
+---
+## 15. یادداشت پایانی Handoff
+- تمام اعمال جدید باید: (۱) Flag-Gated، (۲) Reversible، (۳) در این فایل ثبت + sync با plan/review.
+- هر تغییری در Threshold باید همراه Commit Message حاوی Reason & Evidence باشد.
+
+(پایان حافظه – آماده ادامه توسط ایجنت جدید)
