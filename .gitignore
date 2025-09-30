@@ -4,3 +4,14 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# IDE / tooling artifacts
+.vs/
+*.db
+*.db-shm
+*.db-wal
+# Copilot chat sessions / snapshots
+.vs/AgentPortalShield/copilot-chat/
+.vs/CopilotSnapshots/
+# Workspace state files
+.vs/VSWorkspaceState.json
