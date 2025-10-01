@@ -1,66 +1,245 @@
-# 🚀 MarFaNet Financial Management System
-
 <div align="center">
 
-![MarFaNet Logo](https://img.shields.io/badge/MarFaNet-Financial%20Management-blue?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMTMuMDkgOC4yNkwyMCA5TDEzLjA5IDE1Ljc0TDEyIDIyTDEwLjkxIDE1Ljc0TDQgOUwxMC45MSA4LjI2TDEyIDJaIiBmaWxsPSIjRkZGRkZGIi8+Cjwvc3ZnPgo=)
+<h1>🚀 MarFaNet (نسخه استقرار خودکار 2025)</h1>
 
-**سیستم مدیریت مالی جامع با هوش مصنوعی و قابلیت نصب یک‌مرحله‌ای**
+**پلتفرم مدیریت مالی، نمایندگان و فاکتورها با استقرار یک‌مرحله‌ای و ابزار خط فرمان**
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://docker.com/)
+[![Docker](https://img.shields.io/badge/Docker-Production-blue.svg)](https://docker.com/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-blue.svg)](https://postgresql.org/)
-[![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5+-blue.svg)](https://typescriptlang.org/)
-[![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%2B%20%7C%2022.04%2B%20%7C%2024.04%2B-orange.svg)](https://ubuntu.com/)
-
-[🌟 ویژگی‌ها](#-ویژگی‌ها) •
-[🐳 نصب Docker](#-نصب-با-docker-پیشنهادی) •
-[🚀 نصب خودکار](#-نصب-خودکار) •
-[📚 راهنمای کامل](#-راهنمای-کامل) •
-[🔧 تنظیمات](#-تنظیمات)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04%20LTS-orange.svg)](https://ubuntu.com/)
 
 </div>
 
 ---
 
-## 📖 فهرست مطالب
-
-- [معرفی سیستم](#-معرفی-سیستم)
-- [ویژگی‌های جدید](#-ویژگی‌های-جدید)
-- [معماری سیستم](#-معماری-سیستم)
-- [گزینه‌های نصب](#-گزینه‌های-نصب)
-- [نصب با Docker (پیشنهادی)](#-نصب-با-docker-پیشنهادی)
-- [نصب خودکار بهبود یافته](#-نصب-خودکار-بهبود-یافته)
-- [نصب خودکار کلاسیک](#-نصب-خودکار-کلاسیک)
-- [راهنمای تنظیم دامنه](#-راهنمای-تنظیم-دامنه)
-- [تنظیمات سرور](#-تنظیمات-سرور)
-- [استفاده از سیستم](#-استفاده-از-سیستم)
-- [API و ادغام](#-api-و-ادغام)
-- [نگهداری و پشتیبانی](#-نگهداری-و-پشتیبانی)
-- [عیب‌یابی](#-عیب‌یابی)
-- [توسعه](#-توسعه)
+## فهرست مطالب
+1. معرفی سریع
+2. ویژگی‌ها
+3. معماری
+4. نصب یک‌خطی (Production)
+5. ابزار مدیریتی `agent`
+6. متغیرهای محیطی
+7. عملیات نگهداری (Backup / Update / Restore)
+8. امنیت و توصیه‌ها
+9. عیب‌یابی سریع
+10. Roadmap
+11. مجوز
 
 ---
 
-## 🎯 معرفی سیستم
+## 1) معرفی سریع
+MarFaNet یک سرویس یکپارچه (App + API + Portal) است که با کمترین ورودی (فقط دامنه) روی Ubuntu 24.04+ نصب می‌شود. تمامی رمزها، کانفیگ‌ها و زیرساخت Docker خودکار ساخته می‌گردد.
 
-**MarFaNet** یک سیستم مدیریت مالی پیشرفته و جامع است که برای مدیریت نمایندگان فروش، فاکتورها، پرداخت‌ها و عملیات مالی در محیط کسب‌وکار فارسی طراحی شده است. این سیستم با استفاده از آخرین تکنولوژی‌های وب، Docker، و هوش مصنوعی، راهکاری کامل و امن برای مدیریت مالی ارائه می‌دهد.
-
-> 🔄 انتشار جدید: نصب «صفر تا صد» یک‌مرحله‌ای برای Ubuntu 24.04+ با اسکریپت خودکار + منوی مدیریتی agent (بکاپ، آپدیت، ریستارت، لاگ، سلامت)
-
-### 🌟 چرا MarFaNet؟
-
-- **🐳 Docker-Ready**: نصب آسان و ایزوله با containerization
-- **🔐 امنیت بالا**: احراز هویت چندمرحله‌ای و رمزگذاری
-- **⚡ نصب یک‌مرحله‌ای**: از صفر تا پروداکشن در یک دستور
-- **🤖 هوش مصنوعی**: تحلیل مالی هوشمند با Google Gemini AI
-- **🛡️ Ubuntu 22/24**: پشتیبانی کامل از آخرین نسخه‌های Ubuntu
-- **🔄 Atomic Deployment**: نصب ایمن با قابلیت rollback
-- **📱 موبایل‌محور**: طراحی ریسپانسیو برای همه دستگاه‌ها
-- **🇮🇷 فارسی‌ساز**: پشتیبانی کامل از زبان فارسی و تقویم شمسی
+### اهداف طراحی
+- Zero-Touch Deployment
+- Secrets Auto-Generation
+- Isolation & Safety (Docker Network)
+- عملیات روزمره با یک دستور (`agent`)
 
 ---
+
+## 2) ویژگی‌ها
+- نصب تمام اجزا با یک اسکریپت (Docker + Nginx + SSL + PostgreSQL + Redis)
+- تولید Admin Password, DB Password, Session Secret
+- پورتال نمایندگان: `/portal/[ID]`
+- پنل مدیریت: `/admin`
+- سازوکار Backup + ارسال اختیاری به تلگرام
+- Health Endpoint و حالت ایزوله داخلی (App فقط روی 127.0.0.1:3000)
+- آپدیت بدون تخریب دیتا (Rebuild فقط کانتینر app)
+
+---
+
+## 3) معماری
+```
+┌─────────────────────────────────────────┐
+│ Nginx (Reverse Proxy + SSL + HTTP/2)    │  ← 80 / 443
+└───────────────▲────────────────────────┘
+      │  proxy_pass
+   ┌───────┴────────────────────────┐
+   │  Node.js App (API + UI + Portal)│ ← 127.0.0.1:3000
+   └───────▲───────────┬────────────┘
+      │           │
+     PostgreSQL     Redis(Session)
+```
+
+| سرویس | نقش | شبکه | پایداری |
+|-------|-----|------|---------|
+| app | UI + API + Portal | داخلی | restart unless-stopped |
+| db | PostgreSQL 15 | داخلی | volume پایدار |
+| redis | Session/Caching | داخلی | AOF on |
+| nginx | ورودی خارجی | 80/443 | reverse proxy |
+
+---
+
+## 4) نصب یک‌خطی (Production)
+### پیش‌نیاز DNS
+دامنه باید به IP سرور اشاره کند (A Record).
+
+### اجرا
+```bash
+curl -sSL https://YOUR-CDN-DOMAIN/path/auto-install.sh | sudo bash
+```
+یا:
+```bash
+git clone -b prof https://github.com/Iscgr/AgentPortalShield.git /opt/marfanet
+cd /opt/marfanet
+sudo bash scripts/auto-install.sh
+```
+
+### خروجی نمونه
+```
+============================================================
+ نصب MarFaNet تکمیل شد
+============================================================
+دامنه: https://example.com
+پنل:  https://example.com/admin
+پورتال: https://example.com/portal/[ID]
+Admin User: admin
+Admin Pass: <RAND_PASS>
+DB Pass: <DB_PASS>
+ENV: /opt/marfanet/.env
+ابزار: agent (backup|update|restart|logs|health)
+============================================================
+```
+
+### مسیرهای مهم
+| مورد | مسیر |
+|------|------|
+| نصب | /opt/marfanet |
+| env | /opt/marfanet/.env |
+| compose | /opt/marfanet/docker-compose-stack.yml |
+| nginx.conf | /opt/marfanet/nginx.conf |
+| بکاپ‌ها | /opt/marfanet/backups |
+
+---
+
+## 5) ابزار مدیریتی `agent`
+منوی تعاملی:
+```bash
+agent
+```
+گزینه‌ها:
+```
+1) بکاپ + ارسال تلگرام
+2) آپدیت پنل
+3) ریستارت پنل
+4) نمایش لاگ
+5) وضعیت سلامت
+q) خروج
+```
+فرمان‌های مستقیم:
+```bash
+agent backup
+agent update
+agent restart
+agent logs
+agent health
+```
+فعال‌سازی تلگرام در `.env`:
+```env
+TELEGRAM_BOT_TOKEN=XXXX
+TELEGRAM_CHAT_ID=123456789
+```
+
+---
+
+## 6) متغیرهای محیطی
+| کلید | شرح | مقدار نمونه | خودکار |
+|------|-----|-------------|--------|
+| NODE_ENV | محیط اجرا | production | بله |
+| PORT | پورت داخلی اپ | 3000 | بله |
+| DATABASE_URL | URL اتصال DB | postgresql://... | بله |
+| SESSION_SECRET | کلید نشست | rand hex | بله |
+| ADMIN_USERNAME | کاربر اولیه | admin | بله |
+| ADMIN_PASSWORD | رمز اولیه | rand | بله |
+| PUBLIC_BASE_URL | دامنه اصلی | https://example.com | بله |
+| PUBLIC_PORTAL_BASE_URL | دامنه پورتال | https://example.com | بله |
+| TELEGRAM_BOT_TOKEN | بکاپ تلگرام | - | خیر |
+| TELEGRAM_CHAT_ID | چت مقصد | - | خیر |
+| SKIP_REDIS_HEALTH | کاهش نویز dev | 1 | اختیاری |
+
+---
+
+## 7) نگهداری
+بکاپ:
+```bash
+agent backup
+```
+زمانبندی:
+```bash
+crontab -e
+0 3 * * * /usr/local/bin/agent backup >/dev/null 2>&1
+```
+آپدیت:
+```bash
+agent update
+```
+ریستارت:
+```bash
+agent restart
+```
+بازیابی:
+```bash
+gunzip db_20250101_101500.sql.gz
+docker compose -f /opt/marfanet/docker-compose-stack.yml exec -T db psql -U marfanet marfanet_db < db_20250101_101500.sql
+```
+
+---
+
+## 8) امنیت و توصیه‌ها
+- پسورد admin را پس از اولین ورود تغییر دهید.
+- فعال‌سازی UFW:
+```bash
+ufw allow 22; ufw allow 80; ufw allow 443; ufw --force enable
+```
+- بررسی تمدید گواهی:
+```bash
+certbot renew --dry-run
+```
+- محدودسازی SSH به کلید:
+```bash
+sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config && systemctl restart sshd
+```
+
+---
+
+## 9) عیب‌یابی سریع
+| مشکل | بررسی | رفع |
+|------|--------|-----|
+| 502 | `docker compose logs nginx` | صحت اجرای app |
+| SSL ندارد | `ls /etc/letsencrypt/live/DOMAIN` | اجرای مجدد certbot |
+| عدم ورود | ویرایش ADMIN_PASSWORD در .env | agent restart |
+| لاگ لازم | agent logs | تحلیل خطا |
+| بکاپ ارسال نشد | مقادیر تلگرام | تصحیح و تکرار |
+
+Health:
+```bash
+curl -s https://example.com/health | jq
+```
+
+---
+
+## 10) Roadmap
+- Remote S3 Backup
+- Multi-Node Scaling
+- Advanced Metrics & Alerting
+- OTP & MFA
+- ماژول گزارش‌گیری BI
+
+---
+
+## 11) مجوز و قدردانی
+مجوز: MIT
+
+اگر مفید بود ⭐ بدهید.
+
+ساخته شده با ❤️ برای اکوسیستم فارسی.
+
+---
+
+<div align="center"><sub>MarFaNet Autonomous Deployment Edition © 2025</sub></div>
 
 ## ✨ ویژگی‌های جدید
 
