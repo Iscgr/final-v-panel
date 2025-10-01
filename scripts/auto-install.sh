@@ -47,12 +47,13 @@ log "مرحله 1: بررسی سیستم عامل"
 if ! grep -qi 'ubuntu' /etc/os-release; then
   warn "سیستم عامل Ubuntu شناسایی نشد. ادامه می‌دهیم ولی تضمین کامل نیست."; fi
 
-log "مرحله 2: دریافت دامنه (فقط یکبار سؤال)"
-if [[ -z "${DOMAIN:-}" ]]; then
-  read -rp $'\nدامنه اصلی را وارد کنید (مثال: example.com): ' DOMAIN
-fi
-if [[ -z "$DOMAIN" ]]; then err "دامنه نمی‌تواند خالی باشد"; exit 1; fi
-ok "دامنه: $DOMAIN"
+log "مرحله 2: تنظیم دامنه ثابت (Hardcoded)"
+# دامنه به صورت ثابت تنظیم شده است؛ برای تغییر موقت می‌توانید قبل از اجرای اسکریپت دستور زیر را بزنید:
+# DOMAIN=example.com bash auto-install.sh
+DOMAIN_DEFAULT="marfanet.irnrefnation.com"
+DOMAIN="${DOMAIN:-$DOMAIN_DEFAULT}"
+if [[ -z "$DOMAIN" ]]; then err "دامنه خالی است"; exit 1; fi
+ok "دامنه استفاده‌شده: $DOMAIN"
 
 # Derive WWW and portal if needed (using same root domain)
 PORTAL_DOMAIN="portal.$DOMAIN" # قابل تغییر در آینده
