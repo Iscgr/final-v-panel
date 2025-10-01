@@ -2128,42 +2128,7 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  // ✅ SHERLOCK v34.0: DEPRECATED - use Enhanced Payment Allocation Engine
-  async autoAllocatePayments(representativeId: number): Promise<{
-    allocated: number;
-    totalAmount: string;
-    details: Array<{ paymentId: number; invoiceId: number; amount: string }>;
-  }> {
-    console.warn('⚠️ SHERLOCK v34.0: storage.autoAllocatePayments is DEPRECATED and will be removed in future versions. Use autoAllocatePaymentToInvoices.');
-    // This method is kept for backward compatibility and delegates to the new method.
-    // It needs to fetch a payment ID first, which is not directly available here.
-    // To make this work, we would need to find an unallocated payment for the representative.
-    // For now, we'll simulate by returning empty results or throw an error.
-
-    const unallocatedPayments = await this.getUnallocatedPayments(representativeId);
-    if (!unallocatedPayments.length) {
-      console.log('✅ SHERLOCK v34.0: No unallocated payments found for representative.');
-      return { allocated: 0, totalAmount: '0', details: [] };
-    }
-
-    // Pick the first unallocated payment to demonstrate the call.
-    // In a real scenario, a strategy would be needed to choose which payment to allocate.
-    const paymentToAllocate = unallocatedPayments[0];
-
-    console.log(`🔄 SHERLOCK v34.0: Calling NEW autoAllocatePaymentToInvoices for representative ${representativeId} using payment ${paymentToAllocate.id}...`);
-
-    try {
-      const result = await this.autoAllocatePaymentToInvoices(paymentToAllocate.id, representativeId);
-      return {
-        allocated: result.allocated,
-        totalAmount: result.totalAmount,
-        details: result.details
-      };
-    } catch (error) {
-      console.error('❌ Error during delegated autoAllocatePayments call:', error);
-      throw error;
-    }
-  }
+  // ❌ [ODIN v5.0] AUTO-ALLOCATION REMOVED - Manual allocation only
 
   // ✅ SHERLOCK v34.1: Enhanced Auto-Allocation with ATOMOS Protocol Integration
   async autoAllocatePaymentToInvoices(paymentId: number, representativeId: number): Promise<{
@@ -2271,6 +2236,9 @@ export class DatabaseStorage implements IStorage {
               });
 
               remainingPayment -= allocateAmount;
+
+              // ✅ [ODIN v5.0] Update invoice status after allocation
+              await this.updateInvoiceStatusAfterAllocation(invoice.id);
             }
           }
 
@@ -2278,6 +2246,27 @@ export class DatabaseStorage implements IStorage {
 
           if (totalAllocated > 0) {
             console.log(`✅ SHERLOCK v35.0: Auto-allocation successful - Allocated: ${totalAllocated} to ${allocations.length} invoices`);
+
+            // ✅ [ODIN v5.0] Update payment.isAllocated if fully allocated
+            const [updatedPaymentAllocatedSummary] = await db.select({
+              totalAllocated: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmount}::numeric), 0)` 
+            })
+            .from(paymentAllocations)
+            .where(eq(paymentAllocations.paymentId, paymentId));
+
+            const updatedAllocatedAmount = Number(updatedPaymentAllocatedSummary?.totalAllocated || 0);
+            const isFullyAllocated = Math.abs(paymentAmount - updatedAllocatedAmount) < 0.01; // Tolerance for floating point
+
+            if (isFullyAllocated) {
+              await db
+                .update(payments)
+                .set({ isAllocated: true })
+                .where(eq(payments.id, paymentId));
+              
+              console.log(`✅ [ODIN v5.0] Payment ${paymentId} marked as fully allocated (${updatedAllocatedAmount}/${paymentAmount})`);
+            } else {
+              console.log(`⚠️ [ODIN v5.0] Payment ${paymentId} partially allocated (${updatedAllocatedAmount}/${paymentAmount})`);
+            }
 
             // Create activity log
             await this.createActivityLog({
@@ -2288,7 +2277,8 @@ export class DatabaseStorage implements IStorage {
                 representativeId,
                 allocatedAmount: totalAllocated,
                 allocationsCount: allocations.length,
-                details: allocations
+                details: allocations,
+                isFullyAllocated
               }
             });
 
@@ -2491,41 +2481,45 @@ export class DatabaseStorage implements IStorage {
    * SHERLOCK v22.1: Update invoice status based on payment allocation
    */
   async updateInvoiceStatusAfterAllocation(invoiceId: number): Promise<void> {
-    // Get invoice details
-    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
-    if (!invoice) return;
+    try {
+      // Import paymentAllocations schema
+      const { paymentAllocations } = await import('../shared/schema.js');
 
-    // Calculate total allocated payments for this invoice
-    const allocatedPayments = await db.select({
-      total: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`
-    }).from(payments).where(
-      and(
-        eq(payments.invoiceId, invoiceId),
-        eq(payments.isAllocated, true)
-      )
-    );
+      // Get invoice details
+      const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
+      if (!invoice) return;
 
-    const totalAllocated = allocatedPayments[0]?.total || 0;
-    const invoiceAmount = parseFloat(invoice.amount);
+      // ✅ [ODIN v5.0] Calculate total allocated payments for this invoice from payment_allocations (NEW SCHEMA)
+      const [allocatedSummary] = await db.select({
+        totalAllocated: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmount}::numeric), 0)`
+      }).from(paymentAllocations).where(eq(paymentAllocations.invoiceId, invoiceId));
 
-    // Determine new status
-    let newStatus: string;
-    if (totalAllocated >= invoiceAmount) {
-      newStatus = 'paid';
-    } else if (totalAllocated > 0) {
-      newStatus = 'partial';
-    } else {
-      newStatus = 'unpaid';
-    }
+      const totalAllocated = Number(allocatedSummary?.totalAllocated || 0);
+      const invoiceAmount = parseFloat(invoice.totalAmount);
 
-    // Update invoice status if changed
-    if (invoice.status !== newStatus) {
-      await db
-        .update(invoices)
-        .set({ status: newStatus })
-        .where(eq(invoices.id, invoiceId));
+      console.log(`🔍 [ODIN v5.0] Invoice ${invoiceId}: Amount=${invoiceAmount}, Allocated=${totalAllocated}`);
 
-      console.log(`📝 SHERLOCK v22.1: Updated invoice ${invoice.invoiceNumber} status: ${invoice.status} → ${newStatus}`);
+      // Determine new status
+      let newStatus: string;
+      if (totalAllocated >= invoiceAmount - 0.01) { // Small tolerance for floating point
+        newStatus = 'paid';
+      } else if (totalAllocated > 0) {
+        newStatus = 'partial';
+      } else {
+        newStatus = 'unpaid';
+      }
+
+      // Update invoice status if changed
+      if (invoice.status !== newStatus) {
+        await db
+          .update(invoices)
+          .set({ status: newStatus })
+          .where(eq(invoices.id, invoiceId));
+
+        console.log(`✅ [ODIN v5.0] Updated invoice ${invoice.invoiceNumber} status: ${invoice.status} → ${newStatus}`);
+      }
+    } catch (error) {
+      console.error(`❌ [ODIN v5.0] Error updating invoice ${invoiceId} status:`, error);
     }
   }
 

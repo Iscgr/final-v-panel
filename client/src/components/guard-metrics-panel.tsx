@@ -112,8 +112,24 @@ export const GuardMetricsPanel: React.FC = () => {
             </div>
             <div className="space-y-3 pt-2 border-t">
               {data.persistence && data.persistence.state !== 'off' && (
-                <div className="text-[10px] text-purple-700 dark:text-purple-300">
-                  حالت Persistence: {data.persistence.state === 'shadow' ? 'Shadow (ثبت اما نمایش summary محدود)' : data.persistence.state === 'enforce' ? 'Enforce (نمایش summary)' : data.persistence.state}
+                <div className="text-[10px] p-2 rounded bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700">
+                  <div className="font-semibold text-purple-900 dark:text-purple-200 mb-1">
+                    حالت فعلی: {data.persistence.state === 'shadow' ? '🔍 Shadow Mode' : data.persistence.state === 'enforce' ? '✅ Enforce Mode' : data.persistence.state}
+                  </div>
+                  <div className="text-purple-700 dark:text-purple-300">
+                    {data.persistence.state === 'shadow' && (
+                      <>
+                        📝 داده‌ها در دیتابیس ذخیره می‌شوند اما summary و alerts نمایش داده نمی‌شود. 
+                        این حالت برای تست و آماده‌سازی بدون تاثیر روی عملیات استفاده می‌شود.
+                      </>
+                    )}
+                    {data.persistence.state === 'enforce' && (
+                      <>
+                        🛡️ حالت کامل فعال است. تمام metrics ذخیره، تحلیل و نمایش داده می‌شوند. 
+                        alerts روی آستانه‌های تعریف شده نظارت می‌کنند.
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
               {data.persistence?.state === 'enforce' && data.persistence?.summary && (

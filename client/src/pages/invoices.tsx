@@ -137,6 +137,16 @@ export default function Invoices() {
 
   const sendToTelegramMutation = useMutation({
     mutationFn: async (invoiceIds: number[]) => {
+      // T-02 Fix: Validate Telegram config before sending
+      try {
+        const testResponse = await apiRequest('/api/test-telegram', { method: 'POST' });
+        if (!testResponse.success) {
+          throw new Error('تنظیمات تلگرام کامل نیست. لطفاً Bot Token و Chat ID را در تنظیمات وارد کنید.');
+        }
+      } catch (configError: any) {
+        throw new Error(configError.message || 'لطفاً ابتدا تنظیمات تلگرام را در صفحه تنظیمات تکمیل کنید.');
+      }
+
       const response = await apiRequest('/api/invoices/send-telegram', {
         method: 'POST',
         data: { invoiceIds }

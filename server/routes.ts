@@ -1606,12 +1606,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`📅 [ODIN v5.0] تطبیق تاریخ: ورودی="${paymentDate}" -> عادی‌سازی شده="${normalizedPaymentDate}"`);
 
-      // ✅ ODIN v5.0: تبدیل invoiceNumber به invoice_id (اگر manual allocation انتخاب شده)
+      // ✅ ODIN v5.0 - MANUAL ALLOCATION ONLY: تبدیل invoiceNumber به invoice_id
       let resolvedInvoiceId: number | null = null;
-      let allocationMode: 'auto' | 'manual' | 'none' = 'none';
 
       // پشتیبانی از هر دو روش (invoiceNumber و invoiceId) برای سازگاری
-      if (selectedInvoiceNumber && selectedInvoiceNumber !== "auto") {
+      if (selectedInvoiceNumber && selectedInvoiceNumber !== "") {
         console.log(`🔍 [ODIN v5.0] تبدیل شماره فاکتور "${selectedInvoiceNumber}" به invoice_id...`);
         resolvedInvoiceId = await storage.getInvoiceIdByNumber(selectedInvoiceNumber);
         if (!resolvedInvoiceId) {
@@ -1620,16 +1619,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             message: `فاکتور با شماره ${selectedInvoiceNumber} در سیستم موجود نیست`
           });
         }
-        allocationMode = 'manual';
         console.log(`✅ [ODIN v5.0] شماره فاکتور "${selectedInvoiceNumber}" → invoice_id: ${resolvedInvoiceId}`);
-      } else if (selectedInvoiceId && selectedInvoiceId !== "auto" && selectedInvoiceId !== "") {
+      } else if (selectedInvoiceId && selectedInvoiceId !== "") {
         // Fallback: اگر هنوز از ID استفاده می‌کنند (سازگاری با کد قدیمی)
         resolvedInvoiceId = parseInt(selectedInvoiceId);
-        allocationMode = 'manual';
         console.log(`⚠️ [ODIN v5.0] استفاده از invoice_id مستقیم (deprecated): ${resolvedInvoiceId}`);
-      } else if (selectedInvoiceNumber === "auto" || selectedInvoiceId === "auto") {
-        allocationMode = 'auto';
-        console.log(`🔄 [ODIN v5.0] Auto-allocation برای Representative ${representativeId}`);
       }
 
       // Create the payment initially as unallocated
@@ -1643,8 +1637,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let finalPaymentStatus = newPayment;
 
-      // ✅ ODIN v5.0: UNIFIED ALLOCATION با استفاده از invoice_id که از invoiceNumber تبدیل شده
-      if (allocationMode === 'manual' && resolvedInvoiceId) {
+      // ✅ ODIN v5.0 - MANUAL ALLOCATION ONLY: تخصیص دستی به فاکتور مشخص
+      if (resolvedInvoiceId) {
         console.log(`💰 [ODIN v5.0] اجرای manual allocation - Payment ${newPayment.id} → Invoice ID: ${resolvedInvoiceId}`);
 
         try {
@@ -1667,42 +1661,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error(`❌ [ODIN v5.0] Manual allocation ناموفق:`, allocationError);
           throw new Error(`خطا در تخصیص دستی: ${allocationError.message || allocationError}`);
         }
-      } else if (allocationMode === 'auto') {
-          console.log(`🔄 [ODIN v5.0] اجرای auto-allocation برای Representative ${representativeId}`);
-
-          try {
-            const allocationResult = await storage.autoAllocatePaymentToInvoices(newPayment.id, representativeId);
-
-            if (allocationResult.success && parseFloat(allocationResult.totalAmount) > 0) {
-              const updatedPayments = await storage.getPaymentsByRepresentative(representativeId);
-              const thisPayment = updatedPayments.find(p => p.id === newPayment.id);
-
-              finalPaymentStatus = thisPayment || newPayment;
-              console.log(`✅ [ODIN v5.0] Auto-allocation موفق - ${allocationResult.totalAmount} تومان تخصیص داده شد`);
-              console.log(`📋 [ODIN v5.0] جزئیات تخصیص:`, allocationResult.details);
-            } else {
-              console.log(`⚠️ [ODIN v5.0] Auto-allocation اجرا شد اما تخصیصی امکان‌پذیر نبود`);
-              finalPaymentStatus = newPayment;
-            }
-          } catch (autoAllocationError: any) {
-            console.error(`❌ [ODIN v5.0] Auto-allocation ناموفق:`, autoAllocationError);
-            finalPaymentStatus = newPayment;
-
-            await storage.createActivityLog({
-              type: "payment_auto_allocation_failed",
-              description: `تخصیص خودکار پرداخت ${newPayment.id} ناموفق: ${autoAllocationError.message || autoAllocationError}`,
-              relatedId: representativeId,
-              metadata: {
-                paymentId: newPayment.id,
-                error: autoAllocationError.message || autoAllocationError,
-                protocol: "ODIN v5.0"
-              }
-            });
-          }
-      }
-      // If no allocation specified, payment remains unallocated
-      else {
-        console.log(`📝 SHERLOCK v33.2: Payment ${newPayment.id} created without allocation (manual later)`);
+      } else {
+        // Payment created without allocation - can be allocated manually later
+        console.log(`📝 [ODIN v5.0] Payment ${newPayment.id} created without allocation (can be allocated manually later)`);
       }
 
       // ✅ SHERLOCK v33.2: COMPREHENSIVE FINANCIAL SYNCHRONIZATION
@@ -2301,58 +2262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Auto-allocate payments API
-  app.post("/api/payments/auto-allocate/:representativeId", authMiddleware, async (req, res) => {
-    try {
-      const representativeId = parseInt(req.params.representativeId);
-      const { amount, paymentDate, description, allocations } = req.body;
-
-      // Create the main payment record first
-      const paymentData = {
-        representativeId,
-        amount,
-        paymentDate,
-        description,
-        isAllocated: true
-      };
-
-      const payment = await storage.createPayment(paymentData);
-
-      // Process allocations for each invoice if provided
-      if (allocations && allocations.length > 0) {
-        for (const allocation of allocations) {
-          // Update invoice status
-          await storage.updateInvoice(allocation.invoiceId, {
-            status: allocation.newStatus
-          });
-        }
-      } else {
-        // SHERLOCK v1.0 FIX: Call correct auto-allocation function
-        await storage.autoAllocatePaymentToInvoices(payment.id, representativeId);
-      }
-
-      await storage.createActivityLog({
-        type: "payment_auto_allocation",
-        description: `تخصیص خودکار پرداخت ${amount} ریال برای نماینده ${representativeId}`,
-        relatedId: representativeId,
-        metadata: {
-          paymentId: payment.id,
-          amount: amount,
-          allocationsCount: allocations?.length || 0
-        }
-      });
-
-      res.json({
-        success: true,
-        payment,
-        allocatedCount: allocations?.length || 0,
-        message: "پرداخت با موفقیت ثبت و تخصیص داده شد"
-      });
-    } catch (error) {
-      console.error('Error auto-allocating payments:', error);
-      res.status(500).json({ error: "خطا در تخصیص خودکار پرداخت‌ها" });
-    }
-  });
+  // ❌ [ODIN v5.0] Auto-allocation REMOVED - Manual allocation only via POST /api/payments
 
   // Debt synchronization API - SHERLOCK v1.0 CORE FEATURE
   app.post("/api/representatives/:id/sync-debt", authMiddleware, async (req, res) => {

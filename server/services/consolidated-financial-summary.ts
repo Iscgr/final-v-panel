@@ -28,7 +28,11 @@ export interface ConsolidatedDashboardData {
   unsentTelegramInvoices: number;
   totalSalesPartners: number;
   activeSalesPartners: number;
+  // D-02 Fix: Enhanced system integrity score with guard metrics
   systemIntegrityScore: number;
+  debtScore?: number;
+  criticalEventsLastHour?: number;
+  warnEventsLastHour?: number;
   lastUpdated: string;
   queryTimeMs: number;
   cacheStatus: 'HEALTHY' | 'STALE' | 'UNAVAILABLE';
@@ -158,13 +162,26 @@ export class ConsolidatedFinancialSummaryService {
           sps.total_sales_partners,
           sps.active_sales_partners,
           
-          -- System health (simplified calculation)
+          -- D-02 Fix: System health with guard metrics consideration
+          -- Base score from debt ratio
           CASE 
             WHEN st.total_system_debt = 0 THEN 100
             WHEN st.total_system_debt < 1000000 THEN 90
             WHEN st.total_system_debt < 5000000 THEN 75
             ELSE 60
-          END as system_integrity_score
+          END as debt_score,
+          
+          -- Critical events penalty (from guard_metrics_events in last hour)
+          (SELECT COUNT(*) 
+           FROM guard_metrics_events 
+           WHERE level = 'critical' 
+           AND created_at >= NOW() - INTERVAL '1 hour') as critical_events_last_hour,
+           
+          -- Warning events count
+          (SELECT COUNT(*) 
+           FROM guard_metrics_events 
+           WHERE level = 'warn' 
+           AND created_at >= NOW() - INTERVAL '1 hour') as warn_events_last_hour
           
         FROM rep_summary rs
         CROSS JOIN invoice_summary ist
@@ -183,6 +200,18 @@ export class ConsolidatedFinancialSummaryService {
       if (!row) {
         throw new Error('No data returned from consolidated query');
       }
+
+      // D-02 Fix: Calculate system integrity score from debt + guard metrics
+      const debtScore = Number(row.debt_score) || 0;
+      const criticalEvents = Number(row.critical_events_last_hour) || 0;
+      const warnEvents = Number(row.warn_events_last_hour) || 0;
+      
+      // System Integrity Score Algorithm:
+      // Start with debt score, then apply penalties for guard metrics events
+      let systemIntegrityScore = debtScore;
+      systemIntegrityScore -= (criticalEvents * 5); // Each critical event: -5 points
+      systemIntegrityScore -= (warnEvents * 2);      // Each warning event: -2 points
+      systemIntegrityScore = Math.max(0, Math.min(100, systemIntegrityScore)); // Clamp 0-100
 
       const consolidatedData: ConsolidatedDashboardData = {
         totalRevenue: Number(row.total_revenue) || 0,
@@ -203,7 +232,11 @@ export class ConsolidatedFinancialSummaryService {
         unsentTelegramInvoices: Number(row.unsent_telegram_invoices) || 0,
         totalSalesPartners: Number(row.total_sales_partners) || 0,
         activeSalesPartners: Number(row.active_sales_partners) || 0,
-        systemIntegrityScore: Number(row.system_integrity_score) || 0,
+        // D-02 Fix: Enhanced system integrity score
+        systemIntegrityScore,
+        debtScore,
+        criticalEventsLastHour: criticalEvents,
+        warnEventsLastHour: warnEvents,
         lastUpdated: new Date().toISOString(),
         queryTimeMs,
         cacheStatus: queryTimeMs < 120 ? 'HEALTHY' : queryTimeMs < 300 ? 'STALE' : 'UNAVAILABLE'
@@ -288,6 +321,11 @@ export class ConsolidatedFinancialSummaryService {
       const telegram = (telegramResult as any).rows[0];
       const salesPartners = (salesPartnersResult as any).rows[0];
       
+      // D-02 Fix: Calculate system integrity for legacy fallback too
+      const legacyDebtScore = Number(debt?.total_debt) === 0 ? 100 : 
+                               Number(debt?.total_debt) < 1000000 ? 90 :
+                               Number(debt?.total_debt) < 5000000 ? 75 : 60;
+
       const legacyData: ConsolidatedDashboardData = {
         totalRevenue: Number(payments?.allocated_amount) || 0,
         totalDebt: Number(debt?.total_debt) || 0,
@@ -307,7 +345,9 @@ export class ConsolidatedFinancialSummaryService {
         unsentTelegramInvoices: Number(telegram?.unsent) || 0,
         totalSalesPartners: Number(salesPartners?.total) || 0,
         activeSalesPartners: Number(salesPartners?.active) || 0,
-        systemIntegrityScore: 85, // Simplified
+        // D-02 Fix: System integrity score for fallback
+        systemIntegrityScore: legacyDebtScore,
+        debtScore: legacyDebtScore,
         lastUpdated: new Date().toISOString(),
         queryTimeMs: totalTimeMs,
         cacheStatus: totalTimeMs < 120 ? 'HEALTHY' : 'STALE'
