@@ -1,6 +1,5 @@
 // src/contexts/sidebar-context.tsx
-import React,
-{
+import React, {
   createContext,
   useContext,
   useState,

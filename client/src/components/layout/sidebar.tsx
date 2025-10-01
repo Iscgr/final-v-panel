@@ -48,13 +48,15 @@ export default function Sidebar() {
     }
   };
 
+  const isCollapsed = !isExpanded; // For easier conditional rendering
+
   return (
     <TooltipProvider delayDuration={0}>
       {/* Mobile Overlay */}
-      {isOpen && (
+      {isMobileOpen && (
         <div 
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={onToggle}
+          onClick={closeMobileSidebar}
         />
       )}
       
@@ -62,7 +64,7 @@ export default function Sidebar() {
       <div className={cn(
         "admin-sidebar fixed right-0 top-0 h-screen z-50 transform transition-all duration-300 ease-in-out",
         "lg:translate-x-0",
-        isOpen ? "translate-x-0" : "translate-x-full",
+        isMobileOpen ? "translate-x-0" : "translate-x-full",
         isCollapsed ? "w-20" : "w-80"
       )}>
         {/* Logo Section */}
@@ -97,7 +99,7 @@ export default function Sidebar() {
               variant="ghost"
               size="sm"
               className="lg:hidden text-white hover:bg-white/10"
-              onClick={onToggle}
+              onClick={closeMobileSidebar}
               aria-label="بستن منوی ناوبری"
               title="بستن منوی ناوبری"
             >
@@ -114,7 +116,7 @@ export default function Sidebar() {
                 "absolute -left-3 top-20 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1.5 shadow-lg transition-all duration-300 z-50",
                 isCollapsed && "left-1/2 -translate-x-1/2"
               )}
-              onClick={() => setIsCollapsed(!isCollapsed)}
+              onClick={toggleSidebar}
               aria-label={isCollapsed ? "باز کردن منو" : "بستن منو"}
               title={isCollapsed ? "باز کردن منو" : "بستن منو"}
             >
