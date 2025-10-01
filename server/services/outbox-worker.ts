@@ -2,7 +2,7 @@
 // Purpose: پردازش پیام‌های outbox با exponential backoff strategy + latency metrics + health tracking
 
 import { OutboxService } from './outbox.js';
-import { FeatureFlagManager } from './feature-flag-manager.js';
+import { featureFlagManager } from './feature-flag-manager.js';
 import { db } from '../db';
 import { guardMetricsEvents } from '../../shared/schema';
 
@@ -12,7 +12,6 @@ export interface TelegramAPI {
 
 export class OutboxWorker {
   private readonly outboxService: OutboxService;
-  private readonly featureFlagManager: FeatureFlagManager;
   private readonly telegramAPI: TelegramAPI;
   private isRunning = false;
   private intervalId: NodeJS.Timeout | null = null;
@@ -22,11 +21,9 @@ export class OutboxWorker {
 
   constructor(
     outboxService: OutboxService,
-    featureFlagManager: FeatureFlagManager,
     telegramAPI: TelegramAPI
   ) {
     this.outboxService = outboxService;
-    this.featureFlagManager = featureFlagManager;
     this.telegramAPI = telegramAPI;
   }
 
@@ -35,7 +32,7 @@ export class OutboxWorker {
    */
   private isOutboxEnabled(): boolean {
     try {
-      return this.featureFlagManager.getMultiStageFlagState('outbox_enabled') === 'on';
+      return featureFlagManager.getMultiStageFlagState('outbox_enabled') === 'on';
     } catch {
       return false;
     }

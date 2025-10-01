@@ -216,8 +216,8 @@ app.use((req, res, next) => {
   try {
     const outboxService = new OutboxService();
     const telegramAPI = { sendMessage: async (_chatId: string, _message: string) => { /* real send handled in worker payload */ } } as any;
-    const outboxWorker = new OutboxWorker(outboxService, featureFlagManager as any, telegramAPI);
-    initializeOutboxRoutes(outboxService, outboxWorker, featureFlagManager as any);
+    const outboxWorker = new OutboxWorker(outboxService, telegramAPI);
+    initializeOutboxRoutes(outboxService, outboxWorker);
     app.use('/api/outbox', outboxRoutes);
     const outboxState = featureFlagManager.getMultiStageFlagState('outbox_enabled');
     if (outboxState === 'on') {

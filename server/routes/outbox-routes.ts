@@ -4,7 +4,7 @@
 import { Router } from 'express';
 import { OutboxService, OutboxMessage } from '../services/outbox';
 import { OutboxWorker } from '../services/outbox-worker';
-import { FeatureFlagManager } from '../services/feature-flag-manager';
+import { featureFlagManager } from '../services/feature-flag-manager';
 import { z } from 'zod';
 import { db } from '../db';
 import { outbox } from '../../shared/schema';
@@ -24,19 +24,16 @@ const enqueueMessageSchema = z.object({
 
 let outboxService: OutboxService;
 let outboxWorker: OutboxWorker;
-let featureFlagManager: FeatureFlagManager;
 
 /**
  * Initialize outbox routes with dependencies
  */
 export function initializeOutboxRoutes(
   _outboxService: OutboxService,
-  _outboxWorker: OutboxWorker,
-  _featureFlagManager: FeatureFlagManager
+  _outboxWorker: OutboxWorker
 ) {
   outboxService = _outboxService;
   outboxWorker = _outboxWorker;
-  featureFlagManager = _featureFlagManager;
 }
 
 /**
@@ -54,8 +51,15 @@ router.post('/enqueue', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid request data', details: validationResult.error.issues });
     }
 
-    const parsed = validationResult.data as OutboxMessage; // cast after schema validation
-    const messageId = await outboxService.enqueueMessage(parsed);
+    const parsed = validationResult.data;
+    const messageId = await outboxService.enqueueMessage({
+      type: parsed.type,
+      payload: {
+        recipient: parsed.payload.recipient,
+        message: parsed.payload.message,
+        options: parsed.payload.options
+      }
+    });
 
     res.json({ success: true, data: { messageId, status: 'enqueued' } });
   } catch (error: any) {
