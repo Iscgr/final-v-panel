@@ -1,7 +1,3 @@
-
-> rest-express@1.0.0 dev
-> DATABASE_URL=postgresql://postgres:postgres@localhost:5432/marfanet LOG_DIRECTORY=./logs NODE_ENV=development tsx server/index.ts
-
 🔧 Database Environment Detected: local
 📡 Connection String: postgresql://postgres:***@localhost:5432/marfanet
 🚀 Initializing local database connection...
@@ -9,17 +5,25 @@
 ✅ PHASE 9: Integration health routes registered
 💗 Periodic health monitoring started (every 30s)
 ✅ Database connection initialized successfully
-[dotenv@17.2.2] injecting env (20) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
-10:45:23 PM [express] Checking database connection...
-📝 Log directory initialized: ./logs
-10:45:23 PM [database] Database connection successful
+[dotenv@17.2.2] injecting env (20) from .env -- tip: 📡 auto-backup env with Radar: https://dotenvx.com/radar
+8:35:02 PM [express] Checking database connection...
+Failed to initialize logging directory: Error: EACCES: permission denied, mkdir '/var/log/marfanet'
+    at async Object.mkdir (node:internal/fs/promises:858:10)
+    at async UnifiedErrorManager.initializeLogging (/workspaces/final-v-panel/server/unified-error-manager.ts:104:7) {
+  errno: -13,
+  code: 'EACCES',
+  syscall: 'mkdir',
+  path: '/var/log/marfanet'
+}
+8:35:02 PM [database] Database connection successful
 Query: select "id", "username", "password_hash", "role", "permissions", "is_active", "last_login_at", "created_at" from "admin_users" where "admin_users"."username" = $1 limit $2 -- params: ["mgr", 1]
-Query: update "admin_users" set "password_hash" = $1, "role" = $2, "is_active" = $3 where "admin_users"."username" = $4 -- params: ["$2b$12$3ZBkbkskC0Bra6hAvkObrOHYMacVdzXEhJtd8Ts4iqwqnPNvuWcDG", "SUPER_ADMIN", true, "mgr"]
+Query: update "admin_users" set "password_hash" = $1, "role" = $2, "is_active" = $3 where "admin_users"."username" = $4 -- params: ["$2b$12$1z3F45AaTfSPfn4uPQNQzu1AHDquSrRHqV/C5bCAtBph0Jf1OD5Ya", "SUPER_ADMIN", true, "mgr"]
 🔄 Admin user 'mgr' password reset successfully
 💗 Registering health check routes...
 ✅ Health check routes registered successfully
 ✅ Standardized Invoice Routes Registered
 ✅ Integration health routes registered for Phase 9
+✅ Representatives routes registered with authentication
 ✅ E-B6: Usage Line Visibility routes registered
 ✅ E-B5 Stage 3: KPI Metrics routes registered
 ✅ Batch Rollback Routes Registered
@@ -28,7 +32,7 @@ Starting OutboxWorker...
 Query: insert into "guard_metrics_events" ("id", "event_type", "level", "context", "created_at") values (default, $1, $2, $3, default) -- params: ["OUTBOX_WORKER_STARTED", "info", "{}"]
 🚀 E-C1: OutboxWorker auto-started (flag=on)
 🛰️ E-C4: OutboxMonitor started (alerts on)
-Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-09-30T21:45:23.990Z"]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:35:03.465Z"]
 Query: SELECT
           percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
           percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
@@ -40,12 +44,1571 @@ Starting server on port 3000
 DriftJobService not started (active_reconciliation=off)
 🚀 MarFaNet Server started on port 3000
 ✅ API accessible at /api/dashboard
-Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-09-30T22:45:33.990Z", 5, 5]
+
+
+Source path: /workspaces/final-v-panel/client/src/index.css
+Setting up new context...
+Finding changed files: 6.968ms
+Reading changed files: 458.115ms
+Sorting candidates: 15.567ms
+Generate rules: 532.248ms
+Build stylesheet: 9.238ms
+Potential classes:  11932
+Active contexts:  1
+JIT TOTAL: 1.632s
+
+
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:35:13.465Z", 5, 5]
+8:35:13 PM [express] GET /api/auth/me 200 in 7ms :: {"user":{"id":1,"username":"auto-admin","role":"…
+STRUCT_LOG {"ts":"2025-10-01T20:35:13.517Z","method":"GET","url":"/api/auth/me","ip":"127.0.0.1","ua":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0","status":200,"durationMs":7,"category":"auth","bytes":136}
+8:35:13 PM [express] GET /api/auth/me 200 in 4ms :: {"user":{"id":1,"username":"auto-admin","role":"…
+STRUCT_LOG {"ts":"2025-10-01T20:35:13.521Z","method":"GET","url":"/api/auth/me","ip":"127.0.0.1","ua":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0","status":200,"durationMs":4,"category":"auth","bytes":136}
+🔓 SHERLOCK v26.0: Pass-through auth middleware - no validation
+📊 SHERLOCK v32.0: Dashboard request received
+🔍 SHERLOCK v32.0: Starting dashboard data collection...
+🚀 E-B7: Executing consolidated financial summary query...
+Query: 
+        WITH 
+        -- CTE 1: Representative Summary
+        rep_summary AS (
+          SELECT 
+            COUNT(*) as total_representatives,
+            SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END) as active_representatives,
+            SUM(CASE WHEN is_active = false THEN 1 ELSE 0 END) as inactive_representatives
+          FROM representatives
+        ),
+        
+        -- CTE 2: Invoice Summary
+        invoice_summary AS (
+          SELECT 
+            COUNT(*) as total_invoices,
+            SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_invoices,
+            SUM(CASE WHEN status = 'unpaid' THEN 1 ELSE 0 END) as unpaid_invoices,
+            SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue_invoices,
+            COALESCE(SUM(CAST(amount as DECIMAL)), 0) as total_invoice_amount,
+            COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue') THEN CAST(amount as DECIMAL) ELSE 0 END), 0) as outstanding_amount
+          FROM invoices
+        ),
+        
+        -- CTE 3: Payment Summary
+        payment_summary AS (
+          SELECT 
+            COUNT(*) as total_payments,
+            COALESCE(SUM(CASE WHEN amount_dec IS NOT NULL THEN amount_dec ELSE NULLIF(regexp_replace(amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END), 0) as total_payment_amount,
+            COALESCE(SUM(CASE WHEN is_allocated = true THEN CASE WHEN amount_dec IS NOT NULL THEN amount_dec ELSE NULLIF(regexp_replace(amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0) as allocated_payment_amount,
+            COALESCE(SUM(CASE WHEN is_allocated = false THEN CASE WHEN amount_dec IS NOT NULL THEN amount_dec ELSE NULLIF(regexp_replace(amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0) as unallocated_payment_amount
+          FROM payments
+        ),
+        
+        -- CTE 4: Debt Calculation per Representative
+        debt_calculation AS (
+          SELECT 
+            r.id as representative_id,
+            COALESCE(SUM(CAST(i.amount as DECIMAL)), 0) as total_invoices,
+            COALESCE(SUM(CASE WHEN p.is_allocated = true THEN CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0) as total_allocated_payments,
+            GREATEST(0, 
+              COALESCE(SUM(CAST(i.amount as DECIMAL)), 0) - 
+              COALESCE(SUM(CASE WHEN p.is_allocated = true THEN CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0)
+            ) as representative_debt
+          FROM representatives r
+          LEFT JOIN invoices i ON r.id = i.representative_id
+          LEFT JOIN payments p ON r.id = p.representative_id
+          WHERE r.is_active = true
+          GROUP BY r.id
+        ),
+        
+        -- CTE 5: System Totals
+        system_totals AS (
+          SELECT 
+            COALESCE(SUM(representative_debt), 0) as total_system_debt,
+            COUNT(*) as active_debt_representatives
+          FROM debt_calculation
+        ),
+        
+        -- CTE 6: Telegram Unsent Invoices (D-01 Fix)
+        telegram_summary AS (
+          SELECT 
+            COUNT(*) as unsent_telegram_invoices
+          FROM invoices
+          WHERE sent_to_telegram = false
+        ),
+        
+        -- CTE 7: Active Sales Partners (D-01 Fix)
+        sales_partners_summary AS (
+          SELECT 
+            COUNT(*) as total_sales_partners,
+            COUNT(*) FILTER (WHERE is_active = true) as active_sales_partners
+          FROM sales_partners
+        )
+        
+        -- Final SELECT combining all CTEs
+        SELECT 
+          -- Revenue metrics
+          ps.allocated_payment_amount as total_revenue,
+          
+          -- Debt metrics  
+          st.total_system_debt as total_debt,
+          
+          -- Credit and outstanding (simplified)
+          ps.unallocated_payment_amount as total_credit,
+          ist.outstanding_amount as total_outstanding,
+          
+          -- Representative metrics
+          rs.total_representatives,
+          rs.active_representatives,
+          rs.inactive_representatives,
+          
+          -- Invoice metrics
+          ist.total_invoices,
+          ist.paid_invoices,
+          ist.unpaid_invoices,
+          ist.overdue_invoices,
+          
+          -- Payment metrics
+          ps.total_payments,
+          ps.total_payment_amount,
+          ps.unallocated_payment_amount,
+          
+          -- D-01 Fix: Telegram & Sales Partners metrics
+          ts.unsent_telegram_invoices,
+          sps.total_sales_partners,
+          sps.active_sales_partners,
+          
+          -- System health (simplified calculation)
+          CASE 
+            WHEN st.total_system_debt = 0 THEN 100
+            WHEN st.total_system_debt < 1000000 THEN 90
+            WHEN st.total_system_debt < 5000000 THEN 75
+            ELSE 60
+          END as system_integrity_score
+          
+        FROM rep_summary rs
+        CROSS JOIN invoice_summary ist
+        CROSS JOIN payment_summary ps
+        CROSS JOIN system_totals st
+        CROSS JOIN telegram_summary ts
+        CROSS JOIN sales_partners_summary sps
+      
+✅ Consolidated query completed in 13ms
+✅ E-B7: Consolidated query completed in 13ms
+8:35:15 PM [express] GET /api/dashboard 200 in 26ms :: {"success":true,"data":{"summary":{"totalReve…
+STRUCT_LOG {"ts":"2025-10-01T20:35:15.025Z","method":"GET","url":"/api/dashboard","ip":"127.0.0.1","ua":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0","status":200,"durationMs":26,"category":"api","bytes":976}
+🔓 SHERLOCK v26.0: Pass-through auth middleware - no validation
+📊 SHERLOCK v32.0: Dashboard request received
+🔍 SHERLOCK v32.0: Starting dashboard data collection...
+🚀 E-B7: Executing consolidated financial summary query...
+Query: 
+        WITH 
+        -- CTE 1: Representative Summary
+        rep_summary AS (
+          SELECT 
+            COUNT(*) as total_representatives,
+            SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END) as active_representatives,
+            SUM(CASE WHEN is_active = false THEN 1 ELSE 0 END) as inactive_representatives
+          FROM representatives
+        ),
+        
+        -- CTE 2: Invoice Summary
+        invoice_summary AS (
+          SELECT 
+            COUNT(*) as total_invoices,
+            SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_invoices,
+            SUM(CASE WHEN status = 'unpaid' THEN 1 ELSE 0 END) as unpaid_invoices,
+            SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue_invoices,
+            COALESCE(SUM(CAST(amount as DECIMAL)), 0) as total_invoice_amount,
+            COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue') THEN CAST(amount as DECIMAL) ELSE 0 END), 0) as outstanding_amount
+          FROM invoices
+        ),
+        
+        -- CTE 3: Payment Summary
+        payment_summary AS (
+          SELECT 
+            COUNT(*) as total_payments,
+            COALESCE(SUM(CASE WHEN amount_dec IS NOT NULL THEN amount_dec ELSE NULLIF(regexp_replace(amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END), 0) as total_payment_amount,
+            COALESCE(SUM(CASE WHEN is_allocated = true THEN CASE WHEN amount_dec IS NOT NULL THEN amount_dec ELSE NULLIF(regexp_replace(amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0) as allocated_payment_amount,
+            COALESCE(SUM(CASE WHEN is_allocated = false THEN CASE WHEN amount_dec IS NOT NULL THEN amount_dec ELSE NULLIF(regexp_replace(amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0) as unallocated_payment_amount
+          FROM payments
+        ),
+        
+        -- CTE 4: Debt Calculation per Representative
+        debt_calculation AS (
+          SELECT 
+            r.id as representative_id,
+            COALESCE(SUM(CAST(i.amount as DECIMAL)), 0) as total_invoices,
+            COALESCE(SUM(CASE WHEN p.is_allocated = true THEN CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0) as total_allocated_payments,
+            GREATEST(0, 
+              COALESCE(SUM(CAST(i.amount as DECIMAL)), 0) - 
+              COALESCE(SUM(CASE WHEN p.is_allocated = true THEN CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0)
+            ) as representative_debt
+          FROM representatives r
+          LEFT JOIN invoices i ON r.id = i.representative_id
+          LEFT JOIN payments p ON r.id = p.representative_id
+          WHERE r.is_active = true
+          GROUP BY r.id
+        ),
+        
+        -- CTE 5: System Totals
+        system_totals AS (
+          SELECT 
+            COALESCE(SUM(representative_debt), 0) as total_system_debt,
+            COUNT(*) as active_debt_representatives
+          FROM debt_calculation
+        ),
+        
+        -- CTE 6: Telegram Unsent Invoices (D-01 Fix)
+        telegram_summary AS (
+          SELECT 
+            COUNT(*) as unsent_telegram_invoices
+          FROM invoices
+          WHERE sent_to_telegram = false
+        ),
+        
+        -- CTE 7: Active Sales Partners (D-01 Fix)
+        sales_partners_summary AS (
+          SELECT 
+            COUNT(*) as total_sales_partners,
+            COUNT(*) FILTER (WHERE is_active = true) as active_sales_partners
+          FROM sales_partners
+        )
+        
+        -- Final SELECT combining all CTEs
+        SELECT 
+          -- Revenue metrics
+          ps.allocated_payment_amount as total_revenue,
+          
+          -- Debt metrics  
+          st.total_system_debt as total_debt,
+          
+          -- Credit and outstanding (simplified)
+          ps.unallocated_payment_amount as total_credit,
+          ist.outstanding_amount as total_outstanding,
+          
+          -- Representative metrics
+          rs.total_representatives,
+          rs.active_representatives,
+          rs.inactive_representatives,
+          
+          -- Invoice metrics
+          ist.total_invoices,
+          ist.paid_invoices,
+          ist.unpaid_invoices,
+          ist.overdue_invoices,
+          
+          -- Payment metrics
+          ps.total_payments,
+          ps.total_payment_amount,
+          ps.unallocated_payment_amount,
+          
+          -- D-01 Fix: Telegram & Sales Partners metrics
+          ts.unsent_telegram_invoices,
+          sps.total_sales_partners,
+          sps.active_sales_partners,
+          
+          -- System health (simplified calculation)
+          CASE 
+            WHEN st.total_system_debt = 0 THEN 100
+            WHEN st.total_system_debt < 1000000 THEN 90
+            WHEN st.total_system_debt < 5000000 THEN 75
+            ELSE 60
+          END as system_integrity_score
+          
+        FROM rep_summary rs
+        CROSS JOIN invoice_summary ist
+        CROSS JOIN payment_summary ps
+        CROSS JOIN system_totals st
+        CROSS JOIN telegram_summary ts
+        CROSS JOIN sales_partners_summary sps
+      
+✅ Consolidated query completed in 2ms
+✅ E-B7: Consolidated query completed in 2ms
+8:35:15 PM [express] GET /api/dashboard 200 in 6ms :: {"success":true,"data":{"summary":{"totalReven…
+STRUCT_LOG {"ts":"2025-10-01T20:35:15.625Z","method":"GET","url":"/api/dashboard","ip":"127.0.0.1","ua":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0","status":200,"durationMs":5,"category":"api","bytes":974}
+🔓 SHERLOCK v26.0: Pass-through auth middleware - no validation
+🔓 SHERLOCK v26.0: Pass-through auth middleware - no validation
+8:35:15 PM [express] GET /api/allocations/guard-metrics 200 in 2ms :: {"success":true,"data":{"count…
+STRUCT_LOG {"ts":"2025-10-01T20:35:15.872Z","method":"GET","url":"/api/allocations/guard-metrics","ip":"127.0.0.1","ua":"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0","status":200,"durationMs":2,"category":"api","bytes":134}
 💗 Database health status changed: HEALTHY
-Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-09-30T22:45:43.992Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:35:23.466Z", 5, 5]
 💗 Starting comprehensive health check...
-💗 Health check completed in 325ms
-Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-09-30T22:45:53.992Z", 5, 5]
-Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-09-30T22:46:03.992Z", 5, 5]
-Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-09-30T22:46:13.992Z", 5, 5]
-🛑 SIGTERM received, shutting down gracefully
+💗 Health check completed in 315ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:35:33.467Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:35:43.467Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:35:53.467Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 269.95, heapTotal: 111.24, heapUsed: 105.89, external: 10.65 }
+💗 Health check completed in 258ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:36:03.468Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:36:03.526Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:36:13.469Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:36:23.469Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 257ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:36:33.469Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:36:43.469Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:36:53.469Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 271.7, heapTotal: 110.49, heapUsed: 107.31, external: 10.69 }
+💗 Health check completed in 255ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:37:03.470Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:37:03.529Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:37:13.470Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:37:23.472Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 256ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:37:33.472Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:37:43.473Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:37:53.473Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 272.32, heapTotal: 110.74, heapUsed: 107, external: 10.74 }
+💗 Health check completed in 280ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:38:03.474Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:38:03.531Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:38:13.475Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:38:23.475Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 256ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:38:33.475Z", 5, 5]
+🔓 SHERLOCK v26.0: Pass-through auth middleware - no validation
+📊 SHERLOCK v32.0: Dashboard request received
+🔍 SHERLOCK v32.0: Starting dashboard data collection...
+🚀 E-B7: Executing consolidated financial summary query...
+Query: 
+        WITH 
+        -- CTE 1: Representative Summary
+        rep_summary AS (
+          SELECT 
+            COUNT(*) as total_representatives,
+            SUM(CASE WHEN is_active = true THEN 1 ELSE 0 END) as active_representatives,
+            SUM(CASE WHEN is_active = false THEN 1 ELSE 0 END) as inactive_representatives
+          FROM representatives
+        ),
+        
+        -- CTE 2: Invoice Summary
+        invoice_summary AS (
+          SELECT 
+            COUNT(*) as total_invoices,
+            SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as paid_invoices,
+            SUM(CASE WHEN status = 'unpaid' THEN 1 ELSE 0 END) as unpaid_invoices,
+            SUM(CASE WHEN status = 'overdue' THEN 1 ELSE 0 END) as overdue_invoices,
+            COALESCE(SUM(CAST(amount as DECIMAL)), 0) as total_invoice_amount,
+            COALESCE(SUM(CASE WHEN status IN ('unpaid', 'overdue') THEN CAST(amount as DECIMAL) ELSE 0 END), 0) as outstanding_amount
+          FROM invoices
+        ),
+        
+        -- CTE 3: Payment Summary
+        payment_summary AS (
+          SELECT 
+            COUNT(*) as total_payments,
+            COALESCE(SUM(CASE WHEN amount_dec IS NOT NULL THEN amount_dec ELSE NULLIF(regexp_replace(amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END), 0) as total_payment_amount,
+            COALESCE(SUM(CASE WHEN is_allocated = true THEN CASE WHEN amount_dec IS NOT NULL THEN amount_dec ELSE NULLIF(regexp_replace(amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0) as allocated_payment_amount,
+            COALESCE(SUM(CASE WHEN is_allocated = false THEN CASE WHEN amount_dec IS NOT NULL THEN amount_dec ELSE NULLIF(regexp_replace(amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0) as unallocated_payment_amount
+          FROM payments
+        ),
+        
+        -- CTE 4: Debt Calculation per Representative
+        debt_calculation AS (
+          SELECT 
+            r.id as representative_id,
+            COALESCE(SUM(CAST(i.amount as DECIMAL)), 0) as total_invoices,
+            COALESCE(SUM(CASE WHEN p.is_allocated = true THEN CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0) as total_allocated_payments,
+            GREATEST(0, 
+              COALESCE(SUM(CAST(i.amount as DECIMAL)), 0) - 
+              COALESCE(SUM(CASE WHEN p.is_allocated = true THEN CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END ELSE 0 END), 0)
+            ) as representative_debt
+          FROM representatives r
+          LEFT JOIN invoices i ON r.id = i.representative_id
+          LEFT JOIN payments p ON r.id = p.representative_id
+          WHERE r.is_active = true
+          GROUP BY r.id
+        ),
+        
+        -- CTE 5: System Totals
+        system_totals AS (
+          SELECT 
+            COALESCE(SUM(representative_debt), 0) as total_system_debt,
+            COUNT(*) as active_debt_representatives
+          FROM debt_calculation
+        ),
+        
+        -- CTE 6: Telegram Unsent Invoices (D-01 Fix)
+        telegram_summary AS (
+          SELECT 
+            COUNT(*) as unsent_telegram_invoices
+          FROM invoices
+          WHERE sent_to_telegram = false
+        ),
+        
+        -- CTE 7: Active Sales Partners (D-01 Fix)
+        sales_partners_summary AS (
+          SELECT 
+            COUNT(*) as total_sales_partners,
+            COUNT(*) FILTER (WHERE is_active = true) as active_sales_partners
+          FROM sales_partners
+        )
+        
+        -- Final SELECT combining all CTEs
+        SELECT 
+          -- Revenue metrics
+          ps.allocated_payment_amount as total_revenue,
+          
+          -- Debt metrics  
+          st.total_system_debt as total_debt,
+          
+          -- Credit and outstanding (simplified)
+          ps.unallocated_payment_amount as total_credit,
+          ist.outstanding_amount as total_outstanding,
+          
+          -- Representative metrics
+          rs.total_representatives,
+          rs.active_representatives,
+          rs.inactive_representatives,
+          
+          -- Invoice metrics
+          ist.total_invoices,
+          ist.paid_invoices,
+          ist.unpaid_invoices,
+          ist.overdue_invoices,
+          
+          -- Payment metrics
+          ps.total_payments,
+          ps.total_payment_amount,
+          ps.unallocated_payment_amount,
+          
+          -- D-01 Fix: Telegram & Sales Partners metrics
+          ts.unsent_telegram_invoices,
+          sps.total_sales_partners,
+          sps.active_sales_partners,
+          
+          -- System health (simplified calculation)
+          CASE 
+            WHEN st.total_system_debt = 0 THEN 100
+            WHEN st.total_system_debt < 1000000 THEN 90
+            WHEN st.total_system_debt < 5000000 THEN 75
+            ELSE 60
+          END as system_integrity_score
+          
+        FROM rep_summary rs
+        CROSS JOIN invoice_summary ist
+        CROSS JOIN payment_summary ps
+        CROSS JOIN system_totals st
+        CROSS JOIN telegram_summary ts
+        CROSS JOIN sales_partners_summary sps
+      
+✅ Consolidated query completed in 2ms
+✅ E-B7: Consolidated query completed in 2ms
+8:38:35 PM [express] GET /api/dashboard 200 in 6ms :: {"success":true,"data":{"summary":{"totalReven…
+STRUCT_LOG {"ts":"2025-10-01T20:38:35.228Z","method":"GET","url":"/api/dashboard","ip":"127.0.0.1","ua":"curl/8.5.0","status":200,"durationMs":6,"category":"api","bytes":974}
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:38:43.476Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:38:53.476Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 272.95, heapTotal: 111.24, heapUsed: 108.07, external: 10.8 }
+💗 Health check completed in 261ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:39:03.477Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:39:03.533Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+🔓 SHERLOCK v26.0: Pass-through auth middleware - no validation
+Query: 
+      WITH real_time_debt AS (
+        SELECT 
+          r.id as representative_id,
+          COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) as total_invoices,
+          COALESCE(SUM(CASE WHEN p.is_allocated THEN 
+            CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
+            ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
+          ELSE 0 END), 0) as total_allocated,
+          GREATEST(0, 
+            COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) - 
+            COALESCE(SUM(CASE WHEN p.is_allocated THEN 
+              CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
+              ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
+            ELSE 0 END), 0)
+          ) as calculated_debt
+        FROM representatives r
+        LEFT JOIN invoices i ON r.id = i.representative_id
+        LEFT JOIN payments p ON r.id = p.representative_id
+        GROUP BY r.id
+      ),
+      cached_debt AS (
+        SELECT 
+          representative_id,
+          COALESCE(CAST(cached_balance AS DECIMAL), 0) as cached_balance
+        FROM invoice_balance_cache
+      ),
+      drift_analysis AS (
+        SELECT 
+          rtd.representative_id,
+          rtd.calculated_debt,
+          COALESCE(cd.cached_balance, rtd.calculated_debt) as cached_balance,
+          ABS(rtd.calculated_debt - COALESCE(cd.cached_balance, rtd.calculated_debt)) as absolute_drift
+        FROM real_time_debt rtd
+        LEFT JOIN cached_debt cd ON rtd.representative_id = cd.representative_id
+      )
+      SELECT 
+        COUNT(*) as total_representatives,
+        COALESCE(SUM(calculated_debt), 0) as total_system_debt,
+        COALESCE(SUM(absolute_drift), 0) as total_drift,
+        COALESCE(AVG(absolute_drift), 0) as avg_drift,
+        COALESCE(MAX(absolute_drift), 0) as max_drift,
+        COUNT(CASE WHEN absolute_drift > 100 THEN 1 END) as drifted_representatives
+      FROM drift_analysis
+    
+Query: 
+      WITH allocation_times AS (
+        SELECT 
+          pa.id,
+          EXTRACT(EPOCH FROM (pa.created_at - p.created_at)) * 1000 as latency_ms
+        FROM payment_allocations pa
+        INNER JOIN payments p ON pa.payment_id = p.id
+        WHERE pa.created_at >= NOW() - INTERVAL '$1 minutes'
+          AND pa.created_at > p.created_at
+      )
+      SELECT 
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms) as p50,
+        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) as p95,
+        PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) as p99,
+        COUNT(*) as total_allocations,
+        AVG(latency_ms) as avg_latency
+      FROM allocation_times
+      WHERE latency_ms >= 0 AND latency_ms < 3600000
+     -- params: [1440]
+Query: 
+      WITH allocation_summary AS (
+        SELECT 
+          i.id as invoice_id,
+          CAST(i.amount AS DECIMAL) as invoice_amount,
+          COALESCE(SUM(CASE WHEN pa.amount_dec IS NOT NULL THEN pa.amount_dec
+            ELSE NULLIF(regexp_replace(pa.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END), 0) as allocated_amount
+        FROM invoices i
+        LEFT JOIN payment_allocations pa ON i.id = pa.invoice_id
+        WHERE i.created_at >= NOW() - INTERVAL '$1 minutes'
+        GROUP BY i.id, i.amount
+      )
+      SELECT 
+        COUNT(*) as total_allocations,
+        COUNT(CASE WHEN allocated_amount > 0 AND allocated_amount < invoice_amount THEN 1 END) as partial_allocations,
+        COUNT(CASE WHEN allocated_amount >= invoice_amount THEN 1 END) as full_allocations,
+        COUNT(CASE WHEN allocated_amount = 0 THEN 1 END) as unallocated
+      FROM allocation_summary
+      WHERE invoice_amount > 0
+     -- params: [1440]
+Query: 
+      WITH representative_balances AS (
+        SELECT 
+          r.id,
+          r.name,
+          COALESCE(CAST(r.total_sales AS DECIMAL), 0) as total_sales,
+          COALESCE(CAST(r.total_debt AS DECIMAL), 0) as total_debt,
+          COALESCE(SUM(CASE WHEN p.is_allocated THEN 
+            CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
+            ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
+          ELSE 0 END), 0) as total_paid,
+          COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) as total_invoiced
+        FROM representatives r
+        LEFT JOIN payments p ON r.id = p.representative_id
+        LEFT JOIN invoices i ON r.id = i.representative_id
+        WHERE r.is_active = true
+        GROUP BY r.id, r.name, r.total_sales, r.total_debt
+      )
+      SELECT 
+        COUNT(CASE WHEN total_paid > total_invoiced AND (total_paid - total_invoiced) > 0 THEN 1 END) as representatives_with_buffer,
+        COALESCE(SUM(CASE WHEN total_paid > total_invoiced THEN total_paid - total_invoiced ELSE 0 END), 0) as total_buffer,
+        COALESCE(AVG(CASE WHEN total_paid > total_invoiced THEN total_paid - total_invoiced ELSE 0 END), 0) as avg_buffer,
+        COALESCE(MAX(CASE WHEN total_paid > total_invoiced THEN total_paid - total_invoiced ELSE 0 END), 0) as max_buffer
+      FROM representative_balances
+    
+Query: 
+      SELECT event_type, COUNT(*) AS c
+      FROM guard_metrics_events
+      WHERE created_at >= NOW() - ($1::int * interval '1 minute')
+      GROUP BY event_type
+     -- params: [60]
+Error calculating debt drift PPM: DrizzleQueryError: Failed query: 
+      WITH real_time_debt AS (
+        SELECT 
+          r.id as representative_id,
+          COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) as total_invoices,
+          COALESCE(SUM(CASE WHEN p.is_allocated THEN 
+            CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
+            ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
+          ELSE 0 END), 0) as total_allocated,
+          GREATEST(0, 
+            COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) - 
+            COALESCE(SUM(CASE WHEN p.is_allocated THEN 
+              CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
+              ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
+            ELSE 0 END), 0)
+          ) as calculated_debt
+        FROM representatives r
+        LEFT JOIN invoices i ON r.id = i.representative_id
+        LEFT JOIN payments p ON r.id = p.representative_id
+        GROUP BY r.id
+      ),
+      cached_debt AS (
+        SELECT 
+          representative_id,
+          COALESCE(CAST(cached_balance AS DECIMAL), 0) as cached_balance
+        FROM invoice_balance_cache
+      ),
+      drift_analysis AS (
+        SELECT 
+          rtd.representative_id,
+          rtd.calculated_debt,
+          COALESCE(cd.cached_balance, rtd.calculated_debt) as cached_balance,
+          ABS(rtd.calculated_debt - COALESCE(cd.cached_balance, rtd.calculated_debt)) as absolute_drift
+        FROM real_time_debt rtd
+        LEFT JOIN cached_debt cd ON rtd.representative_id = cd.representative_id
+      )
+      SELECT 
+        COUNT(*) as total_representatives,
+        COALESCE(SUM(calculated_debt), 0) as total_system_debt,
+        COALESCE(SUM(absolute_drift), 0) as total_drift,
+        COALESCE(AVG(absolute_drift), 0) as avg_drift,
+        COALESCE(MAX(absolute_drift), 0) as max_drift,
+        COUNT(CASE WHEN absolute_drift > 100 THEN 1 END) as drifted_representatives
+      FROM drift_analysis
+    
+params: 
+    at NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:73:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async calculateDebtDriftPpm (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:51:24)
+    at async Promise.all (index 0)
+    at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+  query: '\n' +
+    '      WITH real_time_debt AS (\n' +
+    '        SELECT \n' +
+    '          r.id as representative_id,\n' +
+    '          COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) as total_invoices,\n' +
+    '          COALESCE(SUM(CASE WHEN p.is_allocated THEN \n' +
+    '            CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec \n' +
+    "            ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END \n" +
+    '          ELSE 0 END), 0) as total_allocated,\n' +
+    '          GREATEST(0, \n' +
+    '            COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) - \n' +
+    '            COALESCE(SUM(CASE WHEN p.is_allocated THEN \n' +
+    '              CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec \n' +
+    "              ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END \n" +
+    '            ELSE 0 END), 0)\n' +
+    '          ) as calculated_debt\n' +
+    '        FROM representatives r\n' +
+    '        LEFT JOIN invoices i ON r.id = i.representative_id\n' +
+    '        LEFT JOIN payments p ON r.id = p.representative_id\n' +
+    '        GROUP BY r.id\n' +
+    '      ),\n' +
+    '      cached_debt AS (\n' +
+    '        SELECT \n' +
+    '          representative_id,\n' +
+    '          COALESCE(CAST(cached_balance AS DECIMAL), 0) as cached_balance\n' +
+    '        FROM invoice_balance_cache\n' +
+    '      ),\n' +
+    '      drift_analysis AS (\n' +
+    '        SELECT \n' +
+    '          rtd.representative_id,\n' +
+    '          rtd.calculated_debt,\n' +
+    '          COALESCE(cd.cached_balance, rtd.calculated_debt) as cached_balance,\n' +
+    '          ABS(rtd.calculated_debt - COALESCE(cd.cached_balance, rtd.calculated_debt)) as absolute_drift\n' +
+    '        FROM real_time_debt rtd\n' +
+    '        LEFT JOIN cached_debt cd ON rtd.representative_id = cd.representative_id\n' +
+    '      )\n' +
+    '      SELECT \n' +
+    '        COUNT(*) as total_representatives,\n' +
+    '        COALESCE(SUM(calculated_debt), 0) as total_system_debt,\n' +
+    '        COALESCE(SUM(absolute_drift), 0) as total_drift,\n' +
+    '        COALESCE(AVG(absolute_drift), 0) as avg_drift,\n' +
+    '        COALESCE(MAX(absolute_drift), 0) as max_drift,\n' +
+    '        COUNT(CASE WHEN absolute_drift > 100 THEN 1 END) as drifted_representatives\n' +
+    '      FROM drift_analysis\n' +
+    '    ',
+  params: [],
+  cause: error: column "representative_id" does not exist
+      at /workspaces/final-v-panel/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async <anonymous> (/workspaces/final-v-panel/node_modules/src/node-postgres/session.ts:149:14)
+      at async NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:71:12)
+      at async calculateDebtDriftPpm (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:51:24)
+      at async Promise.all (index 0)
+      at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+    length: 118,
+    severity: 'ERROR',
+    code: '42703',
+    detail: undefined,
+    hint: undefined,
+    position: '999',
+    internalPosition: undefined,
+    internalQuery: undefined,
+    where: undefined,
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'parse_relation.c',
+    line: '3647',
+    routine: 'errorMissingColumn'
+  }
+}
+Error calculating partial allocation ratio: DrizzleQueryError: Failed query: 
+      WITH allocation_summary AS (
+        SELECT 
+          i.id as invoice_id,
+          CAST(i.amount AS DECIMAL) as invoice_amount,
+          COALESCE(SUM(CASE WHEN pa.amount_dec IS NOT NULL THEN pa.amount_dec
+            ELSE NULLIF(regexp_replace(pa.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END), 0) as allocated_amount
+        FROM invoices i
+        LEFT JOIN payment_allocations pa ON i.id = pa.invoice_id
+        WHERE i.created_at >= NOW() - INTERVAL '$1 minutes'
+        GROUP BY i.id, i.amount
+      )
+      SELECT 
+        COUNT(*) as total_allocations,
+        COUNT(CASE WHEN allocated_amount > 0 AND allocated_amount < invoice_amount THEN 1 END) as partial_allocations,
+        COUNT(CASE WHEN allocated_amount >= invoice_amount THEN 1 END) as full_allocations,
+        COUNT(CASE WHEN allocated_amount = 0 THEN 1 END) as unallocated
+      FROM allocation_summary
+      WHERE invoice_amount > 0
+    
+params: 1440
+    at NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:73:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async calculatePartialAllocationRatio (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:197:29)
+    at async Promise.all (index 2)
+    at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+  query: '\n' +
+    '      WITH allocation_summary AS (\n' +
+    '        SELECT \n' +
+    '          i.id as invoice_id,\n' +
+    '          CAST(i.amount AS DECIMAL) as invoice_amount,\n' +
+    '          COALESCE(SUM(CASE WHEN pa.amount_dec IS NOT NULL THEN pa.amount_dec\n' +
+    "            ELSE NULLIF(regexp_replace(pa.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END), 0) as allocated_amount\n" +
+    '        FROM invoices i\n' +
+    '        LEFT JOIN payment_allocations pa ON i.id = pa.invoice_id\n' +
+    "        WHERE i.created_at >= NOW() - INTERVAL '$1 minutes'\n" +
+    '        GROUP BY i.id, i.amount\n' +
+    '      )\n' +
+    '      SELECT \n' +
+    '        COUNT(*) as total_allocations,\n' +
+    '        COUNT(CASE WHEN allocated_amount > 0 AND allocated_amount < invoice_amount THEN 1 END) as partial_allocations,\n' +
+    '        COUNT(CASE WHEN allocated_amount >= invoice_amount THEN 1 END) as full_allocations,\n' +
+    '        COUNT(CASE WHEN allocated_amount = 0 THEN 1 END) as unallocated\n' +
+    '      FROM allocation_summary\n' +
+    '      WHERE invoice_amount > 0\n' +
+    '    ',
+  params: [ 1440 ],
+  cause: error: column pa.amount_dec does not exist
+      at /workspaces/final-v-panel/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async <anonymous> (/workspaces/final-v-panel/node_modules/src/node-postgres/session.ts:149:14)
+      at async NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:71:12)
+      at async calculatePartialAllocationRatio (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:197:29)
+      at async Promise.all (index 2)
+      at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+    length: 112,
+    severity: 'ERROR',
+    code: '42703',
+    detail: undefined,
+    hint: undefined,
+    position: '171',
+    internalPosition: undefined,
+    internalQuery: undefined,
+    where: undefined,
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'parse_relation.c',
+    line: '3647',
+    routine: 'errorMissingColumn'
+  }
+}
+Error calculating allocation latency: DrizzleQueryError: Failed query: 
+      WITH allocation_times AS (
+        SELECT 
+          pa.id,
+          EXTRACT(EPOCH FROM (pa.created_at - p.created_at)) * 1000 as latency_ms
+        FROM payment_allocations pa
+        INNER JOIN payments p ON pa.payment_id = p.id
+        WHERE pa.created_at >= NOW() - INTERVAL '$1 minutes'
+          AND pa.created_at > p.created_at
+      )
+      SELECT 
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms) as p50,
+        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) as p95,
+        PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) as p99,
+        COUNT(*) as total_allocations,
+        AVG(latency_ms) as avg_latency
+      FROM allocation_times
+      WHERE latency_ms >= 0 AND latency_ms < 3600000
+    
+params: 1440
+    at NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:73:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async calculateAllocationLatency (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:136:26)
+    at async Promise.all (index 1)
+    at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+  query: '\n' +
+    '      WITH allocation_times AS (\n' +
+    '        SELECT \n' +
+    '          pa.id,\n' +
+    '          EXTRACT(EPOCH FROM (pa.created_at - p.created_at)) * 1000 as latency_ms\n' +
+    '        FROM payment_allocations pa\n' +
+    '        INNER JOIN payments p ON pa.payment_id = p.id\n' +
+    "        WHERE pa.created_at >= NOW() - INTERVAL '$1 minutes'\n" +
+    '          AND pa.created_at > p.created_at\n' +
+    '      )\n' +
+    '      SELECT \n' +
+    '        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms) as p50,\n' +
+    '        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) as p95,\n' +
+    '        PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) as p99,\n' +
+    '        COUNT(*) as total_allocations,\n' +
+    '        AVG(latency_ms) as avg_latency\n' +
+    '      FROM allocation_times\n' +
+    '      WHERE latency_ms >= 0 AND latency_ms < 3600000\n' +
+    '    ',
+  params: [ 1440 ],
+  cause: error: bind message supplies 1 parameters, but prepared statement "" requires 0
+      at /workspaces/final-v-panel/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async <anonymous> (/workspaces/final-v-panel/node_modules/src/node-postgres/session.ts:149:14)
+      at async NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:71:12)
+      at async calculateAllocationLatency (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:136:26)
+      at async Promise.all (index 1)
+      at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+    length: 137,
+    severity: 'ERROR',
+    code: '08P01',
+    detail: undefined,
+    hint: undefined,
+    position: undefined,
+    internalPosition: undefined,
+    internalQuery: undefined,
+    where: undefined,
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'postgres.c',
+    line: '1659',
+    routine: 'exec_bind_message'
+  }
+}
+8:39:08 PM [express] GET /api/allocations/kpi-metrics 200 in 91ms :: {"success":true,"data":{"debtDr…
+STRUCT_LOG {"ts":"2025-10-01T20:39:08.545Z","method":"GET","url":"/api/allocations/kpi-metrics?window=24h","ip":"127.0.0.1","ua":"curl/8.5.0","status":200,"durationMs":91,"category":"api","bytes":1325}
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:39:13.478Z", 5, 5]
+🔓 SHERLOCK v26.0: Pass-through auth middleware - no validation
+Query: 
+      WITH real_time_debt AS (
+        SELECT 
+          r.id as representative_id,
+          COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) as total_invoices,
+          COALESCE(SUM(CASE WHEN p.is_allocated THEN 
+            CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
+            ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
+          ELSE 0 END), 0) as total_allocated,
+          GREATEST(0, 
+            COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) - 
+            COALESCE(SUM(CASE WHEN p.is_allocated THEN 
+              CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
+              ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
+            ELSE 0 END), 0)
+          ) as calculated_debt
+        FROM representatives r
+        LEFT JOIN invoices i ON r.id = i.representative_id
+        LEFT JOIN payments p ON r.id = p.representative_id
+        GROUP BY r.id
+      ),
+      cached_debt AS (
+        SELECT 
+          representative_id,
+          COALESCE(CAST(cached_balance AS DECIMAL), 0) as cached_balance
+        FROM invoice_balance_cache
+      ),
+      drift_analysis AS (
+        SELECT 
+          rtd.representative_id,
+          rtd.calculated_debt,
+          COALESCE(cd.cached_balance, rtd.calculated_debt) as cached_balance,
+          ABS(rtd.calculated_debt - COALESCE(cd.cached_balance, rtd.calculated_debt)) as absolute_drift
+        FROM real_time_debt rtd
+        LEFT JOIN cached_debt cd ON rtd.representative_id = cd.representative_id
+      )
+      SELECT 
+        COUNT(*) as total_representatives,
+        COALESCE(SUM(calculated_debt), 0) as total_system_debt,
+        COALESCE(SUM(absolute_drift), 0) as total_drift,
+        COALESCE(AVG(absolute_drift), 0) as avg_drift,
+        COALESCE(MAX(absolute_drift), 0) as max_drift,
+        COUNT(CASE WHEN absolute_drift > 100 THEN 1 END) as drifted_representatives
+      FROM drift_analysis
+    
+Query: 
+      WITH allocation_times AS (
+        SELECT 
+          pa.id,
+          EXTRACT(EPOCH FROM (pa.created_at - p.created_at)) * 1000 as latency_ms
+        FROM payment_allocations pa
+        INNER JOIN payments p ON pa.payment_id = p.id
+        WHERE pa.created_at >= NOW() - INTERVAL '$1 minutes'
+          AND pa.created_at > p.created_at
+      )
+      SELECT 
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms) as p50,
+        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) as p95,
+        PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) as p99,
+        COUNT(*) as total_allocations,
+        AVG(latency_ms) as avg_latency
+      FROM allocation_times
+      WHERE latency_ms >= 0 AND latency_ms < 3600000
+     -- params: [1440]
+Query: 
+      WITH allocation_summary AS (
+        SELECT 
+          i.id as invoice_id,
+          CAST(i.amount AS DECIMAL) as invoice_amount,
+          COALESCE(SUM(CASE WHEN pa.amount_dec IS NOT NULL THEN pa.amount_dec
+            ELSE NULLIF(regexp_replace(pa.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END), 0) as allocated_amount
+        FROM invoices i
+        LEFT JOIN payment_allocations pa ON i.id = pa.invoice_id
+        WHERE i.created_at >= NOW() - INTERVAL '$1 minutes'
+        GROUP BY i.id, i.amount
+      )
+      SELECT 
+        COUNT(*) as total_allocations,
+        COUNT(CASE WHEN allocated_amount > 0 AND allocated_amount < invoice_amount THEN 1 END) as partial_allocations,
+        COUNT(CASE WHEN allocated_amount >= invoice_amount THEN 1 END) as full_allocations,
+        COUNT(CASE WHEN allocated_amount = 0 THEN 1 END) as unallocated
+      FROM allocation_summary
+      WHERE invoice_amount > 0
+     -- params: [1440]
+Query: 
+      WITH representative_balances AS (
+        SELECT 
+          r.id,
+          r.name,
+          COALESCE(CAST(r.total_sales AS DECIMAL), 0) as total_sales,
+          COALESCE(CAST(r.total_debt AS DECIMAL), 0) as total_debt,
+          COALESCE(SUM(CASE WHEN p.is_allocated THEN 
+            CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
+            ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
+          ELSE 0 END), 0) as total_paid,
+          COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) as total_invoiced
+        FROM representatives r
+        LEFT JOIN payments p ON r.id = p.representative_id
+        LEFT JOIN invoices i ON r.id = i.representative_id
+        WHERE r.is_active = true
+        GROUP BY r.id, r.name, r.total_sales, r.total_debt
+      )
+      SELECT 
+        COUNT(CASE WHEN total_paid > total_invoiced AND (total_paid - total_invoiced) > 0 THEN 1 END) as representatives_with_buffer,
+        COALESCE(SUM(CASE WHEN total_paid > total_invoiced THEN total_paid - total_invoiced ELSE 0 END), 0) as total_buffer,
+        COALESCE(AVG(CASE WHEN total_paid > total_invoiced THEN total_paid - total_invoiced ELSE 0 END), 0) as avg_buffer,
+        COALESCE(MAX(CASE WHEN total_paid > total_invoiced THEN total_paid - total_invoiced ELSE 0 END), 0) as max_buffer
+      FROM representative_balances
+    
+Query: 
+      SELECT event_type, COUNT(*) AS c
+      FROM guard_metrics_events
+      WHERE created_at >= NOW() - ($1::int * interval '1 minute')
+      GROUP BY event_type
+     -- params: [60]
+Error calculating debt drift PPM: DrizzleQueryError: Failed query: 
+      WITH real_time_debt AS (
+        SELECT 
+          r.id as representative_id,
+          COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) as total_invoices,
+          COALESCE(SUM(CASE WHEN p.is_allocated THEN 
+            CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
+            ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
+          ELSE 0 END), 0) as total_allocated,
+          GREATEST(0, 
+            COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) - 
+            COALESCE(SUM(CASE WHEN p.is_allocated THEN 
+              CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
+              ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
+            ELSE 0 END), 0)
+          ) as calculated_debt
+        FROM representatives r
+        LEFT JOIN invoices i ON r.id = i.representative_id
+        LEFT JOIN payments p ON r.id = p.representative_id
+        GROUP BY r.id
+      ),
+      cached_debt AS (
+        SELECT 
+          representative_id,
+          COALESCE(CAST(cached_balance AS DECIMAL), 0) as cached_balance
+        FROM invoice_balance_cache
+      ),
+      drift_analysis AS (
+        SELECT 
+          rtd.representative_id,
+          rtd.calculated_debt,
+          COALESCE(cd.cached_balance, rtd.calculated_debt) as cached_balance,
+          ABS(rtd.calculated_debt - COALESCE(cd.cached_balance, rtd.calculated_debt)) as absolute_drift
+        FROM real_time_debt rtd
+        LEFT JOIN cached_debt cd ON rtd.representative_id = cd.representative_id
+      )
+      SELECT 
+        COUNT(*) as total_representatives,
+        COALESCE(SUM(calculated_debt), 0) as total_system_debt,
+        COALESCE(SUM(absolute_drift), 0) as total_drift,
+        COALESCE(AVG(absolute_drift), 0) as avg_drift,
+        COALESCE(MAX(absolute_drift), 0) as max_drift,
+        COUNT(CASE WHEN absolute_drift > 100 THEN 1 END) as drifted_representatives
+      FROM drift_analysis
+    
+params: 
+    at NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:73:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async calculateDebtDriftPpm (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:51:24)
+    at async Promise.all (index 0)
+    at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+  query: '\n' +
+    '      WITH real_time_debt AS (\n' +
+    '        SELECT \n' +
+    '          r.id as representative_id,\n' +
+    '          COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) as total_invoices,\n' +
+    '          COALESCE(SUM(CASE WHEN p.is_allocated THEN \n' +
+    '            CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec \n' +
+    "            ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END \n" +
+    '          ELSE 0 END), 0) as total_allocated,\n' +
+    '          GREATEST(0, \n' +
+    '            COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) - \n' +
+    '            COALESCE(SUM(CASE WHEN p.is_allocated THEN \n' +
+    '              CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec \n' +
+    "              ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END \n" +
+    '            ELSE 0 END), 0)\n' +
+    '          ) as calculated_debt\n' +
+    '        FROM representatives r\n' +
+    '        LEFT JOIN invoices i ON r.id = i.representative_id\n' +
+    '        LEFT JOIN payments p ON r.id = p.representative_id\n' +
+    '        GROUP BY r.id\n' +
+    '      ),\n' +
+    '      cached_debt AS (\n' +
+    '        SELECT \n' +
+    '          representative_id,\n' +
+    '          COALESCE(CAST(cached_balance AS DECIMAL), 0) as cached_balance\n' +
+    '        FROM invoice_balance_cache\n' +
+    '      ),\n' +
+    '      drift_analysis AS (\n' +
+    '        SELECT \n' +
+    '          rtd.representative_id,\n' +
+    '          rtd.calculated_debt,\n' +
+    '          COALESCE(cd.cached_balance, rtd.calculated_debt) as cached_balance,\n' +
+    '          ABS(rtd.calculated_debt - COALESCE(cd.cached_balance, rtd.calculated_debt)) as absolute_drift\n' +
+    '        FROM real_time_debt rtd\n' +
+    '        LEFT JOIN cached_debt cd ON rtd.representative_id = cd.representative_id\n' +
+    '      )\n' +
+    '      SELECT \n' +
+    '        COUNT(*) as total_representatives,\n' +
+    '        COALESCE(SUM(calculated_debt), 0) as total_system_debt,\n' +
+    '        COALESCE(SUM(absolute_drift), 0) as total_drift,\n' +
+    '        COALESCE(AVG(absolute_drift), 0) as avg_drift,\n' +
+    '        COALESCE(MAX(absolute_drift), 0) as max_drift,\n' +
+    '        COUNT(CASE WHEN absolute_drift > 100 THEN 1 END) as drifted_representatives\n' +
+    '      FROM drift_analysis\n' +
+    '    ',
+  params: [],
+  cause: error: column "representative_id" does not exist
+      at /workspaces/final-v-panel/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async <anonymous> (/workspaces/final-v-panel/node_modules/src/node-postgres/session.ts:149:14)
+      at async NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:71:12)
+      at async calculateDebtDriftPpm (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:51:24)
+      at async Promise.all (index 0)
+      at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+    length: 118,
+    severity: 'ERROR',
+    code: '42703',
+    detail: undefined,
+    hint: undefined,
+    position: '999',
+    internalPosition: undefined,
+    internalQuery: undefined,
+    where: undefined,
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'parse_relation.c',
+    line: '3647',
+    routine: 'errorMissingColumn'
+  }
+}
+Error calculating allocation latency: DrizzleQueryError: Failed query: 
+      WITH allocation_times AS (
+        SELECT 
+          pa.id,
+          EXTRACT(EPOCH FROM (pa.created_at - p.created_at)) * 1000 as latency_ms
+        FROM payment_allocations pa
+        INNER JOIN payments p ON pa.payment_id = p.id
+        WHERE pa.created_at >= NOW() - INTERVAL '$1 minutes'
+          AND pa.created_at > p.created_at
+      )
+      SELECT 
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms) as p50,
+        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) as p95,
+        PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) as p99,
+        COUNT(*) as total_allocations,
+        AVG(latency_ms) as avg_latency
+      FROM allocation_times
+      WHERE latency_ms >= 0 AND latency_ms < 3600000
+    
+params: 1440
+    at NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:73:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async calculateAllocationLatency (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:136:26)
+    at async Promise.all (index 1)
+    at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+  query: '\n' +
+    '      WITH allocation_times AS (\n' +
+    '        SELECT \n' +
+    '          pa.id,\n' +
+    '          EXTRACT(EPOCH FROM (pa.created_at - p.created_at)) * 1000 as latency_ms\n' +
+    '        FROM payment_allocations pa\n' +
+    '        INNER JOIN payments p ON pa.payment_id = p.id\n' +
+    "        WHERE pa.created_at >= NOW() - INTERVAL '$1 minutes'\n" +
+    '          AND pa.created_at > p.created_at\n' +
+    '      )\n' +
+    '      SELECT \n' +
+    '        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms) as p50,\n' +
+    '        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) as p95,\n' +
+    '        PERCENTILE_CONT(0.99) WITHIN GROUP (ORDER BY latency_ms) as p99,\n' +
+    '        COUNT(*) as total_allocations,\n' +
+    '        AVG(latency_ms) as avg_latency\n' +
+    '      FROM allocation_times\n' +
+    '      WHERE latency_ms >= 0 AND latency_ms < 3600000\n' +
+    '    ',
+  params: [ 1440 ],
+  cause: error: bind message supplies 1 parameters, but prepared statement "" requires 0
+      at /workspaces/final-v-panel/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async <anonymous> (/workspaces/final-v-panel/node_modules/src/node-postgres/session.ts:149:14)
+      at async NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:71:12)
+      at async calculateAllocationLatency (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:136:26)
+      at async Promise.all (index 1)
+      at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+    length: 137,
+    severity: 'ERROR',
+    code: '08P01',
+    detail: undefined,
+    hint: undefined,
+    position: undefined,
+    internalPosition: undefined,
+    internalQuery: undefined,
+    where: undefined,
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'postgres.c',
+    line: '1659',
+    routine: 'exec_bind_message'
+  }
+}
+Error calculating partial allocation ratio: DrizzleQueryError: Failed query: 
+      WITH allocation_summary AS (
+        SELECT 
+          i.id as invoice_id,
+          CAST(i.amount AS DECIMAL) as invoice_amount,
+          COALESCE(SUM(CASE WHEN pa.amount_dec IS NOT NULL THEN pa.amount_dec
+            ELSE NULLIF(regexp_replace(pa.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END), 0) as allocated_amount
+        FROM invoices i
+        LEFT JOIN payment_allocations pa ON i.id = pa.invoice_id
+        WHERE i.created_at >= NOW() - INTERVAL '$1 minutes'
+        GROUP BY i.id, i.amount
+      )
+      SELECT 
+        COUNT(*) as total_allocations,
+        COUNT(CASE WHEN allocated_amount > 0 AND allocated_amount < invoice_amount THEN 1 END) as partial_allocations,
+        COUNT(CASE WHEN allocated_amount >= invoice_amount THEN 1 END) as full_allocations,
+        COUNT(CASE WHEN allocated_amount = 0 THEN 1 END) as unallocated
+      FROM allocation_summary
+      WHERE invoice_amount > 0
+    
+params: 1440
+    at NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:73:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async calculatePartialAllocationRatio (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:197:29)
+    at async Promise.all (index 2)
+    at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+  query: '\n' +
+    '      WITH allocation_summary AS (\n' +
+    '        SELECT \n' +
+    '          i.id as invoice_id,\n' +
+    '          CAST(i.amount AS DECIMAL) as invoice_amount,\n' +
+    '          COALESCE(SUM(CASE WHEN pa.amount_dec IS NOT NULL THEN pa.amount_dec\n' +
+    "            ELSE NULLIF(regexp_replace(pa.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END), 0) as allocated_amount\n" +
+    '        FROM invoices i\n' +
+    '        LEFT JOIN payment_allocations pa ON i.id = pa.invoice_id\n' +
+    "        WHERE i.created_at >= NOW() - INTERVAL '$1 minutes'\n" +
+    '        GROUP BY i.id, i.amount\n' +
+    '      )\n' +
+    '      SELECT \n' +
+    '        COUNT(*) as total_allocations,\n' +
+    '        COUNT(CASE WHEN allocated_amount > 0 AND allocated_amount < invoice_amount THEN 1 END) as partial_allocations,\n' +
+    '        COUNT(CASE WHEN allocated_amount >= invoice_amount THEN 1 END) as full_allocations,\n' +
+    '        COUNT(CASE WHEN allocated_amount = 0 THEN 1 END) as unallocated\n' +
+    '      FROM allocation_summary\n' +
+    '      WHERE invoice_amount > 0\n' +
+    '    ',
+  params: [ 1440 ],
+  cause: error: column pa.amount_dec does not exist
+      at /workspaces/final-v-panel/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async <anonymous> (/workspaces/final-v-panel/node_modules/src/node-postgres/session.ts:149:14)
+      at async NodePgPreparedQuery.queryWithCache (/workspaces/final-v-panel/node_modules/src/pg-core/session.ts:71:12)
+      at async calculatePartialAllocationRatio (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:197:29)
+      at async Promise.all (index 2)
+      at async <anonymous> (/workspaces/final-v-panel/server/routes/kpi-metrics-routes.ts:338:9) {
+    length: 112,
+    severity: 'ERROR',
+    code: '42703',
+    detail: undefined,
+    hint: undefined,
+    position: '171',
+    internalPosition: undefined,
+    internalQuery: undefined,
+    where: undefined,
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'parse_relation.c',
+    line: '3647',
+    routine: 'errorMissingColumn'
+  }
+}
+8:39:21 PM [express] GET /api/allocations/kpi-metrics 200 in 26ms :: {"success":true,"data":{"debtDr…
+STRUCT_LOG {"ts":"2025-10-01T20:39:21.164Z","method":"GET","url":"/api/allocations/kpi-metrics?window=24h","ip":"127.0.0.1","ua":"curl/8.5.0","status":200,"durationMs":27,"category":"api","bytes":1325}
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:39:23.478Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 259ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:39:33.479Z", 5, 5]
+🔓 SHERLOCK v26.0: Pass-through auth middleware - no validation
+Query: select count(*), count(*) filter (where is_active = true), COALESCE(SUM(CAST(total_commission as DECIMAL)), 0), COALESCE(AVG(commission_rate), 0) from "sales_partners"
+Query: select COALESCE(SUM(CAST(total_sales as DECIMAL)), 0), COALESCE(SUM(CAST(total_debt as DECIMAL)), 0), COUNT(*) from "representatives" where sales_partner_id IS NOT NULL
+📊 S-01 Fixed: Sales partners statistics - 1 partners, $1028000.00 total sales from 217 representatives
+8:39:36 PM [express] GET /api/sales-partners/statistics 200 in 12ms :: {"totalPartners":1,"activePar…
+STRUCT_LOG {"ts":"2025-10-01T20:39:36.135Z","method":"GET","url":"/api/sales-partners/statistics","ip":"127.0.0.1","ua":"curl/8.5.0","status":200,"durationMs":12,"category":"api","bytes":190}
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:39:43.479Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:39:53.479Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 274.32, heapTotal: 112.24, heapUsed: 108.65, external: 10.81 }
+💗 Health check completed in 264ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:40:03.481Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:40:03.536Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+🔓 SHERLOCK v26.0: Pass-through auth middleware - no validation
+Query: select count(*), COALESCE(SUM(CAST(amount as DECIMAL)), 0), count(*) filter (where status = 'unpaid'), count(*) filter (where status = 'paid'), count(*) filter (where status = 'partial'), count(*) filter (where status = 'overdue') from "invoices" where "invoices"."usage_data"->>'type' = 'manual'
+📊 S-03 Fixed: Manual invoices statistics - Total: 0, Overdue: 0, Amount: 0
+8:40:04 PM [express] GET /api/invoices/manual/statistics 200 in 9ms :: {"totalCount":0,"totalAmount"…
+STRUCT_LOG {"ts":"2025-10-01T20:40:04.516Z","method":"GET","url":"/api/invoices/manual/statistics","ip":"127.0.0.1","ua":"curl/8.5.0","status":200,"durationMs":9,"category":"api","bytes":98}
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:40:13.482Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:40:23.482Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 262ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:40:33.483Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:40:43.483Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:40:53.484Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 274.7, heapTotal: 112.49, heapUsed: 109.57, external: 10.9 }
+💗 Health check completed in 283ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:41:03.484Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:41:03.539Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:41:13.484Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:41:23.484Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 260ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:41:33.483Z", 5, 5]
+🔓 SHERLOCK v26.0: Pass-through auth middleware - no validation
+📊 S-04 Fix: Calculating invoice statistics via optimized SQL
+Query: select COUNT(*), COUNT(*) FILTER (WHERE status = 'unpaid'), COUNT(*) FILTER (WHERE status = 'paid'), COUNT(*) FILTER (WHERE status = 'partial'), COUNT(*) FILTER (WHERE status = 'overdue'), COALESCE(SUM(CAST(amount AS DECIMAL)), 0), COALESCE(SUM(CAST(amount AS DECIMAL)) FILTER (WHERE status = 'unpaid'), 0), COALESCE(SUM(CAST(amount AS DECIMAL)) FILTER (WHERE status = 'paid'), 0), COUNT(*) FILTER (WHERE sent_to_telegram = true), COUNT(*) FILTER (WHERE sent_to_telegram = false) from "invoices"
+📊 S-04 Fixed: Invoice statistics via SQL - Total: 343, Unpaid: 343, Overdue: 0
+8:41:33 PM [express] GET /api/invoices/statistics 200 in 4ms :: {"totalInvoices":343,"unpaidCount":3…
+STRUCT_LOG {"ts":"2025-10-01T20:41:33.500Z","method":"GET","url":"/api/invoices/statistics","ip":"127.0.0.1","ua":"curl/8.5.0","status":200,"durationMs":4,"category":"api","bytes":201}
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:41:43.485Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:41:53.487Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 275.07, heapTotal: 112.74, heapUsed: 109.48, external: 10.92 }
+💗 Health check completed in 258ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:42:03.488Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:42:03.542Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:42:13.488Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:42:23.488Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 258ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:42:33.489Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:42:43.490Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:42:53.490Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 275.45, heapTotal: 113.24, heapUsed: 110.05, external: 10.98 }
+💗 Health check completed in 279ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:43:03.491Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:43:03.543Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:43:13.492Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:43:23.492Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 264ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:43:33.492Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:43:43.494Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:43:53.494Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 275.82, heapTotal: 113.74, heapUsed: 109.93, external: 11.04 }
+💗 Health check completed in 301ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:44:03.494Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:44:03.546Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:44:13.495Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:44:23.496Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 267ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:44:33.496Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:44:43.497Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:44:53.498Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 276.2, heapTotal: 113.99, heapUsed: 110.38, external: 11.06 }
+💗 Health check completed in 263ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:45:03.499Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:45:03.549Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:45:13.500Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:45:23.501Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 253ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:45:33.500Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:45:43.501Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:45:53.501Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 276.57, heapTotal: 115.24, heapUsed: 110.65, external: 11.11 }
+💗 Health check completed in 265ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:46:03.501Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:46:03.552Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:46:13.503Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:46:23.503Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 259ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:46:33.503Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:46:43.504Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:46:53.504Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 276.95, heapTotal: 114.74, heapUsed: 110.89, external: 11.15 }
+💗 Health check completed in 263ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:47:03.505Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:47:03.554Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:47:13.506Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:47:23.506Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 249ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:47:33.506Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:47:43.506Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:47:53.506Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 277.45, heapTotal: 114.99, heapUsed: 111.19, external: 11.19 }
+💗 Health check completed in 263ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:48:03.507Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:48:03.558Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:48:13.507Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:48:23.508Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 255ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:48:33.509Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:48:43.509Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:48:53.510Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 277.7, heapTotal: 115.24, heapUsed: 111.53, external: 11.25 }
+💗 Health check completed in 263ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:49:03.511Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:49:03.562Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:49:13.512Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:49:23.513Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 255ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:49:33.513Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:49:43.514Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:49:53.514Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 278.07, heapTotal: 115.49, heapUsed: 111.84, external: 11.29 }
+💗 Health check completed in 252ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:50:03.515Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:50:03.564Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:50:13.514Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:50:23.515Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 259ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:50:33.514Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:50:43.514Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:50:53.514Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 278.32, heapTotal: 115.74, heapUsed: 112.04, external: 11.33 }
+💗 Health check completed in 256ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:51:03.514Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:51:03.566Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:51:13.514Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:51:23.514Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 251ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:51:33.514Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:51:43.514Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:51:53.515Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 279.57, heapTotal: 115.99, heapUsed: 112.4, external: 11.37 }
+💗 Health check completed in 258ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:52:03.516Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:52:03.569Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:52:13.516Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:52:23.517Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 266ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:52:33.518Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:52:43.520Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:52:53.521Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 280.45, heapTotal: 117.24, heapUsed: 112.65, external: 11.42 }
+💗 Health check completed in 258ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:53:03.522Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:53:03.571Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:53:13.523Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:53:23.526Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 277ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:53:33.526Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:53:43.526Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:53:53.526Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 280.57, heapTotal: 116.74, heapUsed: 113, external: 11.47 }
+💗 Health check completed in 257ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:54:03.526Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:54:03.574Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:54:13.526Z", 5, 5]

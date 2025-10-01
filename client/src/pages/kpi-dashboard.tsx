@@ -187,12 +187,15 @@ export default function KpiDashboard() {
   const handleExport = async (format: 'json' | 'csv') => {
     try {
       setExportLoading(true);
-      const response = await fetch(`/api/allocations/guard-metrics/export?window=${timeWindow}&format=${format}`, {
+      // K-02 Fix: Correct endpoint path
+      const response = await fetch(`/api/allocations/kpi-metrics/export?window=${timeWindow}&format=${format}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
       
-      if (!response.ok) throw new Error('Export failed');
+      if (!response.ok) {
+        throw new Error(`Export failed: ${response.status} ${response.statusText}`);
+      }
       
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -204,7 +207,8 @@ export default function KpiDashboard() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Export error:', error);
+      console.error('K-02: Export error:', error);
+      // TODO: Add user-facing error notification
     } finally {
       setExportLoading(false);
     }

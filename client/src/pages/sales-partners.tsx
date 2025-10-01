@@ -62,11 +62,13 @@ interface SalesPartner extends SalesPartnerWithCount {
 }
 
 interface SalesPartnerStats {
-  totalPartners: string;
-  activePartners: string;
-  totalCommission: string;
-  averageCommissionRate: string;
-  totalCoupledSales?: string;
+  // S-01 Fix: Changed to number to match backend response
+  totalPartners: number;
+  activePartners: number;
+  totalCommission: number;
+  averageCommissionRate: number;
+  totalCoupledSales?: number;
+  totalCoupledDebt?: number;
 }
 
 interface Representative {
@@ -102,18 +104,24 @@ export default function SalesPartners() {
     retryDelay: 1000
   });
 
-  const { data: stats } = useQuery<SalesPartnerStats>({
+  // S-01 Fix: Query for statistics with success state
+  const statsQuery = useQuery<SalesPartnerStats>({
     queryKey: ["/sales-partners/statistics"],
     queryFn: () => apiRequest("/sales-partners/statistics"),
     select: (data: any) => {
+      // S-01 Fix: Handle numeric values from backend
       return data || {
-        totalPartners: "0",
-        activePartners: "0",
-        totalCommission: "0",
-        averageCommissionRate: "0"
+        totalPartners: 0,
+        activePartners: 0,
+        totalCommission: 0,
+        averageCommissionRate: 0,
+        totalCoupledSales: 0,
+        totalCoupledDebt: 0
       };
     }
   });
+  
+  const stats = statsQuery.data;
 
   const { data: representatives = [] } = useQuery<Representative[]>({
     queryKey: ["/api/representatives"],
@@ -265,7 +273,8 @@ export default function SalesPartners() {
                       کل فروش
                     </p>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {formatCurrency(0)}
+                      {/* S-02 Fix: Display actual totalCoupledSales from API */}
+                      {statsQuery.isSuccess ? formatCurrency(Number(stats?.totalCoupledSales || 0)) : formatCurrency(0)}
                     </p>
                   </div>
                   <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center">
@@ -283,7 +292,8 @@ export default function SalesPartners() {
                       کل کمیسیون
                     </p>
                     <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                      {formatCurrency(parseFloat(stats?.totalCommission || "0"))}
+                      {/* S-02 Fix: stats.totalCommission is now number, not string */}
+                      {formatCurrency(stats?.totalCommission || 0)}
                     </p>
                   </div>
                   <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900 rounded-full flex items-center justify-center">
@@ -471,7 +481,8 @@ export default function SalesPartners() {
               <CardContent className="p-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                    {formatCurrency(parseFloat(stats?.totalCommission || "0"))}
+                    {/* S-02 Fix: stats.totalCommission is now number */}
+                    {formatCurrency(stats?.totalCommission || 0)}
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">کل کمیسیون‌ها</div>
                 </div>
@@ -482,7 +493,8 @@ export default function SalesPartners() {
               <CardContent className="p-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                    {toPersianDigits(parseFloat(stats?.averageCommissionRate || "0").toFixed(1))}%
+                    {/* S-02 Fix: stats.averageCommissionRate is now number */}
+                    {toPersianDigits((stats?.averageCommissionRate || 0).toFixed(1))}%
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">میانگین کمیسیون</div>
                 </div>
@@ -493,7 +505,8 @@ export default function SalesPartners() {
               <CardContent className="p-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                    {formatCurrency(parseFloat(stats?.totalCoupledSales || "0"))}
+                    {/* S-02 Fix: stats.totalCoupledSales is now number */}
+                    {formatCurrency(stats?.totalCoupledSales || 0)}
                   </div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">کل فروش کوپل شده</div>
                 </div>

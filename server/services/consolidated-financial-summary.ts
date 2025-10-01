@@ -24,6 +24,10 @@ export interface ConsolidatedDashboardData {
   totalPayments: number;
   totalPaymentAmount: number;
   unallocatedPaymentAmount: number;
+  // D-01 Fix: New metrics for accurate dashboard display
+  unsentTelegramInvoices: number;
+  totalSalesPartners: number;
+  activeSalesPartners: number;
   systemIntegrityScore: number;
   lastUpdated: string;
   queryTimeMs: number;
@@ -103,6 +107,22 @@ export class ConsolidatedFinancialSummaryService {
             COALESCE(SUM(representative_debt), 0) as total_system_debt,
             COUNT(*) as active_debt_representatives
           FROM debt_calculation
+        ),
+        
+        -- CTE 6: Telegram Unsent Invoices (D-01 Fix)
+        telegram_summary AS (
+          SELECT 
+            COUNT(*) as unsent_telegram_invoices
+          FROM invoices
+          WHERE sent_to_telegram = false
+        ),
+        
+        -- CTE 7: Active Sales Partners (D-01 Fix)
+        sales_partners_summary AS (
+          SELECT 
+            COUNT(*) as total_sales_partners,
+            COUNT(*) FILTER (WHERE is_active = true) as active_sales_partners
+          FROM sales_partners
         )
         
         -- Final SELECT combining all CTEs
@@ -133,6 +153,11 @@ export class ConsolidatedFinancialSummaryService {
           ps.total_payment_amount,
           ps.unallocated_payment_amount,
           
+          -- D-01 Fix: Telegram & Sales Partners metrics
+          ts.unsent_telegram_invoices,
+          sps.total_sales_partners,
+          sps.active_sales_partners,
+          
           -- System health (simplified calculation)
           CASE 
             WHEN st.total_system_debt = 0 THEN 100
@@ -145,6 +170,8 @@ export class ConsolidatedFinancialSummaryService {
         CROSS JOIN invoice_summary ist
         CROSS JOIN payment_summary ps
         CROSS JOIN system_totals st
+        CROSS JOIN telegram_summary ts
+        CROSS JOIN sales_partners_summary sps
       `);
 
       const endTime = performance.now();
@@ -172,6 +199,10 @@ export class ConsolidatedFinancialSummaryService {
         totalPayments: Number(row.total_payments) || 0,
         totalPaymentAmount: Number(row.total_payment_amount) || 0,
         unallocatedPaymentAmount: Number(row.unallocated_payment_amount) || 0,
+        // D-01 Fix: Map new fields from query results
+        unsentTelegramInvoices: Number(row.unsent_telegram_invoices) || 0,
+        totalSalesPartners: Number(row.total_sales_partners) || 0,
+        activeSalesPartners: Number(row.active_sales_partners) || 0,
         systemIntegrityScore: Number(row.system_integrity_score) || 0,
         lastUpdated: new Date().toISOString(),
         queryTimeMs,
@@ -251,6 +282,12 @@ export class ConsolidatedFinancialSummaryService {
       const payments = (paymentsResult as any).rows[0];
       const debt = (debtResult as any).rows[0];
 
+      // Query for Telegram and Sales Partners for legacy fallback
+      const telegramResult = await db.execute(sql`SELECT COUNT(*) as unsent FROM invoices WHERE sent_to_telegram = false`);
+      const salesPartnersResult = await db.execute(sql`SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE is_active = true) as active FROM sales_partners`);
+      const telegram = (telegramResult as any).rows[0];
+      const salesPartners = (salesPartnersResult as any).rows[0];
+      
       const legacyData: ConsolidatedDashboardData = {
         totalRevenue: Number(payments?.allocated_amount) || 0,
         totalDebt: Number(debt?.total_debt) || 0,
@@ -266,6 +303,10 @@ export class ConsolidatedFinancialSummaryService {
         totalPayments: Number(payments?.total) || 0,
         totalPaymentAmount: Number(payments?.total_amount) || 0,
         unallocatedPaymentAmount: Number(payments?.total_amount) - Number(payments?.allocated_amount) || 0,
+        // D-01 Fix: Add new fields to legacy fallback
+        unsentTelegramInvoices: Number(telegram?.unsent) || 0,
+        totalSalesPartners: Number(salesPartners?.total) || 0,
+        activeSalesPartners: Number(salesPartners?.active) || 0,
         systemIntegrityScore: 85, // Simplified
         lastUpdated: new Date().toISOString(),
         queryTimeMs: totalTimeMs,

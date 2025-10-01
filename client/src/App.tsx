@@ -139,7 +139,8 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
     <div className="admin-panel-background dark">
       <Sidebar />
       <div className={`main-content ${mainContentMarginClass} transition-[margin] duration-300 relative z-10`}>
-        <Header onMenuClick={isMobile ? openMobileSidebar : toggleSidebar} />
+        {/* Header now uses useSidebar hook internally, no need for props */}
+        <Header />
         <main className="p-4 lg:p-6 relative z-10">
           {children}
         </main>

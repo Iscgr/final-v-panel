@@ -696,6 +696,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const legacySummary = await unifiedFinancialEngine.calculateGlobalSummary();
           
+          // D-01 Fix: Query for missing fields in legacy fallback
+          let unsentTelegram = 0, totalSalesPartners = 0, activeSalesPartners = 0;
+          try {
+            const telegramResult = await db.execute(sql`SELECT COUNT(*) as count FROM invoices WHERE sent_to_telegram = false`);
+            unsentTelegram = Number((telegramResult as any).rows?.[0]?.count) || 0;
+            
+            const partnersResult = await db.execute(sql`
+              SELECT 
+                COUNT(*) as total,
+                COUNT(*) FILTER (WHERE is_active = true) as active 
+              FROM sales_partners
+            `);
+            const partnerRow = (partnersResult as any).rows?.[0];
+            totalSalesPartners = Number(partnerRow?.total) || 0;
+            activeSalesPartners = Number(partnerRow?.active) || 0;
+          } catch (err) {
+            console.warn("⚠️ E-B7: Could not fetch Telegram/Sales Partners in fallback:", err);
+          }
+
           // Convert legacy format to consolidated format for consistency
           consolidatedData = {
             totalRevenue: legacySummary.totalSystemPaid || 0,
@@ -712,6 +731,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             totalPayments: 0, // Legacy doesn't track payment count
             totalPaymentAmount: legacySummary.totalSystemPaid || 0,
             unallocatedPaymentAmount: 0, // Legacy doesn't track unallocated
+            // D-01 Fix: Add new fields to legacy fallback
+            unsentTelegramInvoices: unsentTelegram,
+            totalSalesPartners: totalSalesPartners,
+            activeSalesPartners: activeSalesPartners,
             systemIntegrityScore: Math.round(legacySummary.systemAccuracy || 0),
             lastUpdated: legacySummary.lastCalculationTime || new Date().toISOString(),
             queryTimeMs: 999, // Indicate fallback mode
@@ -733,10 +756,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             totalDebt: consolidatedData.totalDebt,
             totalCredit: consolidatedData.totalCredit,
             totalOutstanding: consolidatedData.totalOutstanding,
-            riskRepresentatives: consolidatedData.inactiveRepresentatives, // Map to existing field
-            unsentTelegramInvoices: consolidatedData.overdueInvoices, // Map to existing field
-            totalSalesPartners: consolidatedData.totalRepresentatives,
-            activeSalesPartners: consolidatedData.activeRepresentatives,
+            riskRepresentatives: consolidatedData.inactiveRepresentatives,
+            // D-01 FIX: Use correct fields from consolidated data
+            unsentTelegramInvoices: consolidatedData.unsentTelegramInvoices, // Corrected: was overdueInvoices
+            totalSalesPartners: consolidatedData.totalSalesPartners, // Corrected: was totalRepresentatives
+            activeSalesPartners: consolidatedData.activeSalesPartners, // Corrected: was activeRepresentatives
             systemIntegrityScore: consolidatedData.systemIntegrityScore,
             lastReconciliationDate: consolidatedData.lastUpdated,
             problematicRepresentativesCount: consolidatedData.inactiveRepresentatives,
@@ -1995,29 +2019,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // MISSING API: Invoice statistics - SHERLOCK v12.1 ENHANCEMENT
   app.get("/api/invoices/statistics", authMiddleware, async (req, res) => {
     try {
-      console.log('📊 SHERLOCK v12.1: Calculating invoice statistics');
+      console.log('📊 S-04 Fix: Calculating invoice statistics via optimized SQL');
 
-      const invoices = await storage.getInvoices();
+      // S-04 Fix: Replace in-memory filtering with single aggregated query
+      const [statsResult] = await db.select({
+        totalInvoices: sql<number>`COUNT(*)`,
+        unpaidCount: sql<number>`COUNT(*) FILTER (WHERE status = 'unpaid')`,
+        paidCount: sql<number>`COUNT(*) FILTER (WHERE status = 'paid')`,
+        partialCount: sql<number>`COUNT(*) FILTER (WHERE status = 'partial')`,
+        overdueCount: sql<number>`COUNT(*) FILTER (WHERE status = 'overdue')`,
+        totalAmount: sql<string>`COALESCE(SUM(CAST(amount AS DECIMAL)), 0)`,
+        unpaidAmount: sql<string>`COALESCE(SUM(CAST(amount AS DECIMAL)) FILTER (WHERE status = 'unpaid'), 0)`,
+        paidAmount: sql<string>`COALESCE(SUM(CAST(amount AS DECIMAL)) FILTER (WHERE status = 'paid'), 0)`,
+        sentToTelegramCount: sql<number>`COUNT(*) FILTER (WHERE sent_to_telegram = true)`,
+        unsentToTelegramCount: sql<number>`COUNT(*) FILTER (WHERE sent_to_telegram = false)`
+      }).from(invoices);
 
       const stats = {
-        totalInvoices: invoices.length,
-        unpaidCount: invoices.filter(inv => inv.status === 'unpaid').length,
-        paidCount: invoices.filter(inv => inv.status === 'paid').length,
-        partialCount: invoices.filter(inv => inv.status === 'partial').length,
-        overdueCount: invoices.filter(inv => inv.status === 'overdue').length,
-        totalAmount: invoices.reduce((sum, inv) => sum + parseFloat(inv.amount), 0),
-        unpaidAmount: invoices
-          .filter(inv => inv.status === 'unpaid')
-          .reduce((sum, inv) => sum + parseFloat(inv.amount), 0),
-        paidAmount: invoices
-          .filter(inv => inv.status === 'paid')
-          .reduce((sum, inv) => sum + parseFloat(inv.amount), 0),
-        // SHERLOCK v12.2: Add telegram statistics for accurate unsent count
-        sentToTelegramCount: invoices.filter(inv => inv.sentToTelegram).length,
-        unsentToTelegramCount: invoices.filter(inv => !inv.sentToTelegram).length
+        totalInvoices: Number(statsResult.totalInvoices || 0),
+        unpaidCount: Number(statsResult.unpaidCount || 0),
+        paidCount: Number(statsResult.paidCount || 0),
+        partialCount: Number(statsResult.partialCount || 0),
+        overdueCount: Number(statsResult.overdueCount || 0),
+        totalAmount: parseFloat(statsResult.totalAmount || '0'),
+        unpaidAmount: parseFloat(statsResult.unpaidAmount || '0'),
+        paidAmount: parseFloat(statsResult.paidAmount || '0'),
+        sentToTelegramCount: Number(statsResult.sentToTelegramCount || 0),
+        unsentToTelegramCount: Number(statsResult.unsentToTelegramCount || 0)
       };
 
-      console.log('📊 آمار فاکتورها:', stats);
+      console.log(`📊 S-04 Fixed: Invoice statistics via SQL - Total: ${stats.totalInvoices}, Unpaid: ${stats.unpaidCount}, Overdue: ${stats.overdueCount}`);
       res.json(stats);
     } catch (error) {
       console.error('❌ خطا در محاسبه آمار فاکتورها:', error);

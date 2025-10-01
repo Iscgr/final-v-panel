@@ -291,13 +291,14 @@ export default function Settings() {
 
   const testTelegramMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('/api/telegram/test-connection', { method: 'POST' });
+      // T-01 Fix: Correct endpoint path
+      const response = await apiRequest('/api/test-telegram', { method: 'POST' });
       return response;
     },
     onSuccess: (data) => {
       toast({
         title: "✅ اتصال تلگرام موفق",
-        description: `ربات ${data.botInfo?.username} متصل شد`,
+        description: `ربات ${data.botInfo?.username || 'تلگرام'} متصل شد`,
       });
     },
     onError: (error: any) => {
