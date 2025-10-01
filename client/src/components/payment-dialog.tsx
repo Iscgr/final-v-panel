@@ -49,7 +49,7 @@ export default function PaymentDialog({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [allocationType, setAllocationType] = useState<'auto' | 'manual'>('auto');
+  // ❌ [ODIN v5.0] allocationType removed - Manual allocation only
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
@@ -71,7 +71,7 @@ export default function PaymentDialog({
       const unpaidInvoices = data.invoices.filter((inv: Invoice) => inv.remainingAmount > 0);
       return { ...data, invoices: unpaidInvoices };
     },
-    enabled: isOpen && allocationType === 'manual',
+    enabled: isOpen, // همیشه فعال - برای نمایش لیست فاکتورها
     staleTime: 0,
   });
 
@@ -103,7 +103,6 @@ export default function PaymentDialog({
       setAmount('');
       setDescription('');
       setSelectedInvoiceNumber('');
-      setAllocationType('auto');
       
       // Close dialog
       onOpenChange(false);
@@ -138,15 +137,6 @@ export default function PaymentDialog({
       return;
     }
 
-    if (allocationType === 'manual' && !selectedInvoiceNumber) {
-      toast({
-        variant: "destructive",
-        title: "خطا",
-        description: "لطفاً فاکتور مورد نظر را انتخاب کنید",
-      });
-      return;
-    }
-
     const paymentData: any = {
       representativeId,
       amount: amountNum,
@@ -154,19 +144,14 @@ export default function PaymentDialog({
       description: description || undefined,
     };
 
-    // ✅ ODIN v5.0: ارسال invoiceNumber به جای invoiceId
-    if (allocationType === 'manual' && selectedInvoiceNumber) {
+    // ✅ ODIN v5.0: ارسال invoiceNumber برای تخصیص دستی (اگر انتخاب شده باشد)
+    if (selectedInvoiceNumber && selectedInvoiceNumber !== '') {
       paymentData.selectedInvoiceNumber = selectedInvoiceNumber;
-    } else if (allocationType === 'auto') {
-      paymentData.selectedInvoiceNumber = 'auto';
     }
+    // else: پرداخت بدون تخصیص ثبت می‌شود
 
     paymentMutation.mutate(paymentData);
   };
-
-  // محاسبه قدیمی‌ترین فاکتور برای نمایش در حالت auto
-  const oldestInvoice = invoicesData?.invoices
-    ?.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -179,70 +164,42 @@ export default function PaymentDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* نوع تخصیص */}
-          <div className="space-y-3">
-            <Label>نوع تخصیص</Label>
-            <RadioGroup value={allocationType} onValueChange={(value) => setAllocationType(value as 'auto' | 'manual')}>
-              <div className="flex items-center space-x-2 space-x-reverse p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-                <RadioGroupItem value="auto" id="auto" />
-                <Label htmlFor="auto" className="flex-1 cursor-pointer">
-                  <div className="font-semibold">تخصیص خودکار</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    تخصیص به قدیمی‌ترین فاکتورها
-                  </div>
-                  {oldestInvoice && allocationType === 'auto' && (
-                    <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                      📌 شروع از فاکتور {toPersianDigits(oldestInvoice.invoiceNumber)} - مانده: {formatCurrency(oldestInvoice.remainingAmount)}
-                    </div>
-                  )}
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2 space-x-reverse p-3 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800">
-                <RadioGroupItem value="manual" id="manual" />
-                <Label htmlFor="manual" className="flex-1 cursor-pointer">
-                  <div className="font-semibold">تخصیص دستی</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    انتخاب فاکتور مشخص
-                  </div>
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
-
-          {/* انتخاب فاکتور در حالت دستی */}
-          {allocationType === 'manual' && (
-            <div className="space-y-2">
-              <Label htmlFor="invoice">فاکتور مقصد</Label>
-              {isLoadingInvoices ? (
-                <div className="flex items-center justify-center p-4">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                </div>
-              ) : (
-                <Select value={selectedInvoiceNumber} onValueChange={setSelectedInvoiceNumber}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="انتخاب فاکتور" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {invoicesData?.invoices.map((invoice) => (
-                      <SelectItem key={invoice.id} value={invoice.invoiceNumber}>
-                        <div className="flex items-center justify-between gap-4 w-full">
-                          <span>فاکتور {toPersianDigits(invoice.invoiceNumber)}</span>
-                          <span className="text-sm text-gray-600">
-                            مانده: {formatCurrency(invoice.remainingAmount)}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                    {(!invoicesData?.invoices || invoicesData.invoices.length === 0) && (
-                      <SelectItem value="none" disabled>
-                        فاکتور تسویه نشده‌ای وجود ندارد
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              )}
+          {/* انتخاب فاکتور - تخصیص دستی فقط */}
+          <div className="space-y-2">
+            <Label htmlFor="invoice">فاکتور مقصد (اختیاری)</Label>
+            <div className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              برای تخصیص دستی، یک فاکتور انتخاب کنید. در غیر این صورت، پرداخت بدون تخصیص ثبت می‌شود.
             </div>
-          )}
+            {isLoadingInvoices ? (
+              <div className="flex items-center justify-center p-4">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
+            ) : (
+              <Select value={selectedInvoiceNumber} onValueChange={setSelectedInvoiceNumber}>
+                <SelectTrigger>
+                  <SelectValue placeholder="بدون تخصیص (می‌توانید بعداً تخصیص دهید)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">بدون تخصیص</SelectItem>
+                  {invoicesData?.invoices.map((invoice) => (
+                    <SelectItem key={invoice.id} value={invoice.invoiceNumber}>
+                      <div className="flex items-center justify-between gap-4 w-full">
+                        <span>فاکتور {toPersianDigits(invoice.invoiceNumber)}</span>
+                        <span className="text-sm text-gray-600">
+                          مانده: {formatCurrency(invoice.remainingAmount)}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                  {(!invoicesData?.invoices || invoicesData.invoices.length === 0) && (
+                    <SelectItem value="no-invoices" disabled>
+                      فاکتور تسویه نشده‌ای وجود ندارد
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
 
           {/* مبلغ */}
           <div className="space-y-2">

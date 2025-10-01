@@ -25,7 +25,7 @@ const Portal = lazy(() => import("@/pages/portal"));
 const AdminLogin = lazy(() => import("@/pages/admin-login"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 const UnifiedAuth = lazy(() => import("@/pages/unified-auth"));
-const AllocationManagement = lazy(() => import("@/pages/allocation-management"));
+// ❌ [ODIN v5.0] AllocationManagement removed - auto-allocation feature removed
 const KpiDashboard = lazy(() => import("@/pages/kpi-dashboard"));
 
 // System
