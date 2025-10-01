@@ -14,12 +14,38 @@
 
 ---
 
+## ⚡ Quick Start
+
+```bash
+# نصب کامل با یک دستور (5-10 دقیقه)
+curl -sSL https://raw.githubusercontent.com/Iscgr/AgentPortalShield/prof/install.sh | sudo bash
+```
+
+**یا اگر مخزن کلون کرده‌اید:**
+
+```bash
+cd /opt/marfanet
+sudo bash install.sh
+```
+
+**پس از نصب:**
+- 🌐 دسترسی: `https://marfanet.irnrefnation.com/admin`
+- 📋 اطلاعات ورود: `cat /opt/marfanet/credentials.txt`
+- 🛠️ مدیریت: `marfanet` (منوی تعاملی)
+
+📚 **مستندات کامل:**
+- [راهنمای نصب تفصیلی](INSTALL_GUIDE.md)
+- [مشخصات فنی استقرار](DEPLOYMENT_SPEC.md)
+- [اسکریپت اعتبارسنجی](validate-install.sh)
+
+---
+
 ## فهرست مطالب
 1. معرفی سریع
 2. ویژگی‌ها
 3. معماری
 4. نصب یک‌خطی (Production)
-5. ابزار مدیریتی `agent`
+5. ابزار مدیریتی `marfanet`
 6. متغیرهای محیطی
 7. عملیات نگهداری (Backup / Update / Restore)
 8. امنیت و توصیه‌ها
