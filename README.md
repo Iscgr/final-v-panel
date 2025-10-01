@@ -47,6 +47,8 @@
 
 **MarFaNet** یک سیستم مدیریت مالی پیشرفته و جامع است که برای مدیریت نمایندگان فروش، فاکتورها، پرداخت‌ها و عملیات مالی در محیط کسب‌وکار فارسی طراحی شده است. این سیستم با استفاده از آخرین تکنولوژی‌های وب، Docker، و هوش مصنوعی، راهکاری کامل و امن برای مدیریت مالی ارائه می‌دهد.
 
+> 🔄 انتشار جدید: نصب «صفر تا صد» یک‌مرحله‌ای برای Ubuntu 24.04+ با اسکریپت خودکار + منوی مدیریتی agent (بکاپ، آپدیت، ریستارت، لاگ، سلامت)
+
 ### 🌟 چرا MarFaNet؟
 
 - **🐳 Docker-Ready**: نصب آسان و ایزوله با containerization
@@ -235,6 +237,171 @@ MarFaNet سه روش نصب مختلف ارائه می‌دهد:
 # دانلود و اجرای اسکریپت Docker
 curl -sSL https://raw.githubusercontent.com/Iscgr/AgentPortalShield/main/docker-deploy.sh | sudo bash
 ```
+
+---
+
+## ⚡ نصب کاملاً خودکار (یک‌خطی جدید پیشنهادی Production)
+
+این روش جدید، همه چیز (Docker, Nginx, SSL, Database, Redis, Build) را خودکار انجام می‌دهد و فقط «دامنه» از شما می‌پرسد.
+
+### ✅ ویژگی‌ها
+- نصب بهینه روی Ubuntu 24.04 / 22.04
+- تولید خودکار: پسورد DB، SESSION_SECRET، Admin Password
+- پشتیبانی SSL معتبر (Let's Encrypt)
+- Reverse Proxy امن (Nginx + HTTP/2)
+- اجرای ایزوله (Bridge Network + Internal app binding)
+- اسکریپت مدیریتی `agent` برای عملیات روزمره
+
+### 🚀 دستور یک‌خطی
+```bash
+curl -sSL https://YOUR-CDN-DOMAIN/path/auto-install.sh | sudo bash
+```
+یا اگر مخزن را کلون کرده‌اید:
+```bash
+sudo bash scripts/auto-install.sh
+```
+
+### 🧪 چه چیزی نصب می‌شود؟
+| مولفه | توضیح | پورت خارجی |
+|-------|-------|-------------|
+| PostgreSQL | دیتابیس مالی | (فقط داخل شبکه Docker) |
+| Redis | نشست و کش | (فقط داخل شبکه Docker) |
+| App (Node.js) | API + UI یکپارچه | 3000 (فقط 127.0.0.1) |
+| Nginx | Reverse Proxy + TLS | 80 / 443 |
+
+### 🗂 مسیر نصب و فایل‌ها
+| فایل/دایرکتوری | مسیر |
+|----------------|-------|
+| ریشه نصب | `/opt/marfanet` |
+| فایل env | `/opt/marfanet/.env` |
+| compose stack | `/opt/marfanet/docker-compose-stack.yml` |
+| کانفیگ nginx | `/opt/marfanet/nginx.conf` |
+| بکاپ‌ها | `/opt/marfanet/backups` |
+
+### 🔐 خروجی نهایی پس از نصب
+نمونه خروجی:
+```
+============================================================
+ نصب MarFaNet تکمیل شد
+============================================================
+دامنه: https://example.com
+پنل:  https://example.com/admin
+پورتال: https://example.com/portal/[ID]
+
+اطلاعات ورود ادمین:
+   Username: admin
+   Password: <GEN_PASS>
+
+دیتابیس:
+   DB User: marfanet
+   DB Name: marfanet_db
+   DB Pass: <GEN_DB_PASS>
+
+فایل ENV: /opt/marfanet/.env
+ابزار مدیریت: agent  (دستورات: agent backup|update|restart|logs|health)
+============================================================
+```
+
+### 🛠 متغیرهای تولید شده خودکار
+| کلید | توضیح |
+|------|-------|
+| ADMIN_PASSWORD | رمز اولیه ورود پنل |
+| DATABASE_URL | اتصال سرویس به PostgreSQL داخلی |
+| SESSION_SECRET | کلید نشست Express |
+| PUBLIC_BASE_URL | دامنه اصلی پنل |
+| PUBLIC_PORTAL_BASE_URL | دامنه لینک‌های پورتال |
+
+---
+
+## 🧭 ابزار مدیریتی Agent
+
+پس از نصب، یک دستور جهانی `agent` در سیستم شما ایجاد می‌شود.
+
+### 🎛 منوی تعاملی
+```bash
+agent
+```
+نمایش گزینه‌ها:
+```
+1) بکاپ + ارسال تلگرام
+2) آپدیت پنل
+3) ریستارت پنل
+4) نمایش لاگ
+5) وضعیت سلامت
+q) خروج
+```
+
+### ⏱ دستورات غیرتعاملی (اسکریپتی)
+```bash
+agent backup
+agent update
+agent restart
+agent logs
+agent health
+```
+
+### 💾 بکاپ + ارسال به تلگرام
+1. در فایل `.env` مقادیر زیر را مقداردهی کنید:
+```env
+TELEGRAM_BOT_TOKEN=xxxxxxxxx
+TELEGRAM_CHAT_ID=123456789
+```
+2. اجرا:
+```bash
+agent backup
+```
+3. فایل فشرده `db_<timestamp>.sql.gz` در مسیر `/opt/marfanet/backups` ذخیره و به تلگرام ارسال می‌شود.
+
+### 🔄 آپدیت بدون تخریب دیتا
+```bash
+agent update
+```
+مراحل: `git fetch/reset` → build مجدد ایمیج app → راه‌اندازی کانتینر جدید.
+
+### ♻️ ریستارت ایمن
+```bash
+agent restart
+```
+
+### 📜 مشاهده لاگ زنده
+```bash
+agent logs
+```
+
+### ❤️ Health Check
+```bash
+agent health
+```
+خواندن `/health` از پشت Nginx و نمایش JSON.
+
+---
+
+## ❗ سناریوهای نگهداری مهم
+
+### تمدید SSL (خودکار کرون certbot وجود دارد، ولی تست دستی):
+```bash
+sudo certbot renew --dry-run
+```
+
+### تغییر دامنه بعد از نصب
+1. ویرایش `PUBLIC_BASE_URL` در `.env`
+2. صدور مجدد گواهی:
+```bash
+docker stop marfanet-nginx
+certbot certonly --standalone -d NEWDOMAIN --agree-tos -m admin@NEWDOMAIN --non-interactive
+```
+3. ویرایش `nginx.conf` و ریستارت:
+```bash
+docker compose -f /opt/marfanet/docker-compose-stack.yml up -d nginx
+```
+
+### بازگردانی بکاپ
+```bash
+gunzip db_20250101_101500.sql.gz
+docker compose -f /opt/marfanet/docker-compose-stack.yml exec -T db psql -U marfanet marfanet_db < db_20250101_101500.sql
+```
+
+---
 
 ### 📋 اطلاعات درخواستی
 
