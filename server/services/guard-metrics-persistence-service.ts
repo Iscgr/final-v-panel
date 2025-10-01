@@ -65,8 +65,15 @@ class GuardMetricsPersistenceServiceClass {
    * Summary ساده: شمارش بر اساس نوع در بازه اخیر (windowMinutes)
    */
   async getSummary(windowMinutes: number) {
-    const since = sql`NOW() - INTERVAL '${windowMinutes} minutes'`;
-    const rows: any = await db.execute(sql`SELECT event_type, COUNT(*) AS c FROM guard_metrics_events WHERE created_at >= ${since} GROUP BY event_type`);
+    // از اینترپولیشن مستقیم داخل INTERVAL اجتناب می‌کنیم تا هم از نظر امنیتی ایمن‌تر باشد
+    // و هم از بروز خطای احتمالی 08P01 (protocol violation در bind) جلوگیری شود.
+    // الگو: NOW() - (<minutes>::int * interval '1 minute')
+    const rows: any = await db.execute(sql`
+      SELECT event_type, COUNT(*) AS c
+      FROM guard_metrics_events
+      WHERE created_at >= NOW() - (${windowMinutes}::int * interval '1 minute')
+      GROUP BY event_type
+    `);
     const out: Record<string, number> = {};
     for (const r of (rows as any).rows || []) {
       out[r.event_type] = Number(r.c);

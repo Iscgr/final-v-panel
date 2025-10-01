@@ -1,4 +1,4 @@
-import { RepresentativeData, FinancialData, BatchData, ValidatedInvoiceData, ValidatedInvoiceBatchData } from './routes-interfaces';
+import { RepresentativeData, FinancialData, BatchData, ValidatedInvoiceData, ValidatedInvoiceBatchData } from './routes-interfaces.js';
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -51,15 +51,15 @@ import { unifiedFinancialEngine } from './services/unified-financial-engine.js';
 // Import integration health routes for Phase 9
 import { registerIntegrationHealthRoutes } from "./routes/integration-health-routes";
 import featureFlagRoutes from './routes/feature-flag-routes.js';
-import { registerHealthRoutes } from './routes/health-routes';
+import { registerHealthRoutes } from './routes/health-routes.js';
 
 // Import unified statistics routes registration
 import { registerUnifiedStatisticsRoutes } from "./routes/unified-statistics-routes.js";
 // Register unified financial routes
 import { registerUnifiedFinancialRoutes } from "./routes/unified-financial-routes.js";
-import { registerShadowAllocationRoutes } from './routes/shadow-allocation-routes';
-import { registerUsageLineRoutes } from './routes/usage-line-routes';
-import { isCanaryRepresentative } from './services/allocation-canary-helper';
+import { registerShadowAllocationRoutes } from './routes/shadow-allocation-routes.js';
+import { registerUsageLineRoutes } from './routes/usage-line-routes.js';
+import { isCanaryRepresentative } from './services/allocation-canary-helper.js';
 
 // Import database optimization routes registration
 import databaseOptimizationRoutes from './routes/database-optimization-routes.js';
@@ -71,7 +71,10 @@ import debtVerificationRoutes from './routes/debt-verification-routes.js';
 // Import Active Reconciliation Routes - Phase B: E-B4
 import activeReconciliationRoutes from './routes/active-reconciliation-routes.js';
 import guardMetricsRoutes from './routes/guard-metrics-routes.js';
-import { featureFlagManager } from './services/feature-flag-manager';
+import { featureFlagManager } from './services/feature-flag-manager.js';
+
+// Import Representatives Routes - Modular & Refactored
+import representativesRoutes from './routes/representatives-routes.js';
 
 // --- Interfaces for Authentication Middleware ---
 interface AuthSession {
@@ -206,6 +209,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // NEW: /api/auth/me برای سازگاری با کلاینت (UnifiedAuthContext)
+  app.get('/api/auth/me', (req, res) => {
+    if (req.session?.authenticated && (req.session as any).user) {
+      const user = (req.session as any).user;
+      return res.json({
+        user: {
+          id: user.id,
+          username: user.username,
+          role: user.role || 'ADMIN',
+          permissions: user.permissions || []
+        },
+        authenticated: true,
+        timestamp: new Date().toISOString()
+      });
+    }
+    return res.status(401).json({
+      error: 'UNAUTHENTICATED',
+      authenticated: false,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // NEW: /api/auth/logout مسیر خروج کاربر
+  app.post('/api/auth/logout', (req, res) => {
+    if (req.session) {
+      req.session.destroy((err) => {
+        if (err) {
+          console.error('Logout session destroy error:', err);
+          return res.status(500).json({ error: 'FAILED_LOGOUT' });
+        }
+        res.clearCookie('marfanet.sid');
+        return res.json({ success: true, message: 'Logged out' });
+      });
+    } else {
+      res.json({ success: true, message: 'No active session' });
+    }
+  });
+
   // 💗 Register Health Check routes for Ubuntu Server monitoring
   registerHealthRoutes(app);
 
@@ -214,6 +255,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register integration health routes for Phase 9
   registerIntegrationHealthRoutes(app);
   app.use('/api/feature-flags', featureFlagRoutes);
+
+  // 🔷 Representatives Routes - Refactored & Modular (5 columns: name, ownerName, totalSales, totalDebt, actions)
+  app.use('/api/representatives', authMiddleware, representativesRoutes);
+  console.log('✅ Representatives routes registered with authentication');
 
   // SHERLOCK v18.4: سیستم مالی یکپارچه واحد - تنها سیستم مالی فعال
   // Previously imported and used directly:
@@ -413,6 +458,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const outboxRoutes = await import('./routes/outbox-routes');
   app.use('/api/outbox', outboxRoutes.default);
 
+  // Phase C: E-C5 - SLA Dashboard Routes
+  const slaDashboardRoutes = await import('./routes/sla-dashboard-routes');
+  app.use('/api/sla', slaDashboardRoutes.default);
+  console.log('✅ E-C5: SLA Dashboard routes registered');
+
   // SHERLOCK v1.0: Session Recovery and Debug Endpoint
   app.get("/api/auth/session-debug", (req, res) => {
     const sessionInfo = {
@@ -573,6 +623,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } else {
       res.status(401).json({ error: "Not authenticated" });
+    }
+  });
+
+  // --- S5 Scaffold: Dashboard Chart Mock Endpoints ---
+  // Revenue Trend (hourly buckets mock)
+  app.get('/api/dashboard/revenue-trend', authMiddleware, async (req, res) => {
+    try {
+      const windowParam = (req.query.window as string) || '24h';
+      const points = 24; // hourly
+      const now = Date.now();
+      const data = Array.from({ length: points }).map((_, i) => {
+        const ts = new Date(now - (points - 1 - i) * 60 * 60 * 1000).toISOString();
+        const base = 12000; // baseline revenue
+        return {
+          timestamp: ts,
+          amount: Math.round(base + Math.sin(i / 3) * 2800 + Math.random() * 1500)
+        };
+      });
+      res.json({ success: true, window: windowParam, data, generatedAt: new Date().toISOString() });
+    } catch (e:any) {
+      res.status(500).json({ success: false, error: 'failed_revenue_trend', details: e.message });
+    }
+  });
+
+  // Aging Buckets distribution (mock)
+  app.get('/api/dashboard/aging-buckets', authMiddleware, async (req, res) => {
+    try {
+      const distribution = {
+        current: 56000,
+        bucket_1_30: 34000,
+        bucket_31_60: 21000,
+        bucket_61_90: 11000,
+        bucket_90_plus: 5000
+      };
+      res.json({ success: true, data: distribution, generatedAt: new Date().toISOString() });
+    } catch (e:any) {
+      res.status(500).json({ success: false, error: 'failed_aging_buckets', details: e.message });
     }
   });
 
@@ -1141,14 +1228,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalSales: financialData.totalSales.toString(),
         credit: rep.credit,
         portalConfig,
-        invoices: sortedInvoices.map(inv => ({
-          invoiceNumber: inv.invoiceNumber,
-          amount: inv.amount,
-          issueDate: inv.issueDate,
-          dueDate: inv.dueDate,
-          status: inv.status,
-          usageData: inv.usageData, // Include usage data for detailed view
-          createdAt: inv.createdAt
+        invoices: await Promise.all(sortedInvoices.map(async (inv) => {
+          // محاسبه remainingAmount از payment_allocations
+          const { paymentAllocations } = await import('../shared/schema.js');
+          const [allocResult] = await db
+            .select({ 
+              totalAllocated: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmount}::numeric), 0)` 
+            })
+            .from(paymentAllocations)
+            .where(eq(paymentAllocations.invoiceId, inv.id));
+
+          const totalAllocated = Number(allocResult?.totalAllocated || 0);
+          const invoiceAmount = parseFloat(inv.amount || '0');
+          const remainingAmount = Math.max(0, invoiceAmount - totalAllocated);
+
+          return {
+            id: inv.id,
+            invoiceNumber: inv.invoiceNumber,
+            amount: inv.amount,
+            remainingAmount: remainingAmount.toString(),
+            issueDate: inv.issueDate,
+            dueDate: inv.dueDate,
+            status: inv.status,
+            usageData: inv.usageData,
+            createdAt: inv.createdAt
+          };
         })),
         payments: payments.map(pay => ({
           amount: pay.amount,
@@ -1456,7 +1560,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/payments", authMiddleware, async (req, res) => {
     try {
-      const { representativeId, amount, paymentDate, description, selectedInvoiceId } = req.body;
+      // ✅ ODIN PROTOCOL v5.0: استفاده از invoiceNumber به عنوان شناسه یکتا
+      const { representativeId, amount, paymentDate, description, selectedInvoiceId, selectedInvoiceNumber } = req.body;
 
       // Basic validation
       if (!representativeId || !amount || !paymentDate) {
@@ -1475,89 +1580,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       const normalizedPaymentDate = toEnglishDigits(paymentDate);
 
-      console.log(`📅 تطبیق تاریخ: ورودی="${paymentDate}" -> عادی‌سازی شده="${normalizedPaymentDate}"`);
+      console.log(`📅 [ODIN v5.0] تطبیق تاریخ: ورودی="${paymentDate}" -> عادی‌سازی شده="${normalizedPaymentDate}"`);
 
-      // ✅ SHERLOCK v33.2: ENHANCED ALLOCATION LOGIC WITH FINANCIAL SYNC
-      let isAllocated = false;
-      let invoiceId = null;
-      let finalPaymentStatus = null;
+      // ✅ ODIN v5.0: تبدیل invoiceNumber به invoice_id (اگر manual allocation انتخاب شده)
+      let resolvedInvoiceId: number | null = null;
+      let allocationMode: 'auto' | 'manual' | 'none' = 'none';
 
-      // Determine allocation status before creating payment
-      if (selectedInvoiceId && selectedInvoiceId !== "auto" && selectedInvoiceId !== "") {
-        // For manual allocation, start as unallocated and update after successful allocation
-        isAllocated = false; // Will be updated after successful allocation
-        invoiceId = null;    // Will be set after successful allocation
-        console.log(`💰 SHERLOCK v33.2: Manual allocation planned - Payment to Invoice ${selectedInvoiceId}`);
-      } else if (selectedInvoiceId === "auto") {
-        console.log(`🔄 SHERLOCK v34.0: UNIFIED Auto-allocation planned for Representative ${representativeId}`);
-        // Auto-allocation will be performed using Enhanced Payment Allocation Engine
-        isAllocated = false; // Start as unallocated, will be updated after auto-allocation
-        invoiceId = null;
-        console.log(`🎯 SHERLOCK v34.0: UNIFIED Auto-allocation planned for Representative ${representativeId}`);
+      // پشتیبانی از هر دو روش (invoiceNumber و invoiceId) برای سازگاری
+      if (selectedInvoiceNumber && selectedInvoiceNumber !== "auto") {
+        console.log(`🔍 [ODIN v5.0] تبدیل شماره فاکتور "${selectedInvoiceNumber}" به invoice_id...`);
+        resolvedInvoiceId = await storage.getInvoiceIdByNumber(selectedInvoiceNumber);
+        if (!resolvedInvoiceId) {
+          return res.status(400).json({ 
+            error: "فاکتور یافت نشد",
+            message: `فاکتور با شماره ${selectedInvoiceNumber} در سیستم موجود نیست`
+          });
+        }
+        allocationMode = 'manual';
+        console.log(`✅ [ODIN v5.0] شماره فاکتور "${selectedInvoiceNumber}" → invoice_id: ${resolvedInvoiceId}`);
+      } else if (selectedInvoiceId && selectedInvoiceId !== "auto" && selectedInvoiceId !== "") {
+        // Fallback: اگر هنوز از ID استفاده می‌کنند (سازگاری با کد قدیمی)
+        resolvedInvoiceId = parseInt(selectedInvoiceId);
+        allocationMode = 'manual';
+        console.log(`⚠️ [ODIN v5.0] استفاده از invoice_id مستقیم (deprecated): ${resolvedInvoiceId}`);
+      } else if (selectedInvoiceNumber === "auto" || selectedInvoiceId === "auto") {
+        allocationMode = 'auto';
+        console.log(`🔄 [ODIN v5.0] Auto-allocation برای Representative ${representativeId}`);
       }
 
-      // Create the payment initially as unallocated for manual assignments
+      // Create the payment initially as unallocated
       const newPayment = await storage.createPayment({
         representativeId,
         amount,
-        paymentDate: normalizedPaymentDate, // Now as text to match database
+        paymentDate: normalizedPaymentDate,
         description,
-        invoiceId: invoiceId
+        invoiceId: null // همیشه null - تخصیص جداگانه انجام می‌شود
       });
 
-      finalPaymentStatus = newPayment; // Initialize with the newly created payment
+      let finalPaymentStatus = newPayment;
 
-      // ✅ SHERLOCK v34.0: UNIFIED ALLOCATION - استفاده انحصاری از Enhanced Payment Allocation Engine
-      if (selectedInvoiceId && selectedInvoiceId !== "auto" && selectedInvoiceId !== "") {
-        console.log(`💰 SHERLOCK v34.0: Executing UNIFIED manual allocation - Payment ${newPayment.id} to Invoice ${selectedInvoiceId}`);
+      // ✅ ODIN v5.0: UNIFIED ALLOCATION با استفاده از invoice_id که از invoiceNumber تبدیل شده
+      if (allocationMode === 'manual' && resolvedInvoiceId) {
+        console.log(`💰 [ODIN v5.0] اجرای manual allocation - Payment ${newPayment.id} → Invoice ID: ${resolvedInvoiceId}`);
 
         try {
-          // ✅ استفاده از storage method برای تخصیص دستی
           const allocationResult = await storage.manualAllocatePaymentToInvoice(
             newPayment.id,
-            parseInt(selectedInvoiceId),
+            resolvedInvoiceId,
             parseFloat(amount),
-            'ADMIN_USER' // یا شناسه کاربری واقعی
+            'ADMIN_USER'
           );
 
           if (!allocationResult.success) {
             throw new Error(`Manual allocation failed: ${allocationResult.message}`);
           }
 
-          // استفاده از وضعیت پرداخت ایجاد شده (allocation method وضعیت را بروزرسانی می‌کند)
-          finalPaymentStatus = { ...newPayment, isAllocated: true, invoiceId: parseInt(selectedInvoiceId) };
+          finalPaymentStatus = { ...newPayment, isAllocated: true, invoiceId: resolvedInvoiceId };
 
-          console.log(`✅ SHERLOCK v34.0: UNIFIED manual allocation successful - ${allocationResult.allocatedAmount} allocated`);
+          console.log(`✅ [ODIN v5.0] Manual allocation موفق - ${allocationResult.allocatedAmount} تومان تخصیص داده شد`);
 
         } catch (allocationError: any) {
-          console.error(`❌ SHERLOCK v34.0: UNIFIED manual allocation failed:`, allocationError);
-          throw new Error(`خطا در تخصیص دستی یکپارچه: ${allocationError.message || allocationError}`);
+          console.error(`❌ [ODIN v5.0] Manual allocation ناموفق:`, allocationError);
+          throw new Error(`خطا در تخصیص دستی: ${allocationError.message || allocationError}`);
         }
-      } else if (selectedInvoiceId === "auto") {
-          console.log(`🔄 SHERLOCK v34.0: Executing UNIFIED auto-allocation for Representative ${representativeId}`);
+      } else if (allocationMode === 'auto') {
+          console.log(`🔄 [ODIN v5.0] اجرای auto-allocation برای Representative ${representativeId}`);
 
           try {
-            // ✅ استفاده از storage method برای تخصیص خودکار
             const allocationResult = await storage.autoAllocatePaymentToInvoices(newPayment.id, representativeId);
 
             if (allocationResult.success && parseFloat(allocationResult.totalAmount) > 0) {
-              // دریافت وضعیت به‌روز شده پرداخت
               const updatedPayments = await storage.getPaymentsByRepresentative(representativeId);
               const thisPayment = updatedPayments.find(p => p.id === newPayment.id);
 
               finalPaymentStatus = thisPayment || newPayment;
-              console.log(`✅ SHERLOCK v34.0: UNIFIED auto-allocation successful - Payment ${newPayment.id} allocated ${allocationResult.totalAmount} تومان`);
-              console.log(`📋 SHERLOCK v34.0: Allocation details:`, allocationResult.details);
+              console.log(`✅ [ODIN v5.0] Auto-allocation موفق - ${allocationResult.totalAmount} تومان تخصیص داده شد`);
+              console.log(`📋 [ODIN v5.0] جزئیات تخصیص:`, allocationResult.details);
             } else {
-              console.log(`⚠️ SHERLOCK v34.0: Auto-allocation completed but no allocation possible`);
+              console.log(`⚠️ [ODIN v5.0] Auto-allocation اجرا شد اما تخصیصی امکان‌پذیر نبود`);
               finalPaymentStatus = newPayment;
             }
           } catch (autoAllocationError: any) {
-            console.error(`❌ SHERLOCK v34.0: UNIFIED auto-allocation failed:`, autoAllocationError);
-            // Keep payment as unallocated if auto-allocation fails
+            console.error(`❌ [ODIN v5.0] Auto-allocation ناموفق:`, autoAllocationError);
             finalPaymentStatus = newPayment;
 
-            // Log detailed error for debugging
             await storage.createActivityLog({
               type: "payment_auto_allocation_failed",
               description: `تخصیص خودکار پرداخت ${newPayment.id} ناموفق: ${autoAllocationError.message || autoAllocationError}`,
@@ -1565,7 +1671,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               metadata: {
                 paymentId: newPayment.id,
                 error: autoAllocationError.message || autoAllocationError,
-                engine: "Enhanced Payment Allocation Engine"
+                protocol: "ODIN v5.0"
               }
             });
           }
@@ -2585,6 +2691,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(logs);
     } catch (error) {
       res.status(500).json({ error: "خطا در دریافت فعالیت‌ها" });
+    }
+  });
+
+  // NEW: Recent Activity endpoint با فرمت مناسب کامپوننت ActivityFeed (Dashboard)
+  app.get('/api/activity/recent', authMiddleware, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 30;
+      const logs = await storage.getActivityLogs(limit);
+      // نرمال‌سازی برای ActivityFeed
+      const normalized = logs.map(l => ({
+        id: String(l.id ?? l.createdAt ?? Math.random()),
+        type: ((): any => {
+          if (l.type === 'invoice_created') return 'invoice_created';
+          if (l.type === 'invoice_updated') return 'invoice_updated';
+          if (l.type === 'invoice_deleted') return 'invoice_deleted';
+          return 'system_error';
+        })(),
+        actor: 'سیستم',
+        at: (l.createdAt instanceof Date ? l.createdAt.toISOString() : new Date(l.createdAt as any).toISOString()),
+        meta: { rawType: l.type, relatedId: (l as any).relatedId, description: (l as any).description }
+      }));
+      res.json({ success: true, items: normalized });
+    } catch (error) {
+      console.error('Recent activity error:', error);
+      res.status(500).json({ error: 'خطا در واکشی فعالیت اخیر' });
     }
   });
 

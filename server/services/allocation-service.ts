@@ -8,9 +8,9 @@ import { payments, invoices, paymentAllocations } from '@shared/schema';
 import { validateAllocations } from './allocation-invariants.js';
 import { GuardMetricsService } from './guard-metrics-service.js';
 import { eq, and, sql } from 'drizzle-orm';
-import { featureFlagManager } from './feature-flag-manager';
-import { isCanaryRepresentative } from './allocation-canary-helper';
-import { InvoiceBalanceCacheService } from './invoice-balance-cache-service';
+import { featureFlagManager } from './feature-flag-manager.js';
+import { isCanaryRepresentative } from './allocation-canary-helper.js';
+import { InvoiceBalanceCacheService } from './invoice-balance-cache-service.js';
 import { stableIdempotencyKey } from '../utils/crypto-hash';
 
 export interface AllocationResultShadow {

@@ -220,14 +220,13 @@ export class OutboxService {
    */
   async getLatencyPercentiles(windowMinutes: number = 60): Promise<{ windowMinutes: number; p50: number | null; p95: number | null; sampleSize: number; }> {
     try {
-      const interval = `${windowMinutes} minutes`;
       const result: any = await db.execute(sql`SELECT
           percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
           percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
           COUNT(*) AS cnt
         FROM guard_metrics_events
         WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
-          AND created_at >= NOW() - INTERVAL ${interval};`);
+          AND created_at >= NOW() - INTERVAL '${sql.raw(windowMinutes.toString())} minutes';`);
       const row = (result as any).rows?.[0];
       return {
         windowMinutes,

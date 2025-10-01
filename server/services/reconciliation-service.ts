@@ -6,7 +6,7 @@
 import { db } from '../database-manager';
 import { payments, invoices, paymentAllocations, reconciliationRuns } from '@shared/schema';
 import { sql } from 'drizzle-orm';
-import { featureFlagManager } from './feature-flag-manager';
+import { featureFlagManager } from './feature-flag-manager.js';
 
 export interface DriftMetrics {
   legacyAllocatedSum: number;   // مجموع مبلغ پرداخت‌های علامت‌خورده is_allocated یا فاکتورهای paid؟ (فعلاً پرداخت‌های allocated)

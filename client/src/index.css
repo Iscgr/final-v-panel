@@ -2,68 +2,72 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  /* === Design System Core Tokens (Phase B3 - Contrast Enhanced) === */
-  /* 5-Color Semantic Palette - WCAG AA Compliant */
-  --ds-primary: hsl(258 62% 58%); /* Darker primary for better contrast */
-  --ds-primary-foreground: var(--primary-foreground);
-  --ds-neutral: hsl(220 9% 46%);
-  --ds-neutral-foreground: hsl(210 20% 98%);
-  --ds-success: hsl(145 65% 35%); /* Much darker green for AA compliance */
-  --ds-success-foreground: hsl(145 25% 96%);
-  --ds-warning: hsl(40 90% 55%);
-  --ds-warning-foreground: hsl(40 30% 10%);
-  --ds-danger: var(--destructive);
-  --ds-danger-foreground: var(--destructive-foreground);
-  /* Focus Ring */
-  --focus-ring-color: hsl(258 90% 70% / 0.9);
-  --focus-ring-offset: 2px;
-  --focus-ring-width: 3px;
+@layer base {
+  :root {
+    /* 
+     * ========================================================================
+     * Design Tokens - Single Source of Truth
+     * ========================================================================
+     * As defined in: src/styles/tokens.ts
+     * This section establishes the foundational design primitives for the MarFaNet app.
+     * All values are derived from the central tokens file to ensure consistency.
+     */
+
+    /* ------------------------------------------------------------------------
+     * Core Palette & Colors
+     * ------------------------------------------------------------------------ */
+    --background: 224 71.4% 4.1%;
+    --foreground: 210 20% 98%;
+
+    --muted: 215 27.9% 16.9%;
+    --muted-foreground: 217.9 10.6% 64.9%;
+
+    --popover: 224 71.4% 4.1%;
+    --popover-foreground: 210 20% 98%;
+
+    --card: 224 71.4% 4.1%;
+    --card-foreground: 210 20% 98%;
+
+    --border: 215 27.9% 16.9%;
+    --input: 215 27.9% 16.9%;
+
+    --primary: 210 20% 98%;
+    --primary-foreground: 220.9 39.3% 11%;
+
+    --secondary: 215 27.9% 16.9%;
+    --secondary-foreground: 210 20% 98%;
+    
+    --success: 142 76% 36%;
+    --success-foreground: 142 80% 96%;
+
+    --warning: 48 96% 50%;
+    --warning-foreground: 48 90% 10%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 20% 98%;
+
+    --ring: 216 12.2% 83.9%;
+    
+    /* ------------------------------------------------------------------------
+     * Radius (Border Radius)
+     * ------------------------------------------------------------------------ */
+    --radius-sm: 0.25rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 1rem;
+  }
+
+  .dark {
+    /* Dark theme overrides can be placed here if needed in the future */
+  }
 }
 
-:root {
-  /* Claymorphism Theme - Soft Pastel Colors */
-  --background: hsl(280, 15%, 97%);
-  --foreground: hsl(260, 15%, 25%);
-  --muted: hsl(290, 20%, 92%);
-  --muted-foreground: hsl(270, 10%, 55%);
-  --popover: hsl(285, 25%, 95%);
-  --popover-foreground: hsl(260, 15%, 25%);
-  --card: hsl(295, 25%, 96%);
-  --card-foreground: hsl(260, 15%, 25%);
-  --border: hsl(285, 15%, 88%);
-  --input: hsl(290, 20%, 94%);
-  --primary: hsl(258, 62%, 75%);
-  --primary-foreground: hsl(0, 0%, 100%);
-  --secondary: hsl(155, 45%, 78%);
-  --secondary-foreground: hsl(160, 20%, 25%);
-  --accent: hsl(195, 55%, 80%);
-  --accent-foreground: hsl(200, 25%, 25%);
-  --destructive: hsl(350, 65%, 75%);
-  --destructive-foreground: hsl(0, 0%, 100%);
-  --ring: hsl(258, 30%, 65%);
-  --radius: 1.2rem;
-
-  /* Claymorphism Specific Colors */
-  --clay-lavender: hsl(258, 62%, 75%);
-  --clay-mint: hsl(155, 45%, 78%);
-  --clay-baby-blue: hsl(195, 55%, 80%);
-  --clay-peach: hsl(25, 70%, 85%);
-  --clay-rose: hsl(340, 50%, 82%);
-  --clay-sage: hsl(85, 35%, 75%);
-
-  /* Shadow Variables */
-  --clay-shadow-outer: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --clay-shadow-inner: inset 0 1px 1px rgba(0, 0, 0, 0.02);
-  --clay-shadow-pressed: inset 0 1px 1px rgba(0, 0, 0, 0.03);
-  --clay-shadow-hover: 0 1px 3px rgba(0, 0, 0, 0.08);
-
-  /* Custom MarFaNet colors with clay treatment */
-  --marfanet-primary: var(--clay-lavender);
-  --marfanet-secondary: var(--clay-mint);
-  --marfanet-accent: var(--clay-baby-blue);
-  --marfanet-error: var(--clay-rose);
-  --marfanet-surface: hsl(290, 20%, 94%);
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
 /* Force Dark Mode for Admin Panel */

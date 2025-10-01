@@ -16,7 +16,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { getDatabaseStatus } from './database-manager';
+import { getDatabaseStatus } from './database-manager.js';
 
 // 🏷️ Error Classification System
 export enum ErrorSeverity {

@@ -3,8 +3,8 @@
  * Job ساعتی (قابل تنظیم) برای اجرای محاسبه drift (shadow) و ثبت در reconciliation_runs (اگر پرچم فعال باشد).
  * Phase A → Passive (record only)
  */
-import { ReconciliationService } from './reconciliation-service';
-import { featureFlagManager } from './feature-flag-manager';
+import { ReconciliationService } from './reconciliation-service.js';
+import { featureFlagManager } from './feature-flag-manager.js';
 
 export class DriftJobService {
   private static timer: NodeJS.Timeout | null = null;

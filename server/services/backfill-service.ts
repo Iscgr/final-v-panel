@@ -6,8 +6,8 @@
 import { db } from '../database-manager';
 import { payments, paymentAllocations } from '@shared/schema';
 import { sql } from 'drizzle-orm';
-import { featureFlagManager } from './feature-flag-manager';
-import { InvoiceBalanceCacheService } from './invoice-balance-cache-service';
+import { featureFlagManager } from './feature-flag-manager.js';
+import { InvoiceBalanceCacheService } from './invoice-balance-cache-service.js';
 
 export interface BackfillDryRunResult {
   candidateCount: number;

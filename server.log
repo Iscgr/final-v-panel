@@ -1,0 +1,51 @@
+
+> rest-express@1.0.0 dev
+> DATABASE_URL=postgresql://postgres:postgres@localhost:5432/marfanet LOG_DIRECTORY=./logs NODE_ENV=development tsx server/index.ts
+
+🔧 Database Environment Detected: local
+📡 Connection String: postgresql://postgres:***@localhost:5432/marfanet
+🚀 Initializing local database connection...
+🚩 ATOMOS Feature Flag Manager v1.0 initialized with safe defaults
+✅ PHASE 9: Integration health routes registered
+💗 Periodic health monitoring started (every 30s)
+✅ Database connection initialized successfully
+[dotenv@17.2.2] injecting env (20) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+10:45:23 PM [express] Checking database connection...
+📝 Log directory initialized: ./logs
+10:45:23 PM [database] Database connection successful
+Query: select "id", "username", "password_hash", "role", "permissions", "is_active", "last_login_at", "created_at" from "admin_users" where "admin_users"."username" = $1 limit $2 -- params: ["mgr", 1]
+Query: update "admin_users" set "password_hash" = $1, "role" = $2, "is_active" = $3 where "admin_users"."username" = $4 -- params: ["$2b$12$3ZBkbkskC0Bra6hAvkObrOHYMacVdzXEhJtd8Ts4iqwqnPNvuWcDG", "SUPER_ADMIN", true, "mgr"]
+🔄 Admin user 'mgr' password reset successfully
+💗 Registering health check routes...
+✅ Health check routes registered successfully
+✅ Standardized Invoice Routes Registered
+✅ Integration health routes registered for Phase 9
+✅ E-B6: Usage Line Visibility routes registered
+✅ E-B5 Stage 3: KPI Metrics routes registered
+✅ Batch Rollback Routes Registered
+✅ E-C5: SLA Dashboard routes registered
+Starting OutboxWorker...
+Query: insert into "guard_metrics_events" ("id", "event_type", "level", "context", "created_at") values (default, $1, $2, $3, default) -- params: ["OUTBOX_WORKER_STARTED", "info", "{}"]
+🚀 E-C1: OutboxWorker auto-started (flag=on)
+🛰️ E-C4: OutboxMonitor started (alerts on)
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-09-30T21:45:23.990Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Starting server on port 3000
+DriftJobService not started (active_reconciliation=off)
+🚀 MarFaNet Server started on port 3000
+✅ API accessible at /api/dashboard
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-09-30T22:45:33.990Z", 5, 5]
+💗 Database health status changed: HEALTHY
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-09-30T22:45:43.992Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 325ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-09-30T22:45:53.992Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-09-30T22:46:03.992Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-09-30T22:46:13.992Z", 5, 5]
+🛑 SIGTERM received, shutting down gracefully

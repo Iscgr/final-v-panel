@@ -15,8 +15,8 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { checkDatabaseHealth, getDatabaseStatus } from './database-manager';
-import errorManager, { ErrorSeverity, ErrorCategory } from './unified-error-manager';
+import { checkDatabaseHealth, getDatabaseStatus } from './database-manager.js';
+import errorManager, { ErrorSeverity, ErrorCategory } from './unified-error-manager.js';
 
 import os from 'os';
 

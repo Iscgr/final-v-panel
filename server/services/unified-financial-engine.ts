@@ -9,8 +9,8 @@ import { db } from '../database-manager';
 import { representatives, invoices, payments } from '@shared/schema';
 import { eq, sql, desc, and } from 'drizzle-orm';
 import { performance } from 'perf_hooks';
-import { pythonFinancialClient } from './python-financial-client';
-import { featureFlagManager } from './feature-flag-manager';
+import { pythonFinancialClient } from './python-financial-client.js';
+import { featureFlagManager } from './feature-flag-manager.js';
 
 // Define RepresentativeFinancialData interface based on the new calculation logic
 interface RepresentativeFinancialData {

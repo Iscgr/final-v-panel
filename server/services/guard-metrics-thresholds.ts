@@ -24,16 +24,44 @@ let lastLoadTs = 0;
 const CACHE_TTL_MS = 60_000; // 1m
 
 /**
- * Placeholder loader: in آینده threshold_config خوانده می‌شود.
- * فعلاً فقط DEFAULT را بازمی‌گرداند.
+ * Placeholder loader: حال از threshold_config خوانده می‌شود.
  */
 async function loadDynamicThresholds(): Promise<Record<string, MetricThreshold>> {
   const now = Date.now();
   if (dynamicThresholdCache && (now - lastLoadTs) < CACHE_TTL_MS) return dynamicThresholdCache;
-  // TODO: SELECT metric_code, warn_threshold, critical_threshold FROM threshold_config WHERE enabled=true
-  dynamicThresholdCache = { ...DEFAULT_GUARD_THRESHOLDS };
-  lastLoadTs = now;
-  return dynamicThresholdCache;
+  
+  try {
+    // Import dynamically to avoid circular dependency
+    const { db } = await import('../db.js');
+    const { thresholdConfig } = await import('../../shared/schema.js');
+    const { eq } = await import('drizzle-orm');
+    
+    const rows = await db.select({
+      metricCode: thresholdConfig.metricCode,
+      warnThreshold: thresholdConfig.warnThreshold,
+      criticalThreshold: thresholdConfig.criticalThreshold
+    }).from(thresholdConfig).where(eq(thresholdConfig.enabled, true));
+    
+    const dynamicMap: Record<string, MetricThreshold> = {};
+    for (const row of rows) {
+      dynamicMap[row.metricCode] = {
+        warn: Number(row.warnThreshold),
+        critical: Number(row.criticalThreshold)
+      };
+    }
+    
+    // Merge with defaults for any missing entries
+    dynamicThresholdCache = { ...DEFAULT_GUARD_THRESHOLDS, ...dynamicMap };
+    lastLoadTs = now;
+    
+    console.log('🎯 Dynamic thresholds loaded from DB:', Object.keys(dynamicMap));
+    return dynamicThresholdCache;
+  } catch (error) {
+    console.warn('⚠️ Failed to load dynamic thresholds, using defaults:', error.message);
+    dynamicThresholdCache = { ...DEFAULT_GUARD_THRESHOLDS };
+    lastLoadTs = now;
+    return dynamicThresholdCache;
+  }
 }
 
 export async function getThresholdForAsync(type: string): Promise<MetricThreshold> {

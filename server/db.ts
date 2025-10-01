@@ -19,7 +19,7 @@ import {
   executeWithRetry,
   getDatabaseStatus,
   logSlowQuery 
-} from './database-manager';
+} from './database-manager.js';
 
 // Re-export everything for backward compatibility
 export { 

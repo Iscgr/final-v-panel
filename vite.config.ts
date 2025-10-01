@@ -16,6 +16,10 @@ export default defineConfig({
         ]
       : []),
   ],
+  worker: {
+    format: 'es',
+    plugins: () => [react()]
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),

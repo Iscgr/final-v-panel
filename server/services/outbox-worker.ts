@@ -1,8 +1,8 @@
 // Phase C: E-C1 Telegram Outbox Worker
 // Purpose: پردازش پیام‌های outbox با exponential backoff strategy + latency metrics + health tracking
 
-import { OutboxService } from './outbox';
-import { FeatureFlagManager } from './feature-flag-manager';
+import { OutboxService } from './outbox.js';
+import { FeatureFlagManager } from './feature-flag-manager.js';
 import { db } from '../db';
 import { guardMetricsEvents } from '../../shared/schema';
 

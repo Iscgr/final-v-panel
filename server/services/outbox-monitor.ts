@@ -18,9 +18,9 @@
  */
 import { db } from '../db.js';
 import { guardMetricsEvents } from '../../shared/schema';
-import { featureFlagManager } from './feature-flag-manager';
-import { OutboxService } from './outbox';
-import { getThresholdFor } from './guard-metrics-thresholds';
+import { featureFlagManager } from './feature-flag-manager.js';
+import { OutboxService } from './outbox.js';
+import { getThresholdFor } from './guard-metrics-thresholds.js';
 
 interface MetricState {
   level: 'warn' | 'critical' | 'none';

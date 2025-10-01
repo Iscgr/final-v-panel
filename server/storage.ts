@@ -1,4 +1,4 @@
-import { InvoiceEditRecord, TransactionRecord, ConfigRecord } from './storage-interfaces';
+import { InvoiceEditRecord, TransactionRecord, ConfigRecord } from './storage-interfaces.js';
 import {
   representatives, salesPartners, invoices, payments, activityLogs, settings, adminUsers, invoiceEdits,
   financialTransactions, dataIntegrityConstraints, invoiceBatches, telegramSendHistory,
@@ -78,6 +78,9 @@ export interface IStorage {
   // SHERLOCK v12.4: Manual Invoices Management
   getManualInvoices(options: { page: number; limit: number; search?: string; status?: string }): Promise<{ data: Invoice[]; pagination: any }>;
   getManualInvoicesStatistics(): Promise<{ totalCount: number; totalAmount: string; unpaidCount: number; paidCount: number; partialCount: number }>;
+
+  // HELPER: Get Invoice ID by Invoice Number
+  getInvoiceIdByNumber(invoiceNumber: string): Promise<number | null>;
 
   // Payments
   getPayments(): Promise<Payment[]>;
@@ -719,19 +722,23 @@ export class DatabaseStorage implements IStorage {
       const invoiceAmount = parseFloat(invoice[0].amount);
       const dueDate = invoice[0].dueDate;
 
-      // Get total payments allocated to this invoice
-      const paymentResults = await db.select({ amount: payments.amount })
-        .from(payments)
-        .where(eq(payments.invoiceId, invoiceId));
+      // ✅ استفاده از payment_allocations به جای payments.invoiceId
+      const { paymentAllocations } = await import('../shared/schema.js');
+      const allocationResults = await db.select({ 
+        allocatedAmount: paymentAllocations.allocatedAmount 
+      })
+        .from(paymentAllocations)
+        .where(eq(paymentAllocations.invoiceId, invoiceId));
 
-      const totalPaid = paymentResults.reduce((sum: number, payment: any) =>
-        sum + parseFloat(payment.amount), 0);
+      const totalPaid = allocationResults.reduce((sum: number, alloc: any) =>
+        sum + parseFloat(alloc.allocatedAmount || '0'), 0);
 
-      // Calculate status based on payment coverage
-      if (totalPaid >= invoiceAmount) {
-        return 'paid'; // Fully paid
-      } else if (totalPaid > 0) {
-        return 'partial'; // Partially paid
+      // Calculate status based on payment coverage with precise comparison
+      const EPSILON = 0.01; // tolerance for floating point comparison
+      if (totalPaid >= invoiceAmount - EPSILON) {
+        return 'paid'; // Fully paid (تسویه شده)
+      } else if (totalPaid > EPSILON) {
+        return 'partial'; // Partially paid (تسویه جزئی)
       } else {
         // Check if overdue
         if (dueDate) {
@@ -741,7 +748,7 @@ export class DatabaseStorage implements IStorage {
             return 'overdue'; // Overdue and unpaid
           }
         }
-        return 'unpaid'; // Not paid and not overdue
+        return 'unpaid'; // Not paid and not overdue (تسویه نشده)
       }
     } catch (error) {
       console.error('Error calculating invoice payment status:', error);
@@ -903,6 +910,20 @@ export class DatabaseStorage implements IStorage {
       allocationHistory: null,
       updatedAt: payment.createdAt
     }));
+  }
+
+  // ✅ ODIN PROTOCOL v5.0: Helper Method for Invoice Number to ID Conversion
+  async getInvoiceIdByNumber(invoiceNumber: string): Promise<number | null> {
+    return executeWithRetry(
+      async () => {
+        const [invoice] = await db.select({ id: invoices.id })
+          .from(invoices)
+          .where(eq(invoices.invoiceNumber, invoiceNumber))
+          .limit(1);
+        return invoice?.id || null;
+      },
+      'getInvoiceIdByNumber'
+    );
   }
 
   async createPayment(payment: InsertPayment): Promise<Payment> {
@@ -2144,22 +2165,33 @@ export class DatabaseStorage implements IStorage {
   }> {
     return executeWithRetry(
       async () => {
-        console.log(`🚀 SHERLOCK v34.1: BASIC auto-allocation for payment ${paymentId}, representative ${representativeId}`);
+        console.log(`🚀 SHERLOCK v35.0: Auto-allocation (NEW SCHEMA) for payment ${paymentId}, representative ${representativeId}`);
 
         try {
+          // Import paymentAllocations schema
+          const { paymentAllocations } = await import('../shared/schema.js');
+
           // Get the payment
           const [payment] = await db.select().from(payments).where(eq(payments.id, paymentId));
           if (!payment) {
             throw new Error(`Payment ${paymentId} not found`);
           }
 
-          // Get already allocated amount for this payment
-          // For now, assume payments are either fully allocated or not allocated at all
-          // This is a simplified implementation since the enhanced engine was removed
-          const allocatedAmount = payment.isAllocated ? parseFloat(payment.amount) : 0;
-          const unallocatedAmount = parseFloat(payment.amount) - allocatedAmount;
+          // Calculate already allocated amount for this payment
+          const [paymentAllocatedSummary] = await db.select({
+            totalAllocated: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmount}::numeric), 0)` 
+          })
+          .from(paymentAllocations)
+          .where(eq(paymentAllocations.paymentId, paymentId));
+
+          const allocatedAmount = Number(paymentAllocatedSummary?.totalAllocated || 0);
+          const paymentAmount = parseFloat(payment.amount);
+          const unallocatedAmount = paymentAmount - allocatedAmount;
+
+          console.log(`💰 SHERLOCK v35.0: Payment ${paymentId} - Total: ${paymentAmount}, Allocated: ${allocatedAmount}, Remaining: ${unallocatedAmount}`);
 
           if (unallocatedAmount <= 0) {
+            console.log(`⚠️ SHERLOCK v35.0: Payment ${paymentId} already fully allocated`);
             return {
               success: false,
               allocated: 0,
@@ -2168,33 +2200,58 @@ export class DatabaseStorage implements IStorage {
             };
           }
 
-          // Get unpaid invoices for the representative (FIFO order)
-          const unpaidInvoices = await db
+          // Get unpaid invoices for the representative with their current allocated amounts (FIFO order)
+          const unpaidInvoicesRaw = await db
             .select()
             .from(invoices)
             .where(and(
               eq(invoices.representativeId, representativeId),
               or(eq(invoices.status, 'unpaid'), eq(invoices.status, 'partial'))
             ))
-            .orderBy(invoices.createdAt);
+            .orderBy(invoices.issueDate); // FIFO by issue date
 
-          let remainingAmount = unallocatedAmount;
+          // Calculate remaining amount for each invoice
+          const unpaidInvoices = [];
+          for (const invoice of unpaidInvoicesRaw) {
+            const [invoiceAllocatedSummary] = await db.select({
+              totalAllocated: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmount}::numeric), 0)` 
+            })
+            .from(paymentAllocations)
+            .where(eq(paymentAllocations.invoiceId, invoice.id));
+
+            const invoiceAllocatedTotal = Number(invoiceAllocatedSummary?.totalAllocated || 0);
+            const totalAmount = parseFloat(invoice.totalAmount);
+            const remainingAmount = totalAmount - invoiceAllocatedTotal;
+
+            if (remainingAmount > 0) {
+              unpaidInvoices.push({
+                ...invoice,
+                remainingAmount
+              });
+            }
+          }
+
+          console.log(`📋 SHERLOCK v35.0: Found ${unpaidInvoices.length} unpaid invoices for representative ${representativeId}`);
+
+          let remainingPayment = unallocatedAmount;
           const allocations = [];
 
           for (const invoice of unpaidInvoices) {
-            if (remainingAmount <= 0) break;
+            if (remainingPayment <= 0) break;
 
-            const invoiceBalance = parseFloat(invoice.totalAmount) - parseFloat(invoice.paidAmount || '0');
-            const allocateAmount = Math.min(remainingAmount, invoiceBalance);
+            const allocateAmount = Math.min(remainingPayment, invoice.remainingAmount);
 
             if (allocateAmount > 0) {
-              // Create allocation record
-              await db.insert(financialTransactions).values({
+              console.log(`  → Allocating ${allocateAmount} to invoice ${invoice.id} (remaining: ${invoice.remainingAmount})`);
+
+              // Insert into payment_allocations (NEW SCHEMA)
+              await db.insert(paymentAllocations).values({
                 paymentId,
                 invoiceId: invoice.id,
-                amount: allocateAmount.toString(),
-                type: 'allocation',
-                description: `تخصیص خودکار پرداخت ${paymentId} به فاکتور ${invoice.id}`,
+                allocatedAmount: allocateAmount.toString(),
+                method: 'auto',
+                synthetic: false,
+                performedBy: undefined,
                 createdAt: new Date()
               });
 
@@ -2204,24 +2261,25 @@ export class DatabaseStorage implements IStorage {
                 amount: allocateAmount.toString()
               });
 
-              remainingAmount -= allocateAmount;
+              remainingPayment -= allocateAmount;
             }
           }
 
-          const totalAllocated = unallocatedAmount - remainingAmount;
+          const totalAllocated = unallocatedAmount - remainingPayment;
 
           if (totalAllocated > 0) {
-            console.log(`✅ SHERLOCK v34.1: Auto-allocation successful - Allocated: ${totalAllocated}`);
+            console.log(`✅ SHERLOCK v35.0: Auto-allocation successful - Allocated: ${totalAllocated} to ${allocations.length} invoices`);
 
             // Create activity log
             await this.createActivityLog({
               type: 'payment_auto_allocated',
-              description: `تخصیص خودکار پرداخت ${paymentId} به مبلغ ${totalAllocated}`,
+              description: `تخصیص خودکار پرداخت ${paymentId} به مبلغ ${totalAllocated} به ${allocations.length} فاکتور`,
               relatedId: paymentId,
               metadata: {
                 representativeId,
                 allocatedAmount: totalAllocated,
-                allocationsCount: allocations.length
+                allocationsCount: allocations.length,
+                details: allocations
               }
             });
 
@@ -2235,7 +2293,7 @@ export class DatabaseStorage implements IStorage {
               details: allocations
             };
           } else {
-            console.log(`❌ SHERLOCK v34.1: No allocations possible for payment ${paymentId}`);
+            console.log(`❌ SHERLOCK v35.0: No allocations possible for payment ${paymentId}`);
 
             return {
               success: false,
@@ -2245,7 +2303,7 @@ export class DatabaseStorage implements IStorage {
             };
           }
         } catch (error) {
-          console.error(`❌ SHERLOCK v34.1: Auto-allocation error:`, error);
+          console.error(`❌ SHERLOCK v35.0: Auto-allocation error:`, error);
 
           // Log critical errors
           await this.createActivityLog({
@@ -2279,9 +2337,12 @@ export class DatabaseStorage implements IStorage {
   }> {
     return executeWithRetry(
       async () => {
-        console.log(`🎯 SHERLOCK v34.1: Manual allocation - Payment ${paymentId} -> Invoice ${invoiceId}, Amount: ${amount}`);
+        console.log(`🎯 SHERLOCK v35.0: Manual allocation (NEW SCHEMA) - Payment ${paymentId} -> Invoice ${invoiceId}, Amount: ${amount}`);
 
         try {
+          // Import paymentAllocations schema
+          const { paymentAllocations } = await import('../shared/schema.js');
+
           // Get payment and invoice
           const [payment] = await db.select().from(payments).where(eq(payments.id, paymentId));
           const [invoice] = await db.select().from(invoices).where(eq(invoices.id, invoiceId));
@@ -2293,46 +2354,77 @@ export class DatabaseStorage implements IStorage {
             throw new Error(`Invoice ${invoiceId} not found`);
           }
 
-          // Check if payment is already allocated
-          if (payment.isAllocated) {
+          // Validate amount
+          const allocateAmount = amount;
+          const paymentAmount = parseFloat(payment.amount);
+          
+          if (allocateAmount <= 0) {
             return {
               success: false,
               allocatedAmount: 0,
-              message: 'این پرداخت قبلاً تخصیص داده شده است'
+              message: 'مبلغ تخصیص باید مثبت باشد'
             };
           }
 
-          // Check if amount matches payment amount (simplified - only full allocations)
-          if (parseFloat(payment.amount) !== amount) {
+          if (allocateAmount > paymentAmount) {
             return {
               success: false,
               allocatedAmount: 0,
-              message: 'در حال حاضر فقط تخصیص کامل پرداخت پشتیبانی می‌شود'
+              message: `مبلغ تخصیص (${amount}) بیشتر از مبلغ پرداخت (${payment.amount}) است`
             };
           }
 
-          // Update payment
-          await db
-            .update(payments)
-            .set({
-              invoiceId: invoiceId,
-              isAllocated: true
-            })
-            .where(eq(payments.id, paymentId));
+          // Calculate current allocated total for this payment (to prevent over-allocation)
+          const [paymentAllocatedSummary] = await db.select({
+            totalAllocated: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmount}::numeric), 0)` 
+          })
+          .from(paymentAllocations)
+          .where(eq(paymentAllocations.paymentId, paymentId));
 
-          // Update invoice paid amount
-          const currentPaidAmount = parseFloat(invoice.paidAmount || '0');
-          const newPaidAmount = currentPaidAmount + amount;
+          const paymentAllocatedTotal = Number(paymentAllocatedSummary?.totalAllocated || 0);
+          const paymentRemaining = paymentAmount - paymentAllocatedTotal;
 
-          await db
-            .update(invoices)
-            .set({
-              paidAmount: newPaidAmount.toString(),
-              status: newPaidAmount >= parseFloat(invoice.totalAmount) ? 'paid' : 'partial'
-            })
-            .where(eq(invoices.id, invoiceId));
+          if (allocateAmount > paymentRemaining) {
+            return {
+              success: false,
+              allocatedAmount: 0,
+              message: `مبلغ تخصیص (${amount}) بیشتر از باقیمانده پرداخت (${paymentRemaining}) است`
+            };
+          }
 
-          console.log(`✅ SHERLOCK v34.1: Manual allocation successful`);
+          // Calculate current allocated total for this invoice (to prevent over-payment)
+          const [invoiceAllocatedSummary] = await db.select({
+            totalAllocated: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmount}::numeric), 0)` 
+          })
+          .from(paymentAllocations)
+          .where(eq(paymentAllocations.invoiceId, invoiceId));
+
+          const invoiceAllocatedTotal = Number(invoiceAllocatedSummary?.totalAllocated || 0);
+          const totalAmount = parseFloat(invoice.totalAmount);
+          const invoiceRemaining = totalAmount - invoiceAllocatedTotal;
+
+          console.log(`💰 SHERLOCK v35.0: Invoice ${invoiceId} - Total: ${totalAmount}, Allocated: ${invoiceAllocatedTotal}, Remaining: ${invoiceRemaining}, Allocating: ${allocateAmount}`);
+
+          if (allocateAmount > invoiceRemaining) {
+            return {
+              success: false,
+              allocatedAmount: 0,
+              message: `مبلغ تخصیص (${amount}) بیشتر از باقیمانده فاکتور (${invoiceRemaining}) است`
+            };
+          }
+
+          // Insert into payment_allocations (NEW SCHEMA)
+          await db.insert(paymentAllocations).values({
+            paymentId,
+            invoiceId,
+            allocatedAmount: amount.toString(),
+            method: 'manual',
+            synthetic: false,
+            performedBy: undefined, // Can be enhanced later with admin user ID
+            createdAt: new Date()
+          });
+
+          console.log(`✅ SHERLOCK v35.0: Manual allocation successful! Created payment_allocations record.`);
 
           // Create activity log
           await this.createActivityLog({
@@ -2344,7 +2436,8 @@ export class DatabaseStorage implements IStorage {
               amount,
               performedBy,
               reason,
-              representativeId: payment.representativeId
+              representativeId: payment.representativeId,
+              newInvoiceAllocatedTotal: invoiceAllocatedTotal + allocateAmount
             }
           });
 
@@ -2358,7 +2451,7 @@ export class DatabaseStorage implements IStorage {
             transactionId: `manual_${paymentId}_${invoiceId}_${Date.now()}`
           };
         } catch (error) {
-          console.error(`❌ SHERLOCK v34.1: Manual allocation failed:`, error);
+          console.error(`❌ SHERLOCK v35.0: Manual allocation failed:`, error);
 
           // Log failure for auditing
           await this.createActivityLog({

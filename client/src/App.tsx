@@ -18,6 +18,7 @@ const Dashboard = lazy(() => import("@/pages/dashboard"));
 const Invoices = lazy(() => import("@/pages/invoices"));
 const InvoiceManagement = lazy(() => import("@/pages/InvoiceManagement"));
 const Representatives = lazy(() => import("@/pages/representatives"));
+const RepresentativeProfile = lazy(() => import("@/pages/representative-profile"));
 const SalesPartners = lazy(() => import("@/pages/sales-partners"));
 const Settings = lazy(() => import("@/pages/settings"));
 const Portal = lazy(() => import("@/pages/portal"));
@@ -106,6 +107,7 @@ function AuthenticatedRouter() {
             <Route path="/dashboard" component={Dashboard} />
             <Route path="/kpi-dashboard" component={KpiDashboard} />
             <Route path="/representatives" component={Representatives} />
+            <Route path="/representatives/:code" component={RepresentativeProfile} />
             <Route path="/invoices" component={Invoices} />
             <Route path="/invoice-management" component={InvoiceManagement} />
             <Route path="/sales-partners" component={SalesPartners} />

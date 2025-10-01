@@ -278,6 +278,22 @@ export const outbox = pgTable('outbox', {
   createdAt: timestamp('created_at').defaultNow()
 });
 
+// Dynamic Threshold Configuration (E-C4)
+// هدف: مدیریت آستانه‌های پویا برای alerting و SLA monitoring
+export const thresholdConfig = pgTable('threshold_config', {
+  id: serial('id').primaryKey(),
+  metricCode: text('metric_code').notNull().unique(), // 'outbox_failure_rate', 'outbox_avg_retry', 'outbox_latency_p95'
+  warnThreshold: decimal('warn_threshold', { precision: 18, scale: 6 }).notNull(),
+  criticalThreshold: decimal('critical_threshold', { precision: 18, scale: 6 }).notNull(),
+  windowMinutes: integer('window_minutes').notNull().default(60),
+  comparisonOperator: text('comparison_operator').notNull().default('>'),
+  enabled: boolean('enabled').notNull().default(true),
+  autoSuspendOnBreach: boolean('auto_suspend_on_breach').notNull().default(false),
+  meta: json('meta').default({}),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow()
+});
+
 // Data Integrity Constraints (محدودیت‌های یکپارچگی داده) - Clock's Precision Mechanism
 export const dataIntegrityConstraints = pgTable("data_integrity_constraints", {
   id: serial("id").primaryKey(),
@@ -291,6 +307,39 @@ export const dataIntegrityConstraints = pgTable("data_integrity_constraints", {
   autoFixAttempts: integer("auto_fix_attempts").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow()
+});
+
+// Ingestion State Management (E-C6)
+// هدف: مدیریت وضعیت فرایندهای ingestion برای resumable processes
+export const ingestionState = pgTable('ingestion_state', {
+  id: serial('id').primaryKey(),
+  batchId: text('batch_id').notNull().unique(),
+  state: text('state').notNull().default('PENDING'),
+  currentStep: integer('current_step').notNull().default(0),
+  totalSteps: integer('total_steps').notNull().default(0),
+  processedRecords: integer('processed_records').notNull().default(0),
+  totalRecords: integer('total_records').notNull().default(0),
+  errorCount: integer('error_count').notNull().default(0),
+  lastError: text('last_error'),
+  checkpointData: json('checkpoint_data'),
+  startedAt: timestamp('started_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  completedAt: timestamp('completed_at')
+});
+
+export const processSteps = pgTable('process_steps', {
+  id: serial('id').primaryKey(),
+  batchId: text('batch_id').notNull(),
+  stepNumber: integer('step_number').notNull(),
+  stepName: text('step_name').notNull(),
+  stepType: text('step_type').notNull(),
+  stepConfig: json('step_config'),
+  status: text('status').notNull().default('PENDING'),
+  startedAt: timestamp('started_at'),
+  completedAt: timestamp('completed_at'),
+  errorMessage: text('error_message'),
+  retryCount: integer('retry_count').notNull().default(0),
+  createdAt: timestamp('created_at').defaultNow()
 });
 
 // Settings (تنظیمات)
@@ -981,7 +1030,18 @@ export const insertDailyReportSchema = omitInsert(createInsertSchema(dailyReport
 
 export const insertReconciliationActionSchema = omitInsert(createInsertSchema(reconciliationActions), "id", "createdAt", "appliedAt");
 
+// State Management Types (E-C6)
+export type IngestionState = typeof ingestionState.$inferSelect;
+export type InsertIngestionState = typeof ingestionState.$inferInsert;
+export type ProcessStep = typeof processSteps.$inferSelect;
+export type InsertProcessStep = typeof processSteps.$inferInsert;
+
+export const insertIngestionStateSchema = createInsertSchema(ingestionState);
+export const insertProcessStepSchema = createInsertSchema(processSteps);
+
 export const insertOutboxSchema = omitInsert(createInsertSchema(outbox), "id", "createdAt");
+
+export const insertThresholdConfigSchema = omitInsert(createInsertSchema(thresholdConfig), "id", "createdAt", "updatedAt");
 
 // ==================== TYPES ====================
 
@@ -1008,3 +1068,6 @@ export type InsertDailyReport = z.infer<typeof insertDailyReportSchema>;
 
 export type Outbox = typeof outbox.$inferSelect;
 export type InsertOutbox = z.infer<typeof insertOutboxSchema>;
+
+export type ThresholdConfig = typeof thresholdConfig.$inferSelect;
+export type InsertThresholdConfig = z.infer<typeof insertThresholdConfigSchema>;

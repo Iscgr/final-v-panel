@@ -4,16 +4,16 @@ dotenv.config();
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
-import { checkDatabaseHealth, closeDatabaseConnection, pool } from "./db";
-import { performanceMonitoringMiddleware } from "./middleware/performance";
-import { featureFlagManager } from './services/feature-flag-manager';
-import { DriftJobService } from './services/drift-job-service';
-import { OutboxService } from './services/outbox';
-import { OutboxWorker } from './services/outbox-worker';
-import outboxRoutes, { initializeOutboxRoutes } from './routes/outbox-routes';
-import OutboxMonitor from './services/outbox-monitor';
+import { registerRoutes } from "./routes.js"; // Correct path
+import { setupVite, serveStatic, log } from "./vite.js";
+import { checkDatabaseHealth, closeDatabaseConnection, pool } from "./db.js";
+import { performanceMonitoringMiddleware } from "./middleware/performance.js";
+import { featureFlagManager } from './services/feature-flag-manager.js';
+import { DriftJobService } from './services/drift-job-service.js';
+import { OutboxService } from './services/outbox.js';
+import { OutboxWorker } from './services/outbox-worker.js';
+import outboxRoutes, { initializeOutboxRoutes } from './routes/outbox-routes.js';
+import OutboxMonitor from './services/outbox-monitor.js';
 
 
 const app = express();
@@ -162,6 +162,40 @@ app.use((req, res, next) => {
     }
   });
 
+  next();
+});
+
+// Structured logging middleware (AUTH + API focus)
+app.use((req, res, next) => {
+  const startHr = process.hrtime.bigint();
+  const { method, url } = req;
+  const isAuth = url.startsWith('/api/auth');
+  const isApi = url.startsWith('/api/');
+  if (!isAuth && !isApi) return next();
+
+  const meta: any = {
+    ts: new Date().toISOString(),
+    method,
+    url,
+    ip: req.ip,
+    ua: req.headers['user-agent']?.slice(0,120)
+  };
+
+  res.on('finish', () => {
+    const durMs = Number((process.hrtime.bigint() - startHr) / BigInt(1_000_000));
+    meta.status = res.statusCode;
+    meta.durationMs = durMs;
+    if (isAuth) meta.category = 'auth'; else if (isApi) meta.category = 'api';
+    const len = res.getHeader('content-length');
+    if (len) meta.bytes = Number(len);
+    // Flag slow
+    if (durMs > 1200) meta.slow = true;
+    try {
+      console.log('STRUCT_LOG', JSON.stringify(meta));
+    } catch {
+      console.log('STRUCT_LOG_ERR_FALLBACK', meta);
+    }
+  });
   next();
 });
 

@@ -8,6 +8,7 @@ interface Invoice {
   id: number;
   invoiceNumber: string;
   amount: string;
+  remainingAmount?: string;
   issueDate: string;
   dueDate?: string;
   status: string;
@@ -81,6 +82,11 @@ function InvoiceCard({ invoice }: { invoice: Invoice }) {
           <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#10b981' }}>
             {parseFloat(String(invoice.amount || '0')).toLocaleString('fa-IR')} تومان
           </p>
+          {invoice.remainingAmount && parseFloat(invoice.remainingAmount) > 0 && (
+            <p style={{ fontSize: '14px', color: '#fb923c', marginTop: '4px' }}>
+              مانده: {parseFloat(invoice.remainingAmount).toLocaleString('fa-IR')} تومان
+            </p>
+          )}
           <p style={{ 
             fontSize: '12px', 
             padding: '4px 8px', 
@@ -88,10 +94,11 @@ function InvoiceCard({ invoice }: { invoice: Invoice }) {
             background: invoice.status === 'paid' ? '#059669' : 
                        invoice.status === 'partial' ? '#ea580c' : '#dc2626',
             color: 'white',
-            display: 'inline-block'
+            display: 'inline-block',
+            marginTop: '4px'
           }}>
-            {invoice.status === 'paid' ? 'پرداخت شده' : 
-             invoice.status === 'partial' ? 'تسویه جزئی' : 'پرداخت نشده'}
+            {invoice.status === 'paid' ? '✓ تسویه شده' : 
+             invoice.status === 'partial' ? '◐ تسویه جزئی' : '✗ تسویه نشده'}
           </p>
         </div>
       </div>

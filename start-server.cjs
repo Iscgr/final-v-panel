@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// اسکریپت اجرای سرور در حالت production با پشتیبانی ESM
+// اسکریپت اجرای سرور در حالت production
 
 (async () => {
 	try {
-		await import('ts-node/register');
-		await import('./server/index.ts');
+		// اجرای فایل کامپایل شده
+		await import('./dist/server/index.js');
 	} catch (err) {
 		console.error('Startup error:', err);
 		process.exit(1);

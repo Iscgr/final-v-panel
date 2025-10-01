@@ -12,8 +12,8 @@ export interface TelegramMessage {
 }
 
 // --- E-C1 Shadow Integration Imports ---
-import { featureFlagManager } from './feature-flag-manager';
-import { OutboxService } from './outbox';
+import { featureFlagManager } from './feature-flag-manager.js';
+import { OutboxService } from './outbox.js';
 
 let sharedOutboxService: OutboxService | null = null;
 function getOutboxService(): OutboxService {

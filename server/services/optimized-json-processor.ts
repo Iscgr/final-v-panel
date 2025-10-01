@@ -2,7 +2,7 @@
 // 🎯 SHERLOCK v33.0 - Optimized JSON Processor
 // پردازش بهینه فایل‌های JSON با pagination و کش هوشمند
 
-import { unifiedCache } from './unified-cache-manager';
+import { unifiedCache } from './unified-cache-manager.js';
 
 export interface ProcessingConfig {
   batchSize: number;

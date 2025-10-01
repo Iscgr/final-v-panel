@@ -122,10 +122,10 @@ export class FeatureFlagManager {
         description: 'اجرای job آشتی و اعمال سیاست‌ها'
       },
       outbox_enabled: {
-        state: 'off',
+        state: 'on',
         allowed: ['off','on'],
         lastModified: new Date().toISOString(),
-        modifiedBy: 'init',
+        modifiedBy: 'phase_c_optimization',
         description: 'فعال‌سازی الگوی outbox برای event dispatch'
       }
       ,
@@ -151,17 +151,17 @@ export class FeatureFlagManager {
         description: 'فعال‌سازی تخصیص جزئی پرداخت‌ها (E-B2)'      
       },
       guard_metrics_persistence: {
-        state: 'off',
+        state: 'shadow',
         allowed: ['off','shadow','enforce'],
         lastModified: new Date().toISOString(),
-        modifiedBy: 'init',
+        modifiedBy: 'phase_c_optimization',
         description: 'Persist رویدادهای Guard Metrics (E-B5 مرحله 1)'
       },
       guard_metrics_alerts: {
-        state: 'off',
+        state: 'on',
         allowed: ['off','on'],
         lastModified: new Date().toISOString(),
-        modifiedBy: 'init',
+        modifiedBy: 'phase_c_optimization',
         description: 'فعال کردن تحلیل Threshold و اعلان داخلی داشبورد متریک گارد (E-B5 مرحله 2)'
       }
     };

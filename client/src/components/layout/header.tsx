@@ -1,42 +1,28 @@
 import { Button } from "@/components/ui/button";
 import { Menu } from "lucide-react";
+import { useSidebar } from "@/contexts/sidebar-context";
+import { cn } from "@/lib/utils";
 
-interface HeaderProps {
-  onMenuClick?: () => void;
-}
+export default function Header() {
+  const { openMobileSidebar } = useSidebar();
 
-// Simplified Header after deprecations: removed time, telegram status, AI assistant, logout.
-export default function Header({ onMenuClick }: HeaderProps) {
   return (
-    <header className="admin-glass-card mx-4 lg:mx-6 mt-4 mb-6">
-      <div className="px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3 space-x-reverse">
-            {/* Mobile menu button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="باز کردن منوی ناوبری"
-              title="باز کردن منوی ناوبری"
-              className="lg:hidden text-white hover:bg-white/10 focus-ring-base"
-              onClick={onMenuClick}
-            >
-              <Menu className="w-5 h-5" aria-hidden="true" />
-            </Button>
+    <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-4 lg:h-[60px] lg:px-6">
+      <Button
+        variant="outline"
+        size="icon"
+        className="shrink-0 md:hidden"
+        onClick={openMobileSidebar}
+        aria-label="باز کردن منو"
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
 
-            <div>
-              <h1 className="text-xl lg:text-2xl font-bold text-white">
-                داشبورد مدیریت مالی
-              </h1>
-              <p className="text-sm text-blue-200 mt-1 hidden sm:block">
-                مدیریت فاکتورها، پرداخت‌ها و نمایندگان
-              </p>
-            </div>
-          </div>
-
-          {/* Right side intentionally minimal per cleanup spec */}
-          <div />
-        </div>
+      <div className="w-full flex-1">
+        {/* Search bar can go here */}
+      </div>
+      <div>
+        {/* User profile, settings dropdown can go here */}
       </div>
     </header>
   );
