@@ -1,30 +1,34 @@
 import { Switch, Route, useLocation, Router } from "wouter";
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UnifiedAuthProvider, useUnifiedAuth } from "@/contexts/unified-auth-context";
+import { SidebarProvider, useSidebar } from "@/contexts/sidebar-context";
 import { useMobileOptimizations } from "@/hooks/use-mobile-optimizations";
 
 // Layout components
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
 
-// Pages
-import Dashboard from "@/pages/dashboard";
-import Invoices from "@/pages/invoices";
-import InvoiceManagement from "@/pages/InvoiceManagement";
-import Representatives from "@/pages/representatives";
-import SalesPartners from "@/pages/sales-partners";
-import Settings from "@/pages/settings";
-import Portal from "@/pages/portal";
-import AdminLogin from "@/pages/admin-login";
-import NotFound from "@/pages/not-found";
-import UnifiedAuth from "@/pages/unified-auth";
-import AllocationManagement from "@/pages/allocation-management";
-import KpiDashboard from "@/pages/kpi-dashboard";
+// Pages (Lazy Loaded)
+const Dashboard = lazy(() => import("@/pages/dashboard"));
+const Invoices = lazy(() => import("@/pages/invoices"));
+const InvoiceManagement = lazy(() => import("@/pages/InvoiceManagement"));
+const Representatives = lazy(() => import("@/pages/representatives"));
+const SalesPartners = lazy(() => import("@/pages/sales-partners"));
+const Settings = lazy(() => import("@/pages/settings"));
+const Portal = lazy(() => import("@/pages/portal"));
+const AdminLogin = lazy(() => import("@/pages/admin-login"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+const UnifiedAuth = lazy(() => import("@/pages/unified-auth"));
+const AllocationManagement = lazy(() => import("@/pages/allocation-management"));
+const KpiDashboard = lazy(() => import("@/pages/kpi-dashboard"));
+
+// System
+import ErrorBoundary from "@/components/system/ErrorBoundary";
 
 function AuthenticatedRouter() {
   const { isAuthenticated: adminAuthenticated, isLoading: adminIsLoading, user: adminUser } = useUnifiedAuth(); // Use unified auth hook
@@ -35,36 +39,34 @@ function AuthenticatedRouter() {
   if (isPublicPortal) {
     return (
       <div className="dark public-portal-isolated">
-        <Switch>
-          <Route path="/portal/:publicId" component={Portal} />
-          <Route path="/representative/:publicId" component={Portal} />
-          <Route path="/portal/*">
-            {() => (
-              <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-red-400 text-6xl mb-4">⚠</div>
-                  <h1 className="text-2xl font-bold mb-2">پورتال یافت نشد</h1>
-                  <p className="text-gray-400">
-                    لینک پورتال نامعتبر است. لطفاً لینک صحیح را از مدیر سیستم دریافت کنید.
-                  </p>
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">در حال بارگذاری پورتال...</div>}>
+          <Switch>
+            <Route path="/portal/:publicId" component={Portal} />
+            <Route path="/representative/:publicId" component={Portal} />
+            <Route path="/portal/*">
+              {() => (
+                <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-red-400 text-6xl mb-4">⚠</div>
+                    <h1 className="text-2xl font-bold mb-2">پورتال یافت نشد</h1>
+                    <p className="text-gray-400">لینک پورتال نامعتبر است. لطفاً لینک صحیح را از مدیر سیستم دریافت کنید.</p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </Route>
-          <Route path="/representative/*">
-            {() => (
-              <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-red-400 text-6xl mb-4">⚠</div>
-                  <h1 className="text-2xl font-bold mb-2">پورتال یافت نشد</h1>
-                  <p className="text-gray-400">
-                    لینک پورتال نامعتبر است. لطفاً لینک صحیح را از مدیر سیستم دریافت کنید.
-                  </p>
+              )}
+            </Route>
+            <Route path="/representative/*">
+              {() => (
+                <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-red-400 text-6xl mb-4">⚠</div>
+                    <h1 className="text-2xl font-bold mb-2">پورتال یافت نشد</h1>
+                    <p className="text-gray-400">لینک پورتال نامعتبر است. لطفاً لینک صحیح را از مدیر سیستم دریافت کنید.</p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </Route>
-        </Switch>
+              )}
+            </Route>
+          </Switch>
+        </Suspense>
       </div>
     );
   }
@@ -82,44 +84,60 @@ function AuthenticatedRouter() {
 
   if (!adminAuthenticated) {
     if (location === "/admin-login") {
-      return <AdminLogin onLoginSuccess={() => {}} />;
+      return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center">...</div>}>
+          <AdminLogin onLoginSuccess={() => {}} />
+        </Suspense>
+      );
     }
-    return <UnifiedAuth />;
+    return (
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center">در حال بارگذاری...</div>}>
+        <UnifiedAuth />
+      </Suspense>
+    );
   }
 
   return (
     <AdminLayout>
-      <Switch>
-        <Route path="/" component={Dashboard} />
-        <Route path="/dashboard" component={Dashboard} />
-        <Route path="/kpi-dashboard" component={KpiDashboard} />
-        <Route path="/representatives" component={Representatives} />
-        <Route path="/invoices" component={Invoices} />
-        <Route path="/invoice-management" component={InvoiceManagement} />
-        <Route path="/sales-partners" component={SalesPartners} />
-        <Route path="/settings" component={Settings} />
-        <Route path="/admin-login">
-          <AdminLogin onLoginSuccess={() => {
-            console.log('Admin login successful');
-          }} />
-        </Route>
-        <Route component={NotFound} />
-      </Switch>
+      <ErrorBoundary>
+        <Suspense fallback={<div className="p-8 text-center">در حال بارگذاری صفحه...</div>}>
+          <Switch>
+            <Route path="/" component={Dashboard} />
+            <Route path="/dashboard" component={Dashboard} />
+            <Route path="/kpi-dashboard" component={KpiDashboard} />
+            <Route path="/representatives" component={Representatives} />
+            <Route path="/invoices" component={Invoices} />
+            <Route path="/invoice-management" component={InvoiceManagement} />
+            <Route path="/sales-partners" component={SalesPartners} />
+            <Route path="/settings" component={Settings} />
+            <Route path="/admin-login">
+              <AdminLogin onLoginSuccess={() => { console.log('Admin login successful'); }} />
+            </Route>
+            <Route component={NotFound} />
+          </Switch>
+        </Suspense>
+      </ErrorBoundary>
     </AdminLayout>
   );
 }
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { isExpanded, isMobileOpen, toggleSidebar, openMobileSidebar, closeMobileSidebar } = useSidebar();
   const { isMobile } = useMobileOptimizations();
 
-  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+  // Mobile: use drawer-style sidebar
+  // Desktop: use fixed sidebar with dynamic width
+  const mainContentMarginClass = isMobile 
+    ? 'mr-0' // No margin on mobile
+    : isExpanded 
+      ? 'lg:mr-80' // Full sidebar width when expanded
+      : 'lg:mr-20'; // Collapsed sidebar width
 
   return (
     <div className="admin-panel-background dark">
-      <Sidebar isOpen={isSidebarOpen} onToggle={toggleSidebar} />
-      <div className="main-content lg:mr-80 mr-0 relative z-10">
-        <Header onMenuClick={toggleSidebar} />
+      <Sidebar />
+      <div className={`main-content ${mainContentMarginClass} transition-[margin] duration-300 relative z-10`}>
+        <Header onMenuClick={isMobile ? openMobileSidebar : toggleSidebar} />
         <main className="p-4 lg:p-6 relative z-10">
           {children}
         </main>
@@ -130,16 +148,20 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 
 function App() {
   const { isMobile } = useMobileOptimizations();
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <UnifiedAuthProvider>
-          <Router>
-            <div className={`min-h-screen bg-background ${isMobile ? 'mobile-optimized' : ''}`}>
-              <AuthenticatedRouter />
-            </div>
-          </Router>
+          <SidebarProvider>
+            <Router>
+              <div className={`min-h-screen bg-background ${isMobile ? 'mobile-optimized' : ''}`}>
+                <ErrorBoundary>
+                  <AuthenticatedRouter />
+                </ErrorBoundary>
+                <Toaster />
+              </div>
+            </Router>
+          </SidebarProvider>
         </UnifiedAuthProvider>
       </TooltipProvider>
     </QueryClientProvider>
