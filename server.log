@@ -1612,3 +1612,40 @@ Query: SELECT
         WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
           AND created_at >= NOW() - INTERVAL '60 minutes';
 Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:54:13.526Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:54:23.526Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 259ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:54:33.527Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:54:43.528Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:54:53.529Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 280.95, heapTotal: 116.99, heapUsed: 113.24, external: 11.51 }
+💗 Health check completed in 252ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:55:03.529Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:55:03.577Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:55:13.530Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:55:23.530Z", 5, 5]
+💗 Starting comprehensive health check...
+💗 Health check completed in 254ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:55:33.530Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:55:43.531Z", 5, 5]
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:55:53.531Z", 5, 5]
+💗 Starting comprehensive health check...
+Memory usage: { rss: 281.2, heapTotal: 117.24, heapUsed: 113.56, external: 11.55 }
+💗 Health check completed in 255ms
+Query: select "id", "type", "payload", "status", "retry_count", "next_retry_at", "error_last", "processed_at", "created_at" from "outbox" where (("outbox"."status" = $1 or ("outbox"."status" = $2 and "outbox"."next_retry_at" <= $3)) and "outbox"."retry_count" <= $4) order by "outbox"."created_at" limit $5 -- params: ["PENDING", "FAILED", "2025-10-01T20:56:03.532Z", 5, 5]
+Query: select "status", "retry_count", "created_at" from "outbox" where "outbox"."created_at" >= $1 -- params: ["2025-10-01T19:56:03.580Z"]
+Query: SELECT
+          percentile_cont(0.5) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p50,
+          percentile_cont(0.95) WITHIN GROUP (ORDER BY (context->>'ms')::numeric) AS p95,
+          COUNT(*) AS cnt
+        FROM guard_metrics_events
+        WHERE event_type = 'OUTBOX_MESSAGE_LATENCY'
+          AND created_at >= NOW() - INTERVAL '60 minutes';
