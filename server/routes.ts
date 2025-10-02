@@ -80,6 +80,8 @@ import representativesRoutes from './routes/representatives-routes.js';
 import adminResourcesRoutes from './routes/admin-resources-routes.js';
 // Import Portal Resources Routes - Public Resources for Representatives
 import portalResourcesRoutes from './routes/portal-resources-routes.js';
+// Import File Upload & View Tracking Routes
+import fileUploadRoutes from './routes/file-upload-routes.js';
 
 // --- Interfaces for Authentication Middleware ---
 interface AuthSession {
@@ -272,6 +274,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 🔷 Portal Resources Routes - Public Resources for Representatives Portal
   app.use('/api/portal', portalResourcesRoutes);
   console.log('✅ Portal resources routes registered (public access)');
+
+  // 🔷 File Upload & View Tracking Routes
+  app.use('/api/admin', authMiddleware, fileUploadRoutes);
+  app.use('/api/portal', fileUploadRoutes); // Public view tracking endpoint
+  console.log('✅ File upload and view tracking routes registered');
 
   // SHERLOCK v18.4: سیستم مالی یکپارچه واحد - تنها سیستم مالی فعال
   // Previously imported and used directly:

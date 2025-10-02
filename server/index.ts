@@ -107,6 +107,22 @@ app.use(performanceMonitoringMiddleware);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
+// Serve uploaded files statically
+import path from 'path';
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
+app.use('/uploads', express.static(UPLOAD_DIR, {
+  maxAge: '1d', // Cache for 1 day
+  setHeaders: (res, filePath) => {
+    // Set appropriate content type based on file extension
+    if (filePath.endsWith('.mp4') || filePath.endsWith('.webm')) {
+      res.set('Content-Type', 'video/mp4');
+    } else if (filePath.endsWith('.png') || filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+      res.set('Content-Type', 'image/jpeg');
+    }
+  }
+}));
+console.log('✅ Static file serving enabled for /uploads directory');
+
 // Special middleware for Android browser compatibility
 app.use((req, res, next) => {
   const userAgent = req.headers['user-agent'] || '';
