@@ -2,7 +2,7 @@ import { strict as assert } from 'assert';
 import { OutboxService } from '../services/outbox';
 import { featureFlagManager } from '../services/feature-flag-manager';
 import { db } from '../db';
-import { outbox } from '../../shared/schema';
+import { outbox } from '../../shared/schema.js';
 import { sql, eq } from 'drizzle-orm';
 
 async function resetOutbox() {

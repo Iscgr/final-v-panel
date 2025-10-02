@@ -4,7 +4,7 @@
 import { OutboxService } from './outbox.js';
 import { featureFlagManager } from './feature-flag-manager.js';
 import { db } from '../db.js';
-import { guardMetricsEvents } from '../../shared/schema';
+import { guardMetricsEvents } from '../../shared/schema.js';
 
 export interface TelegramAPI {
   sendMessage(chatId: string, message: string, options?: any): Promise<void>;

@@ -7,7 +7,7 @@ import { OutboxWorker } from '../services/outbox-worker.js';
 import { featureFlagManager } from '../services/feature-flag-manager.js';
 import { z } from 'zod';
 import { db } from '../db.js';
-import { outbox } from '../../shared/schema';
+import { outbox } from '../../shared/schema.js';
 import { inArray } from 'drizzle-orm';
 
 const router = Router();

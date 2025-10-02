@@ -1,5 +1,5 @@
 /**
- * OutboxMonitor (Phase C – E-C4 wiring)
+ * OutboxMonitor (Phase C ï¿½ E-C4 wiring)
  * Periodically evaluates Outbox rolling window metrics + latency percentiles
  * and emits guard_metrics_events when thresholds (warn/critical) are crossed.
  * 
@@ -17,7 +17,7 @@
  *    or value returns below warn (reset state silently).
  */
 import { db } from '../db.js';
-import { guardMetricsEvents } from '../../shared/schema';
+import { guardMetricsEvents } from '../../shared/schema.js';
 import { featureFlagManager } from './feature-flag-manager.js';
 import { OutboxService } from './outbox.js';
 import { getThresholdFor } from './guard-metrics-thresholds.js';
