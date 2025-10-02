@@ -34,6 +34,19 @@ export default function PortalResources({ publicId }: PortalResourcesProps) {
   const [isLoading, setIsLoading] = React.useState(true);
   const [copiedLinks, setCopiedLinks] = React.useState<{ [key: number]: boolean }>({});
 
+  // تابع برای ثبت بازدید
+  const trackView = React.useCallback(async (appId: number, actionType: 'view' | 'download' | 'qr_scan' | 'video_play') => {
+    try {
+      await fetch(`/api/portal/track-view/${appId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicId, actionType })
+      });
+    } catch (error) {
+      console.error(`خطا در ثبت بازدید (${actionType}):`, error);
+    }
+  }, [publicId]);
+
   React.useEffect(() => {
     const fetchResources = async () => {
       try {
@@ -41,6 +54,12 @@ export default function PortalResources({ publicId }: PortalResourcesProps) {
         const json = await res.json();
         if (json.success) {
           setResources(json.data);
+          // ثبت بازدید برای تمام اپلیکیشن‌های نمایش داده شده
+          if (json.data?.appDownloads) {
+            json.data.appDownloads.forEach((app: AppDownload) => {
+              trackView(app.id, 'view');
+            });
+          }
         }
       } catch (error) {
         console.error('خطا در دریافت منابع:', error);
@@ -50,7 +69,7 @@ export default function PortalResources({ publicId }: PortalResourcesProps) {
     };
 
     fetchResources();
-  }, [publicId]);
+  }, [publicId, trackView]);
 
   const copyToClipboard = (link: string, id: number) => {
     navigator.clipboard.writeText(link);
@@ -58,6 +77,15 @@ export default function PortalResources({ publicId }: PortalResourcesProps) {
     setTimeout(() => {
       setCopiedLinks({ ...copiedLinks, [id]: false });
     }, 2000);
+  };
+
+  const handleDownloadClick = (app: AppDownload) => {
+    trackView(app.id, 'download');
+    window.open(app.downloadLink, '_blank');
+  };
+
+  const handleVideoPlay = (appId: number) => {
+    trackView(appId, 'video_play');
   };
 
   if (isLoading) {
@@ -272,6 +300,7 @@ export default function PortalResources({ publicId }: PortalResourcesProps) {
                       e.currentTarget.style.background = 'linear-gradient(135deg, #10b981, #059669)';
                       e.currentTarget.style.transform = 'scale(1)';
                     }}
+                    onClick={() => handleDownloadClick(app)}
                   >
                     <Download size={18} />
                     دانلود مستقیم
@@ -333,6 +362,7 @@ export default function PortalResources({ publicId }: PortalResourcesProps) {
                         cursor: 'pointer',
                         transition: 'all 0.2s'
                       }}
+                      onClick={() => handleVideoPlay(app.id)}
                     >
                       <Play size={16} />
                       ویدئو آموزشی

@@ -1,9 +1,9 @@
 /**
  * صفحه مدیریت اطلاعیه‌ها در پنل ادمین
  */
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Edit, Trash2, Save, X, AlertCircle, Info, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, AlertCircle, Info, CheckCircle, XCircle, Search, Filter } from 'lucide-react';
 
 interface Announcement {
   id: number;
@@ -35,6 +35,9 @@ export default function AnnouncementsManager() {
   const queryClient = useQueryClient();
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState<'all' | Announcement['type']>('all');
+  const [filterActive, setFilterActive] = useState<'all' | boolean>('all');
   const [formData, setFormData] = useState<Partial<Announcement>>({
     title: '',
     content: '',
@@ -53,6 +56,19 @@ export default function AnnouncementsManager() {
       return json.data || [];
     }
   });
+
+  // فیلتر و جستجو
+  const filteredAnnouncements = useMemo(() => {
+    return announcements.filter(item => {
+      if (filterActive !== 'all' && item.isActive !== filterActive) return false;
+      if (filterType !== 'all' && item.type !== filterType) return false;
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        return item.title.toLowerCase().includes(query) || item.content.toLowerCase().includes(query);
+      }
+      return true;
+    });
+  }, [announcements, searchQuery, filterType, filterActive]);
 
   // ایجاد اطلاعیه جدید
   const createMutation = useMutation({
@@ -138,25 +154,46 @@ export default function AnnouncementsManager() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">در حال بارگذاری...</p>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6" dir="rtl">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">مدیریت اطلاعیه‌ها</h1>
-        {!isAdding && !editingId && (
-          <button
-            onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-          >
-            <Plus size={20} />
-            افزودن اطلاعیه جدید
-          </button>
-        )}
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">مدیریت اطلاعیه‌ها</h1>
+        <p className="text-gray-600">ایجاد، ویرایش و حذف اطلاعیه‌های مهم برای پرتال عمومی</p>
+      </div>
+
+      <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center justify-between bg-white p-4 rounded-lg shadow-sm">
+        <div className="relative flex-1 max-w-md w-full">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input type="text" placeholder="جستجو در عنوان یا محتوا..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pr-10 pl-4 py-2 border rounded-lg" />
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Filter className="w-5 h-5 text-gray-500" />
+            <select value={filterType} onChange={(e) => setFilterType(e.target.value as any)} className="p-2 border rounded-lg">
+              <option value="all">همه نوع‌ها</option>
+              <option value="info">اطلاع‌رسانی</option>
+              <option value="warning">هشدار</option>
+              <option value="success">موفقیت</option>
+              <option value="error">خطا</option>
+            </select>
+            <select value={String(filterActive)} onChange={(e) => setFilterActive(e.target.value === 'all' ? 'all' : e.target.value === 'true')} className="p-2 border rounded-lg">
+              <option value="all">همه وضعیت‌ها</option>
+              <option value="true">فعال</option>
+              <option value="false">غیرفعال</option>
+            </select>
+          </div>
+        </div>
+        <button onClick={() => { resetForm(); setIsAdding(true); setEditingId(null); }} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+          <Plus className="w-5 h-5" />
+          افزودن اطلاعیه
+        </button>
       </div>
 
       {/* فرم افزودن/ویرایش */}
@@ -262,24 +299,20 @@ export default function AnnouncementsManager() {
         </div>
       )}
 
-      {/* لیست اطلاعیه‌ها */}
-      <div className="grid gap-4">
-        {announcements.length === 0 ? (
-          <div className="bg-white rounded-lg shadow-lg p-8 text-center text-gray-500">
-            هیچ اطلاعیه‌ای ثبت نشده است
-          </div>
-        ) : (
-          announcements.map((announcement) => (
-            <div
-              key={announcement.id}
-              className="bg-white rounded-lg shadow-lg p-6 border border-gray-200 hover:shadow-xl transition"
-            >
-              <div className="flex justify-between items-start mb-3">
-                <div className="flex items-start gap-3 flex-1">
-                  <div className="mt-1">{typeIcons[announcement.type]}</div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredAnnouncements.map((announcement) => (
+          <div key={announcement.id} className={`rounded-lg shadow-md overflow-hidden border-l-4 ${
+            { info: 'border-blue-500', warning: 'border-yellow-500', success: 'border-green-500', error: 'border-red-500' }[announcement.type]
+          }`}>
+            <div className="p-4">
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="text-xl">
+                    {typeIcons[announcement.type]}
+                  </div>
                   <div className="flex-1">
                     <h3 className="text-lg font-semibold text-gray-900">{announcement.title}</h3>
-                    <p className="text-gray-600 mt-1 whitespace-pre-line">{announcement.content}</p>
+                    <p className="text-gray-600 text-sm mt-1 whitespace-pre-line">{announcement.content}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -304,7 +337,7 @@ export default function AnnouncementsManager() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 mt-4">
+              <div className="flex flex-wrap gap-2">
                 <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${typeColors[announcement.type]}`}>
                   {announcement.type === 'info' && 'اطلاعات'}
                   {announcement.type === 'warning' && 'هشدار'}
@@ -328,9 +361,19 @@ export default function AnnouncementsManager() {
                 )}
               </div>
             </div>
-          ))
-        )}
+          </div>
+        ))}
       </div>
+
+      {filteredAnnouncements.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-gray-500 text-lg">
+            {searchQuery || filterType !== 'all' || filterActive !== 'all'
+              ? 'نتیجه‌ای یافت نشد'
+              : 'هنوز اطلاعیه‌ای اضافه نشده است'}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
