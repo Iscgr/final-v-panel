@@ -14,8 +14,16 @@ const portalAppSchema = z.object({
   description: z.string().optional(),
   downloadLink: z.string().url("لینک دانلود معتبر نیست").min(1, "لینک دانلود الزامی است"),
   qrCode: z.string().optional(),
-  videoUrl: z.string().url("لینک ویدیو معتبر نیست").optional().or(z.literal("")),
-  iconUrl: z.string().url("لینک آیکون معتبر نیست").optional().or(z.literal("")),
+  videoUrl: z.string()
+    .url("لینک ویدیو معتبر نیست")
+    .or(z.literal(""))
+    .transform((val) => val === "" ? undefined : val)
+    .optional(),
+  iconUrl: z.string()
+    .url("لینک آیکون معتبر نیست")
+    .or(z.literal(""))
+    .transform((val) => val === "" ? undefined : val)
+    .optional(),
   order: z.number().int().min(0).optional(),
   isActive: z.boolean().optional()
 });
