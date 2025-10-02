@@ -28,6 +28,12 @@ const UnifiedAuth = lazy(() => import("@/pages/unified-auth"));
 // ❌ [ODIN v5.0] AllocationManagement removed - auto-allocation feature removed
 const KpiDashboard = lazy(() => import("@/pages/kpi-dashboard"));
 
+// Admin Resources Management Pages
+const AppDownloadsManager = lazy(() => import("@/pages/admin/AppDownloadsManager"));
+const AnnouncementsManager = lazy(() => import("@/pages/admin/AnnouncementsManager"));
+
+// Error boundary component
+
 // System
 import ErrorBoundary from "@/components/system/ErrorBoundary";
 
@@ -111,6 +117,8 @@ function AuthenticatedRouter() {
             <Route path="/invoices" component={Invoices} />
             <Route path="/invoice-management" component={InvoiceManagement} />
             <Route path="/sales-partners" component={SalesPartners} />
+            <Route path="/admin/app-downloads" component={AppDownloadsManager} />
+            <Route path="/admin/announcements" component={AnnouncementsManager} />
             <Route path="/settings" component={Settings} />
             <Route path="/admin-login">
               <AdminLogin onLoginSuccess={() => { console.log('Admin login successful'); }} />

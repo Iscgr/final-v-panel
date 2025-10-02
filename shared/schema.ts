@@ -1012,6 +1012,36 @@ export const dailyReportsRelations = relations(dailyReports, ({ one }) => ({
   })
 }));
 
+// ==================== APP DOWNLOADS & ANNOUNCEMENTS ====================
+// برای مدیریت لینک‌های دانلود اپلیکیشن و اطلاعیه‌های پرتال عمومی
+
+// App Downloads (لینک‌های دانلود اپلیکیشن)
+export const appDownloads = pgTable("app_downloads", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(), // نام اپلیکیشن
+  description: text("description"), // توضیحات کوتاه
+  downloadLink: text("download_link").notNull(), // لینک دانلود مستقیم
+  qrCodeUrl: text("qr_code_url"), // URL تصویر QR Code
+  videoUrl: text("video_url"), // URL ویدئوی آموزشی
+  displayOrder: integer("display_order").default(0), // ترتیب نمایش
+  isActive: boolean("is_active").default(true), // فعال/غیرفعال
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+
+// Announcements (اطلاعیه‌های مهم)
+export const announcements = pgTable("announcements", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(), // عنوان اطلاعیه
+  content: text("content").notNull(), // محتوای اطلاعیه
+  priority: integer("priority").default(0), // اولویت نمایش (بالاتر = مهم‌تر)
+  type: text("type").default("info"), // info, warning, success, error
+  isActive: boolean("is_active").default(true), // فعال/غیرفعال
+  expiresAt: timestamp("expires_at"), // تاریخ انقضا (اختیاری)
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+
 // ==================== ZOD SCHEMAS ====================
 
 export const insertEmployeeSchema = omitInsert(createInsertSchema(employees), "id", "createdAt", "updatedAt");
@@ -1043,6 +1073,10 @@ export const insertOutboxSchema = omitInsert(createInsertSchema(outbox), "id", "
 
 export const insertThresholdConfigSchema = omitInsert(createInsertSchema(thresholdConfig), "id", "createdAt", "updatedAt");
 
+export const insertAppDownloadSchema = omitInsert(createInsertSchema(appDownloads), "id", "createdAt", "updatedAt");
+
+export const insertAnnouncementSchema = omitInsert(createInsertSchema(announcements), "id", "createdAt", "updatedAt");
+
 // ==================== TYPES ====================
 
 export type Employee = typeof employees.$inferSelect;
@@ -1071,3 +1105,9 @@ export type InsertOutbox = z.infer<typeof insertOutboxSchema>;
 
 export type ThresholdConfig = typeof thresholdConfig.$inferSelect;
 export type InsertThresholdConfig = z.infer<typeof insertThresholdConfigSchema>;
+
+export type AppDownload = typeof appDownloads.$inferSelect;
+export type InsertAppDownload = z.infer<typeof insertAppDownloadSchema>;
+
+export type Announcement = typeof announcements.$inferSelect;
+export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;

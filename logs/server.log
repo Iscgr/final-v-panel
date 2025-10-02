@@ -1,2 +1,39 @@
 nohup: ignoring input
 nohup: failed to run command 'tsx': No such file or directory
+
+> rest-express@1.0.0 dev
+> DATABASE_URL=postgresql://postgres:postgres@localhost:5432/marfanet LOG_DIRECTORY=./logs NODE_ENV=development tsx server/index.ts
+
+🔧 Database Environment Detected: local
+📡 Connection String: postgresql://postgres:***@localhost:5432/marfanet
+🚀 Initializing local database connection...
+🚩 ATOMOS Feature Flag Manager v1.0 initialized with safe defaults
+✅ PHASE 9: Integration health routes registered
+💗 Periodic health monitoring started (every 30s)
+✅ Database connection initialized successfully
+[dotenv@17.2.2] injecting env (20) from .env -- tip: ⚙️  override existing env vars with { override: true }
+5:38:11 PM [express] Checking database connection...
+📝 Log directory initialized: ./logs
+5:38:11 PM [database] Database connection successful
+Query: select "id", "username", "password_hash", "role", "permissions", "is_active", "last_login_at", "created_at" from "admin_users" where "admin_users"."username" = $1 limit $2 -- params: ["mgr", 1]
+Query: update "admin_users" set "password_hash" = $1, "role" = $2, "is_active" = $3 where "admin_users"."username" = $4 -- params: ["$2b$12$vbCZud.aFcyiDn2nhlc3COP5LwNU6npP.VHTxsfeQwysbKiEd0FTq", "SUPER_ADMIN", true, "mgr"]
+🔄 Admin user 'mgr' password reset successfully
+💗 Registering health check routes...
+✅ Health check routes registered successfully
+✅ Standardized Invoice Routes Registered
+✅ Integration health routes registered for Phase 9
+✅ Representatives routes registered with authentication
+✅ Admin resources routes registered (app-downloads, announcements)
+✅ Portal resources routes registered (public access)
+✅ E-B6: Usage Line Visibility routes registered
+✅ E-B5 Stage 3: KPI Metrics routes registered
+✅ Batch Rollback Routes Registered
+✅ E-C5: SLA Dashboard routes registered
+E-C1: OutboxWorker not started (outbox_enabled=off)
+Starting server on port 3000
+DriftJobService not started (active_reconciliation=off)
+🚀 MarFaNet Server started on port 3000
+✅ API accessible at /api/dashboard
+💗 Database health status changed: HEALTHY
+💗 Starting comprehensive health check...
+💗 Health check completed in 1466ms

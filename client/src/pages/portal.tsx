@@ -2,6 +2,7 @@ import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import React, { useState } from "react";
 import { getQueryFn } from "@/lib/queryClient";
+import PortalResources from "@/components/PortalResources";
 
 // Type definitions for portal data
 interface Invoice {
@@ -587,6 +588,9 @@ export default function Portal() {
           </p>
         )}
       </div>
+
+      {/* 🔷 NEW: Resources Section (App Downloads & Announcements) */}
+      <PortalResources publicId={publicId!} />
 
       {/* Financial Overview - Simple Cards */}
       <div style={{ marginBottom: '40px' }}>
