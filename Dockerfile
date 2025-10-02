@@ -66,6 +66,10 @@ COPY --from=builder --chown=marfanet:nodejs /app/start-server.cjs ./start-server
 # Copy necessary config files
 COPY --from=builder --chown=marfanet:nodejs /app/drizzle.config.ts ./
 
+# Resolve TypeScript path aliases at runtime
+RUN rm -rf node_modules/@shared && \
+    ln -s ../dist/shared node_modules/@shared
+
 # Create necessary directories
 RUN mkdir -p /app/logs && \
     chown -R marfanet:nodejs /app
