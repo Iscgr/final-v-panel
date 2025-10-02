@@ -2017,6 +2017,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ✅ Validate Telegram message template
+  app.post("/api/settings/telegram/validate-template", authMiddleware, async (req, res) => {
+    try {
+      const { template } = req.body;
+      
+      if (!template || typeof template !== 'string') {
+        return res.status(400).json({ error: "قالب پیام الزامی است" });
+      }
+
+      const { validateTelegramTemplate } = await import('./services/telegram.js');
+      const validation = validateTelegramTemplate(template);
+
+      console.log('🔍 Template validation result:', validation);
+
+      res.json({
+        success: true,
+        validation: {
+          isValid: validation.isValid,
+          usedVariables: validation.usedVariables,
+          missingVariables: validation.missingVariables,
+          invalidVariables: validation.invalidVariables
+        }
+      });
+    } catch (error: any) {
+      console.error('❌ خطا در اعتبارسنجی قالب پیام:', error);
+      res.status(500).json({
+        error: "خطا در اعتبارسنجی قالب پیام",
+        details: error.message
+      });
+    }
+  });
+
   // ✅ ODIN v5.0: Send ACTUAL invoices to Telegram (NOT test message)
   // این endpoint فاکتورهای واقعی را با قالب کامل ارسال می‌کند
   app.post("/api/invoices/send-telegram", authMiddleware, async (req, res) => {
@@ -2073,22 +2105,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
 
-          // Prepare Telegram message
-          // SHERLOCK v16.3 TELEGRAM URL FIX: Use proper portal link generation
+          /**
+           * Prepare Telegram message with standardized data mapping
+           * 
+           * Data Sources:
+           * - Invoice: invoice.invoiceNumber, invoice.amount, invoice.issueDate, invoice.status
+           * - Representative: representative.name, representative.ownerName, representative.publicId
+           * - Representative Code: representative.panelUsername || representative.code
+           * - Portal Link: generated via getPortalLink(representative.publicId)
+           * - Send Status: invoice.sentToTelegram, invoice.telegramSendCount
+           */
+          
+          // Import portal link generator
           const { getPortalLink } = await import('./config');
+          
+          // Generate portal link from representative's publicId
           const portalLink = getPortalLink(representative.publicId);
+          console.log(`🔗 Generated portal link for representative ${representative.name}: ${portalLink}`);
+          
+          // Format amount with thousand separators (e.g., 1,000,000)
+          const formattedAmount = parseFloat(invoice.amount).toLocaleString('fa-IR', {
+            maximumFractionDigits: 0
+          });
+          
+          // Build telegram message object with all required variables
           const telegramMessage = {
+            invoiceNumber: invoice.invoiceNumber,
             representativeName: representative.name,
             shopOwner: representative.ownerName || representative.name,
             panelId: representative.panelUsername || representative.code,
-            amount: invoice.amount,
+            amount: formattedAmount,
             issueDate: invoice.issueDate,
             status: formatInvoiceStatus(invoice.status),
             portalLink,
-            invoiceNumber: invoice.invoiceNumber,
             isResend: invoice.sentToTelegram || false,
             sendCount: (invoice.telegramSendCount || 0) + 1
           };
+          
+          console.log('📋 Telegram message data prepared:', {
+            invoice: telegramMessage.invoiceNumber,
+            representative: telegramMessage.representativeName,
+            amount: telegramMessage.amount,
+            sendCount: telegramMessage.sendCount
+          });
 
           // Send to Telegram
           const success = await sendInvoiceToTelegram(botToken, chatId, telegramMessage, template);
@@ -2679,10 +2738,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/settings/:key", authMiddleware, async (req, res) => {
     try {
       const { value } = req.body;
+      console.log(`📝 Updating setting: ${req.params.key} = ${value?.substring(0, 50)}...`);
       const setting = await storage.updateSetting(req.params.key, value);
+      console.log(`✅ Setting ${req.params.key} updated successfully`);
       res.json(setting);
     } catch (error) {
-      res.status(500).json({ error: "خطا در بروزرسانی تنظیمات" });
+      console.error('❌ Error updating setting:', error);
+      res.status(500).json({ error: "خطا در بروزرسانی تنظیمات", details: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 

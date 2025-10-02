@@ -1,13 +1,46 @@
+/**
+ * Interface for Telegram message data
+ * 
+ * Template Variables Mapping:
+ * - {invoice_number} => invoiceNumber
+ * - {representative_name} => representativeName
+ * - {shop_owner} => shopOwner
+ * - {panel_id} => panelId
+ * - {amount} => amount (formatted with thousand separators)
+ * - {issue_date} => issueDate
+ * - {status} => status (formatted with Persian labels)
+ * - {portal_link} => portalLink (production URL)
+ * - {resend_indicator} => auto-generated based on isResend flag
+ */
 export interface TelegramMessage {
-  representativeName: string;
-  shopOwner: string | null;
-  panelId: string;
-  amount: string;
-  issueDate: string;
-  status: string;
-  portalLink: string;
+  /** شماره فاکتور - مستقیماً از invoice.invoiceNumber */
   invoiceNumber: string;
+  
+  /** نام نماینده - از representative.name */
+  representativeName: string;
+  
+  /** نام صاحب فروشگاه - از representative.ownerName یا fallback به representative.name */
+  shopOwner: string | null;
+  
+  /** شناسه پنل - از representative.panelUsername یا representative.code */
+  panelId: string;
+  
+  /** مبلغ فاکتور - فرمت شده با جداکننده هزار (e.g. "1,000,000") */
+  amount: string;
+  
+  /** تاریخ صدور - از invoice.issueDate */
+  issueDate: string;
+  
+  /** وضعیت فاکتور - فرمت شده با formatInvoiceStatus() */
+  status: string;
+  
+  /** لینک پورتال - تولید شده با getPortalLink() */
+  portalLink: string;
+  
+  /** آیا این ارسال مجدد است؟ - از invoice.sentToTelegram */
   isResend?: boolean;
+  
+  /** تعداد دفعات ارسال - از invoice.telegramSendCount */
   sendCount?: number;
 }
 
@@ -43,17 +76,44 @@ export async function sendInvoiceToTelegram(
     
     console.log(`🔗 SHERLOCK v32.0: Portal link generation - Original: ${message.portalLink}, Production: ${productionPortalLink}`);
     
-    // Replace template variables with actual data
-    let messageText = template
-      .replace(/{representative_name}/g, message.representativeName)
-      .replace(/{shop_owner}/g, message.shopOwner || 'نامشخص')
-      .replace(/{panel_id}/g, message.panelId)
-      .replace(/{amount}/g, message.amount)
-      .replace(/{issue_date}/g, message.issueDate)
-      .replace(/{status}/g, message.status)
-      .replace(/{portal_link}/g, productionPortalLink)
-      .replace(/{invoice_number}/g, message.invoiceNumber)
-      .replace(/{resend_indicator}/g, resendIndicator);
+    /**
+     * Replace template variables with actual invoice data
+     * 
+     * Supported variables:
+     * - {invoice_number}: شماره فاکتور
+     * - {representative_name}: نام نماینده
+     * - {shop_owner}: نام صاحب فروشگاه
+     * - {panel_id}: شناسه پنل
+     * - {amount}: مبلغ فاکتور (با جداکننده هزار)
+     * - {issue_date}: تاریخ صدور
+     * - {status}: وضعیت فاکتور
+     * - {portal_link}: لینک پورتال
+     * - {resend_indicator}: نشانگر ارسال مجدد
+     */
+    const templateVariables: Record<string, string> = {
+      invoice_number: message.invoiceNumber,
+      representative_name: message.representativeName,
+      shop_owner: message.shopOwner || 'نامشخص',
+      panel_id: message.panelId,
+      amount: message.amount,
+      issue_date: message.issueDate,
+      status: message.status,
+      portal_link: productionPortalLink,
+      resend_indicator: resendIndicator
+    };
+
+    // Replace all variables in template
+    let messageText = template;
+    Object.entries(templateVariables).forEach(([key, value]) => {
+      const regex = new RegExp(`{${key}}`, 'g');
+      messageText = messageText.replace(regex, value);
+    });
+    
+    console.log('📝 Template variables replaced:', {
+      invoice: message.invoiceNumber,
+      variablesCount: Object.keys(templateVariables).length,
+      messageLength: messageText.length
+    });
 
     // --- Phase C Shadow Mode: enqueue instead of direct send when flag ON ---
     if (outboxState === 'on') {
@@ -92,13 +152,22 @@ export async function sendInvoiceToTelegram(
 
     const result = await response.json();
     if (result.ok !== true) {
-      console.error('❌ Telegram send failed:', result);
+      console.error('❌ Telegram send failed:', {
+        error_code: result.error_code,
+        description: result.description,
+        invoice: message.invoiceNumber
+      });
       return false;
     }
 
+    console.log(`✅ Telegram message sent successfully for invoice ${message.invoiceNumber}`);
     return true;
   } catch (error) {
-    console.error('خطا در ارسال پیام تلگرام:', error);
+    console.error('❌ خطا در ارسال پیام تلگرام:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      invoice: message.invoiceNumber,
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return false;
   }
 }
@@ -129,6 +198,25 @@ export async function sendBulkInvoicesToTelegram(
   return { success, failed };
 }
 
+/**
+ * Available template variables for Telegram messages
+ */
+export const TELEGRAM_TEMPLATE_VARIABLES = [
+  'invoice_number',
+  'representative_name',
+  'shop_owner',
+  'panel_id',
+  'amount',
+  'issue_date',
+  'status',
+  'portal_link',
+  'resend_indicator'
+] as const;
+
+/**
+ * Get default Telegram message template
+ * Contains all standard variables for invoice notifications
+ */
 export function getDefaultTelegramTemplate(): string {
   return `📋 فاکتور شماره {invoice_number}{resend_indicator}
 
@@ -144,6 +232,47 @@ export function getDefaultTelegramTemplate(): string {
 {portal_link}
 
 تولید شده توسط سیستم مدیریت مالی 🤖`;
+}
+
+/**
+ * Validate template and find used variables
+ * Returns list of variables found in template
+ */
+export function validateTelegramTemplate(template: string): {
+  isValid: boolean;
+  usedVariables: string[];
+  missingVariables: string[];
+  invalidVariables: string[];
+} {
+  // Find all variables in template
+  const variableRegex = /{([^}]+)}/g;
+  const matches = template.matchAll(variableRegex);
+  const usedVariables: string[] = [];
+  const invalidVariables: string[] = [];
+  
+  for (const match of matches) {
+    const variable = match[1];
+    if (TELEGRAM_TEMPLATE_VARIABLES.includes(variable as any)) {
+      if (!usedVariables.includes(variable)) {
+        usedVariables.push(variable);
+      }
+    } else {
+      if (!invalidVariables.includes(variable)) {
+        invalidVariables.push(variable);
+      }
+    }
+  }
+  
+  // Check for missing critical variables
+  const criticalVariables = ['invoice_number', 'representative_name', 'amount'];
+  const missingVariables = criticalVariables.filter(v => !usedVariables.includes(v));
+  
+  return {
+    isValid: invalidVariables.length === 0 && missingVariables.length === 0,
+    usedVariables,
+    missingVariables,
+    invalidVariables
+  };
 }
 
 export function formatInvoiceStatus(status: string): string {
