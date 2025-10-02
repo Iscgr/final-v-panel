@@ -61,6 +61,7 @@ COPY --from=builder --chown=marfanet:nodejs /app/dist ./dist
 COPY --from=builder --chown=marfanet:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=marfanet:nodejs /app/package*.json ./
 COPY --from=builder --chown=marfanet:nodejs /app/shared ./shared
+COPY --from=builder --chown=marfanet:nodejs /app/start-server.cjs ./start-server.cjs
 
 # Copy necessary config files
 COPY --from=builder --chown=marfanet:nodejs /app/drizzle.config.ts ./
@@ -80,4 +81,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=5 \
 EXPOSE 3000
 
 # Start command
-CMD ["node", "dist/index.js"]
+CMD ["node", "start-server.cjs"]
