@@ -97,6 +97,7 @@ export const invoices = pgTable("invoices", {
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   issueDate: text("issue_date").notNull(), // Persian date: 1404/4/30
   dueDate: text("due_date"), // Persian date
+  dueDateGregorian: timestamp("due_date_gregorian"), // تاریخ میلادی برای مقایسه
   status: text("status").notNull().default("unpaid"), // unpaid, paid, overdue
   usageData: json("usage_data"), // Raw JSON data from uploaded file
   sentToTelegram: boolean("sent_to_telegram").default(false),

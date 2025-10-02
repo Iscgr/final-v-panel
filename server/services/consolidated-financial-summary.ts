@@ -132,7 +132,7 @@ export class ConsolidatedFinancialSummaryService {
         -- Final SELECT combining all CTEs
         SELECT 
           -- Revenue metrics
-          ps.allocated_payment_amount as total_revenue,
+          ps.total_payment_amount as total_revenue,
           
           -- Debt metrics  
           st.total_system_debt as total_debt,

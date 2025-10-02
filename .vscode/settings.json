@@ -1,5 +1,5 @@
 {
-    "github.copilot.chat.codeGeneration.useInstructionFiles": false,
+    "github.copilot.chat.codeGeneration.useInstructionFiles": true,
     "css.validate": false,
     "scss.validate": false,
     "less.validate": false,

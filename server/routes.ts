@@ -26,6 +26,7 @@ interface MulterRequest extends Request {
   file?: Express.Multer.File;
 }
 import { z } from "zod";
+import PersianDate from "persian-date";
 import {
   insertRepresentativeSchema,
   insertSalesPartnerSchema,
@@ -2481,7 +2482,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updatedPayment = await storage.allocatePaymentToInvoice(paymentId, invoiceId);
-
       // CRITICAL: Recalculate invoice status based on actual payment allocations
       const calculatedStatus = await storage.calculateInvoicePaymentStatus(invoiceId);
       await storage.updateInvoice(invoiceId, { status: calculatedStatus });
