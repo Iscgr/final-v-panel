@@ -122,7 +122,7 @@ export class FeatureFlagManager {
         description: 'اجرای job آشتی و اعمال سیاست‌ها'
       },
       outbox_enabled: {
-        state: 'on',
+        state: 'off', // ODIN: Temporarily disabled to enforce direct send
         allowed: ['off','on'],
         lastModified: new Date().toISOString(),
         modifiedBy: 'phase_c_optimization',
