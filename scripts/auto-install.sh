@@ -63,6 +63,13 @@ log "مرحله 3: نصب پکیج‌های پایه"
 apt-get update -y >/dev/null
 DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl git jq ufw nginx software-properties-common certbot python3-certbot-nginx unzip >/dev/null
 
+# اطمینان از آزاد بودن پورت‌های 80/443 قبل از راه‌اندازی nginx کانتینری
+if systemctl is-active --quiet nginx; then
+  warn "nginx سرویسی سیستم در حال اجرا است؛ آن را متوقف می‌کنیم تا پورت‌ها آزاد شوند"
+  systemctl stop nginx || warn "توقف nginx سیستم ناموفق بود"
+fi
+systemctl disable nginx >/dev/null 2>&1 || true
+
 log "مرحله 4: نصب Docker اگر موجود نیست"
 if ! command -v docker >/dev/null 2>&1; then
   install -m 0755 -d /etc/apt/keyrings
@@ -222,7 +229,7 @@ cat > "$INSTALL_DIR/nginx.conf" <<EOF
 server {
     listen 80;
     server_name $DOMAIN;
-    return 301 https://$DOMAIN$request_uri;
+    return 301 https://$DOMAIN\$request_uri;
 }
 server {
     listen 443 ssl http2;
