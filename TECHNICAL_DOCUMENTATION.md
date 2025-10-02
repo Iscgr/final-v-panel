@@ -8,10 +8,20 @@ MarFaNet is a comprehensive financial management system built with modern full-s
 ### Technology Stack
 - **Frontend**: React 18 + TypeScript + Vite
 - **Backend**: Node.js + Express + TypeScript
-- **Database**: PostgreSQL with Drizzle ORM
+- **Database**: **PostgreSQL 14+** with Drizzle ORM (Pure PostgreSQL, no SQLite)
+- **Cache**: Redis 7 (Session storage)
 - **UI Framework**: Shadcn/UI + Tailwind CSS
 - **State Management**: TanStack React Query
-- **Authentication**: Session-based with bcrypt
+- **Authentication**: Session-based with bcrypt + Passport.js
+- **Container**: Docker + Docker Compose
+
+### Database Architecture
+MarFaNet uses **PostgreSQL** as its exclusive database system. The system is designed with:
+- **Drizzle ORM** configured for PostgreSQL dialect
+- **Native PostgreSQL** data types (serial, timestamp, json, decimal)
+- **Node-postgres (pg)** driver for connection pooling
+- **Neon Serverless** support for cloud deployments
+- **No SQLite dependency** - any SQLite references in package-lock.json are unused peer dependencies
 
 ## 📐 Application Structure
 

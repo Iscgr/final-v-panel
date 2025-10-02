@@ -37,10 +37,18 @@
 ### Backend
 - **Runtime:** Node.js 20 LTS
 - **Framework:** Express.js 4.21+
-- **Database:** PostgreSQL 15
-- **ORM:** Drizzle ORM 0.44+
-- **Session Store:** Redis 7 + connect-pg-simple
+- **Database:** **PostgreSQL 14-15** (Exclusive - No SQLite)
+- **ORM:** Drizzle ORM 0.44+ (PostgreSQL dialect only)
+- **Database Driver:** node-postgres (pg) ^8.16 + @neondatabase/serverless
+- **Session Store:** Redis 7 + connect-pg-simple (PostgreSQL-backed sessions)
 - **Authentication:** Passport.js + bcrypt
+
+#### Database Configuration Details
+- **Primary Driver:** `pg` (node-postgres) for local/traditional PostgreSQL
+- **Cloud Support:** `@neondatabase/serverless` for Neon cloud deployments
+- **Connection Pooling:** Intelligent pool management with environment detection
+- **Schema Management:** Drizzle migrations with pure PostgreSQL syntax
+- **No SQLite:** Project exclusively uses PostgreSQL - any SQLite peer dependencies are unused
 
 ### Frontend
 - **Library:** React 18
@@ -58,14 +66,22 @@
 ## 📦 Container Services
 
 ### 1. PostgreSQL Database (`db`)
-- **Image:** postgres:15-alpine
+- **Image:** postgres:14-15-alpine
 - **Port:** 5432 (internal only)
 - **Volume:** postgres_data
 - **Health Check:** pg_isready
+- **Character Encoding:** UTF-8
+- **Locale:** C (for performance)
 - **Resources:**
   - CPU: 1 core
   - RAM: 512MB-1GB
   - Storage: 10GB+
+  
+**Note:** MarFaNet uses PostgreSQL exclusively. The database is configured with:
+- Optimized connection pooling (25 connections for local, 10 for serverless)
+- Automatic health checks every 30 seconds
+- Graceful shutdown handling
+- Performance monitoring and slow query logging
 
 ### 2. Redis Cache (`redis`)
 - **Image:** redis:7-alpine
