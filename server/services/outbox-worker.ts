@@ -3,7 +3,7 @@
 
 import { OutboxService } from './outbox.js';
 import { featureFlagManager } from './feature-flag-manager.js';
-import { db } from '../db';
+import { db } from '../db.js';
 import { guardMetricsEvents } from '../../shared/schema';
 
 export interface TelegramAPI {

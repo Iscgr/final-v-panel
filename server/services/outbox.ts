@@ -1,7 +1,7 @@
 // Phase C: E-C1 Telegram Outbox Service
 // Purpose: تضمین تحویل پیام‌های تلگرام با retry mechanism و KPI tracking
 
-import { db } from '../db';
+import { db } from '../db.js';
 import { outbox, guardMetricsEvents } from '../../shared/schema';
 import { eq, and, lte, or, inArray, gte, sql } from 'drizzle-orm';
 

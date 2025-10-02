@@ -2,11 +2,11 @@
 // Purpose: API endpoints برای مدیریت outbox و monitoring
 
 import { Router } from 'express';
-import { OutboxService, OutboxMessage } from '../services/outbox';
-import { OutboxWorker } from '../services/outbox-worker';
-import { featureFlagManager } from '../services/feature-flag-manager';
+import { OutboxService, OutboxMessage } from '../services/outbox.js';
+import { OutboxWorker } from '../services/outbox-worker.js';
+import { featureFlagManager } from '../services/feature-flag-manager.js';
 import { z } from 'zod';
-import { db } from '../db';
+import { db } from '../db.js';
 import { outbox } from '../../shared/schema';
 import { inArray } from 'drizzle-orm';
 

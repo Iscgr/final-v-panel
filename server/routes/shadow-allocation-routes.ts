@@ -1,8 +1,8 @@
 import type { Express, Request, Response } from 'express';
-import { db } from '../db';
+import { db } from '../db.js';
 import { payments, invoices, paymentAllocations } from '@shared/schema';
 import { sql, eq } from 'drizzle-orm';
-import { featureFlagManager } from '../services/feature-flag-manager';
+import { featureFlagManager } from '../services/feature-flag-manager.js';
 
 /**
  * Shadow Allocation Routes (Phase A - Iteration 3)

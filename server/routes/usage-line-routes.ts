@@ -1,8 +1,8 @@
 import type { Express, Request, Response } from 'express';
-import { db } from '../db';
+import { db } from '../db.js';
 import { paymentAllocations, payments, invoices } from '@shared/schema';
 import { sql, eq, and, desc, isNull, isNotNull } from 'drizzle-orm';
-import { featureFlagManager } from '../services/feature-flag-manager';
+import { featureFlagManager } from '../services/feature-flag-manager.js';
 
 /**
  * E-B6: Usage Line Visibility & Audit Routes
