@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiRequest } from '@/lib/queryClient';
@@ -649,6 +650,53 @@ export default function SalesPartners() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ✅ ODIN v5.0: Edit Commission Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>ویرایش درصد کمیسیون</DialogTitle>
+            <DialogDescription>
+              تغییر درصد کمیسیون برای {selectedPartner?.name}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedPartner && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="commission">درصد کمیسیون (%)</Label>
+                <Input
+                  id="commission"
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="100"
+                  defaultValue={selectedPartner.commissionRate || 0}
+                  placeholder="مثال: 5"
+                />
+                <p className="text-sm text-gray-500">
+                  کمیسیون فعلی: {toPersianDigits((selectedPartner.commissionRate || 0).toString())}%
+                </p>
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+                  انصراف
+                </Button>
+                <Button onClick={() => {
+                  // TODO: Implement update commission API call
+                  toast({
+                    title: "توجه",
+                    description: "قابلیت ویرایش کمیسیون در حال توسعه است",
+                  });
+                  setIsEditOpen(false);
+                }}>
+                  ذخیره تغییرات
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>

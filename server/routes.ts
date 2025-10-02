@@ -2017,10 +2017,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // SHERLOCK v12.3: Send invoices to Telegram - Complete Implementation
+  // ✅ ODIN v5.0: Send ACTUAL invoices to Telegram (NOT test message)
+  // این endpoint فاکتورهای واقعی را با قالب کامل ارسال می‌کند
   app.post("/api/invoices/send-telegram", authMiddleware, async (req, res) => {
     try {
-      console.log('📨 SHERLOCK v12.3: Sending invoices to Telegram');
+      console.log('📨 ODIN v5.0: Sending REAL invoices to Telegram (NOT test)');
       const { invoiceIds } = req.body;
 
       if (!invoiceIds || !Array.isArray(invoiceIds)) {
@@ -2149,9 +2150,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Delete invoice from database
       await storage.deleteInvoice(invoiceId);
 
-      // CRITICAL: Update representative financial data after deletion
+      // ✅ ODIN v5.0 CRITICAL: Sync representative debt to database table
       console.log(`🔄 به‌روزرسانی اطلاعات مالی نماینده ${invoice.representativeId}`);
       await storage.updateRepresentativeFinancials(invoice.representativeId);
+      
+      // ✅ Force sync to representatives table for immediate UI update
+      const { unifiedFinancialEngine } = await import('./services/unified-financial-engine.js');
+      await unifiedFinancialEngine.syncRepresentativeDebt(invoice.representativeId);
+      console.log(`✅ ODIN v5.0: Synced representative ${invoice.representativeId} debt to database after invoice deletion`);
 
       // Log the activity for audit trail
       await storage.createActivityLog({
