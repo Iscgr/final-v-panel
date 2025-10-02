@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryKey } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -102,7 +103,7 @@ export default function PaymentDialog({
       // Reset form
       setAmount('');
       setDescription('');
-      setSelectedInvoiceNumber('');
+      setSelectedInvoiceNumber(''); // این خالی می‌شود و در UI به "none" تبدیل می‌شود
       
       // Close dialog
       onOpenChange(false);
@@ -111,9 +112,24 @@ export default function PaymentDialog({
       if (onPaymentComplete) {
         onPaymentComplete();
       }
-      
-      queryClient.invalidateQueries({ queryKey: [`/api/representatives/${representativeCode}`] });
-      queryClient.invalidateQueries({ queryKey: ['/api/representatives'] });
+
+      const invalidateKeys: QueryKey[] = [
+        [`/api/representatives/${representativeCode}`],
+        ['/api/representatives'],
+        ['representatives'],
+        ['/dashboard'],
+        ['/api/dashboard'],
+        ['financial-summary-v1'],
+        ['global-financial-summary-corrected'],
+        ['/api/unified-financial/summary'],
+        ['/api/unified-financial/debtors'],
+        ['/api/unified-financial/all-representatives'],
+        ['debtor-representatives']
+      ];
+
+      invalidateKeys.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -145,7 +161,7 @@ export default function PaymentDialog({
     };
 
     // ✅ ODIN v5.0: ارسال invoiceNumber برای تخصیص دستی (اگر انتخاب شده باشد)
-    if (selectedInvoiceNumber && selectedInvoiceNumber !== '') {
+    if (selectedInvoiceNumber && selectedInvoiceNumber !== '' && selectedInvoiceNumber !== 'none') {
       paymentData.selectedInvoiceNumber = selectedInvoiceNumber;
     }
     // else: پرداخت بدون تخصیص ثبت می‌شود
@@ -175,12 +191,12 @@ export default function PaymentDialog({
                 <Loader2 className="h-5 w-5 animate-spin" />
               </div>
             ) : (
-              <Select value={selectedInvoiceNumber} onValueChange={setSelectedInvoiceNumber}>
+              <Select value={selectedInvoiceNumber || "none"} onValueChange={(value) => setSelectedInvoiceNumber(value === "none" ? "" : value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="بدون تخصیص (می‌توانید بعداً تخصیص دهید)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">بدون تخصیص</SelectItem>
+                  <SelectItem value="none">بدون تخصیص</SelectItem>
                   {invoicesData?.invoices.map((invoice) => (
                     <SelectItem key={invoice.id} value={invoice.invoiceNumber}>
                       <div className="flex items-center justify-between gap-4 w-full">

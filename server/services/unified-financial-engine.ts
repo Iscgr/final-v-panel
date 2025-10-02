@@ -6,7 +6,7 @@
  */
 
 import { db } from '../database-manager';
-import { representatives, invoices, payments } from '@shared/schema';
+import { representatives, invoices, payments, paymentAllocations } from '@shared/schema';
 import { eq, sql, desc, and } from 'drizzle-orm';
 import { performance } from 'perf_hooks';
 import { pythonFinancialClient } from './python-financial-client.js';
@@ -241,28 +241,36 @@ export class UnifiedFinancialEngine {
     // ✅ محاسبه صحیح: فروش کل = مجموع کل فاکتورهای صادر شده
     const invoiceData = await db.select({
       count: sql<number>`COUNT(*)`,
-      totalSales: sql<number>`COALESCE(SUM(CAST(amount as DECIMAL)), 0)`, // فروش کل
-      lastDate: sql<string>`MAX(created_at)`
+      totalSales: sql<number>`COALESCE(SUM(CAST(${invoices.amount} AS DECIMAL)), 0)`, // فروش کل
+      lastDate: sql<string>`MAX(${invoices.createdAt})`
     }).from(invoices).where(eq(invoices.representativeId, representativeId));
 
-    // ✅ محاسبه صحیح: پرداخت تخصیص یافته = مجموع پرداخت‌های تخصیص یافته
+    // ✅ محاسبه صحیح: پرداخت تخصیص یافته براساس جدول تخصیص‌ها
+    const allocationData = await db
+      .select({
+        totalAllocated: sql<number>`COALESCE(SUM(${paymentAllocations.allocatedAmount}::numeric), 0)`
+      })
+      .from(paymentAllocations)
+      .innerJoin(invoices, eq(paymentAllocations.invoiceId, invoices.id))
+      .where(eq(invoices.representativeId, representativeId));
+
     const paymentData = await db.select({
       count: sql<number>`COUNT(*)`,
-      totalPaid: sql<number>`COALESCE(SUM(CASE WHEN is_allocated = true THEN CAST(amount as DECIMAL) ELSE 0 END), 0)`, // پرداخت تخصیص یافته
-      lastDate: sql<string>`MAX(payment_date)`
+      lastDate: sql<string>`MAX(${payments.paymentDate})`
     }).from(payments).where(eq(payments.representativeId, representativeId));
 
     const invoice = invoiceData[0];
     const payment = paymentData[0];
+    const allocation = allocationData[0];
 
     // ✅ محاسبات صحیح طبق تعاریف استاندارد
-    const totalSales = invoice.totalSales;           // فروش کل
-    const totalPaid = payment.totalPaid;             // پرداخت تخصیص یافته
-    const actualDebt = Math.max(0, totalSales - totalPaid); // بدهی استاندارد
+  const totalSales = Number(invoice?.totalSales ?? 0);           // فروش کل
+  const totalPaid = Number(allocation?.totalAllocated ?? 0);     // پرداخت تخصیص یافته واقعی
+  const actualDebt = Math.max(0, totalSales - totalPaid);        // بدهی استاندارد
     const totalUnpaid = actualDebt;                  // مجموع پرداخت نشده = بدهی استاندارد
 
     // Performance metrics
-    const paymentRatio = totalSales > 0 ? (totalPaid / totalSales) * 100 : 0;
+  const paymentRatio = totalSales > 0 ? (totalPaid / totalSales) * 100 : 0;
 
     // Debt level classification
     let debtLevel: 'HEALTHY' | 'MODERATE' | 'HIGH' | 'CRITICAL';
@@ -285,9 +293,9 @@ export class UnifiedFinancialEngine {
       paymentRatio: Math.round(paymentRatio * 100) / 100,
       debtLevel,
 
-      invoiceCount: invoice.count,
-      paymentCount: payment.count,
-      lastTransactionDate: invoice.lastDate || payment.lastDate || null,
+  invoiceCount: Number(invoice?.count ?? 0),
+  paymentCount: Number(payment?.count ?? 0),
+  lastTransactionDate: invoice?.lastDate || payment?.lastDate || null,
 
       calculationTimestamp: new Date().toISOString(),
       accuracyGuaranteed: true
@@ -592,7 +600,7 @@ export class UnifiedFinancialEngine {
   /**
    * ✅ SHERLOCK v24.0: بروزرسانی بدهی نماینده با force invalidation
    */
-  async syncRepresentativeDebt(representativeId: number): Promise<void> {
+  async syncRepresentativeDebt(representativeId: number): Promise<UnifiedFinancialData> {
     try {
       // Force invalidate all related caches BEFORE calculation
       UnifiedFinancialEngine.forceInvalidateRepresentative(representativeId);
@@ -612,6 +620,7 @@ export class UnifiedFinancialEngine {
       UnifiedFinancialEngine.forceInvalidateRepresentative(representativeId);
 
       console.log(`✅ SHERLOCK v24.0: Synced representative ${representativeId} debt: ${financialData.actualDebt} with immediate cache invalidation`);
+      return financialData;
     } catch (error) {
       console.error(`❌ Failed to sync representative ${representativeId} debt:`, error);
       throw error;
