@@ -10,7 +10,7 @@
  * 5. Type-safe interfaces
  */
 
-import { db } from "../db";
+import { db } from "../db.js";
 import { representatives, invoices, payments, salesPartners, activityLogs } from "@shared/schema";
 import { sql, eq, and, or, gte, count, desc } from "drizzle-orm";
 import { unifiedFinancialEngine } from "./unified-financial-engine.js";

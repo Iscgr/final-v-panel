@@ -3,7 +3,7 @@
  * ساختار استاندارد برای پردازش فاکتورها با حذف کامل سیستم‌های موازی
  */
 
-import { toPersianDigits, getCurrentPersianDate } from "../../client/src/lib/persian-date";
+import { toPersianDigits, getCurrentPersianDate } from "../../client/src/lib/persian-date.js";
 
 // Re-export Persian date utilities
 export { toPersianDigits, getCurrentPersianDate };

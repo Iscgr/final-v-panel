@@ -1,4 +1,4 @@
-import { toPersianDigits, getCurrentPersianDate } from "../../client/src/lib/persian-date";
+import { toPersianDigits, getCurrentPersianDate } from "../../client/src/lib/persian-date.js";
 
 // Re-export Persian date utilities for use in routes
 export { toPersianDigits, getCurrentPersianDate };

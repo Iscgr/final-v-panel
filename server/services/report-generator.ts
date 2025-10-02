@@ -1,5 +1,5 @@
-import { storage } from "../storage";
-import { toPersianDigits, getCurrentPersianDate } from "./invoice";
+import { storage } from "../storage.js";
+import { toPersianDigits, getCurrentPersianDate } from "./invoice.js";
 
 export async function generateFinancialReport() {
   try {

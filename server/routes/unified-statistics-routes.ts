@@ -4,7 +4,7 @@
  */
 
 import { Router } from "express";
-import { unifiedStatisticsEngine } from "../services/unified-statistics-engine";
+import { unifiedStatisticsEngine } from "../services/unified-statistics-engine.js";
 
 const router = Router();
 

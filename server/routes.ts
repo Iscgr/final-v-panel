@@ -1,8 +1,8 @@
 import { RepresentativeData, FinancialData, BatchData, ValidatedInvoiceData, ValidatedInvoiceBatchData } from './routes-interfaces.js';
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { db } from "./db";
+import { storage } from "./storage.js";
+import { db } from "./db.js";
 import { sql, eq, and, or, like, gte, lte, asc, count, desc } from "drizzle-orm";
 import { invoices, representatives, payments, activityLogs } from "@shared/schema";
 
@@ -14,7 +14,7 @@ function sherlockLog(...args: any[]) {
     console.log(...args);
   }
 }
-import { unifiedAuthMiddleware, enhancedUnifiedAuthMiddleware } from "./middleware/unified-auth";
+import { unifiedAuthMiddleware, enhancedUnifiedAuthMiddleware } from "./middleware/unified-auth.js";
 
 import multer from "multer";
 
@@ -35,13 +35,13 @@ import {
   insertInvoiceBatchSchema
 } from "@shared/schema";
 // ✅ NEW STANDARDIZED IMPORTS:
-import { registerStandardizedInvoiceRoutes } from "./routes/standardized-invoice-routes";
+import { registerStandardizedInvoiceRoutes } from "./routes/standardized-invoice-routes.js";
 import {
   sendInvoiceToTelegram,
   sendBulkInvoicesToTelegram,
   getDefaultTelegramTemplate,
   formatInvoiceStatus
-} from "./services/telegram";
+} from "./services/telegram.js";
 import bcrypt from "bcryptjs";
 // Commented out temporarily - import { generateFinancialReport } from "./services/report-generator";
 
@@ -49,7 +49,7 @@ import bcrypt from "bcryptjs";
 import { unifiedFinancialEngine } from './services/unified-financial-engine.js';
 
 // Import integration health routes for Phase 9
-import { registerIntegrationHealthRoutes } from "./routes/integration-health-routes";
+import { registerIntegrationHealthRoutes } from "./routes/integration-health-routes.js";
 import featureFlagRoutes from './routes/feature-flag-routes.js';
 import { registerHealthRoutes } from './routes/health-routes.js';
 

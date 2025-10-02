@@ -17,7 +17,7 @@ import {
   // Telegram Send History Import
   type TelegramSendHistory, type InsertTelegramSendHistory
 } from "@shared/schema";
-import { db, checkDatabaseHealth, executeWithRetry } from "./database-manager";
+import { db, checkDatabaseHealth, executeWithRetry } from "./database-manager.js";
 import { eq, desc, sql, and, or, ilike, inArray } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from "bcryptjs";
