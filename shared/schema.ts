@@ -351,6 +351,35 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at").defaultNow()
 });
 
+// Portal Apps (اپلیکیشن‌های پرتال)
+// هدف: مدیریت لینک‌های دانلود، QR کد و ویدیوهای آموزشی اپلیکیشن‌ها برای نمایش در پرتال عمومی
+export const portalApps = pgTable("portal_apps", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(), // نام اپلیکیشن
+  description: text("description"), // توضیحات کوتاه
+  downloadLink: text("download_link").notNull(), // لینک دانلود مستقیم
+  qrCode: text("qr_code"), // لینک یا داده QR کد
+  videoUrl: text("video_url"), // لینک ویدیو آموزشی
+  iconUrl: text("icon_url"), // آیکون اپلیکیشن
+  order: integer("order").default(0), // ترتیب نمایش
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+
+// Portal Announcements (اعلانات پرتال)
+// هدف: نمایش اعلانات و اخبار مهم در پرتال عمومی نماینده
+export const portalAnnouncements = pgTable("portal_announcements", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(), // عنوان اعلان
+  content: text("content").notNull(), // محتوای اعلان
+  type: text("type").default("info"), // info, warning, success, error
+  isActive: boolean("is_active").default(true),
+  priority: integer("priority").default(0), // اولویت نمایش (بالاتر = مهم‌تر)
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+
 
 
 // AI Configuration (تنظیمات پیشرفته هوش مصنوعی)
@@ -723,6 +752,10 @@ export const insertDataIntegrityConstraintSchema = omitInsert(createInsertSchema
 
 export const insertSettingSchema = omitInsert(createInsertSchema(settings), "id", "updatedAt");
 
+export const insertPortalAppSchema = omitInsert(createInsertSchema(portalApps), "id", "createdAt", "updatedAt");
+
+export const insertPortalAnnouncementSchema = omitInsert(createInsertSchema(portalAnnouncements), "id", "createdAt", "updatedAt");
+
 /*
 export const insertAiConfigurationSchema = createInsertSchema(aiConfiguration).omit({
   id: true,
@@ -792,6 +825,12 @@ export type InsertDataIntegrityConstraint = z.infer<typeof insertDataIntegrityCo
 
 export type Setting = typeof settings.$inferSelect;
 export type InsertSetting = z.infer<typeof insertSettingSchema>;
+
+export type PortalApp = typeof portalApps.$inferSelect;
+export type InsertPortalApp = z.infer<typeof insertPortalAppSchema>;
+
+export type PortalAnnouncement = typeof portalAnnouncements.$inferSelect;
+export type InsertPortalAnnouncement = z.infer<typeof insertPortalAnnouncementSchema>;
 
 /*
 export type AiConfiguration = typeof aiConfiguration.$inferSelect;

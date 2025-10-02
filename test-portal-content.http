@@ -1,0 +1,166 @@
+### Test Portal Content API Routes
+### Use with REST Client extension in VS Code or similar HTTP clients
+
+@baseUrl = http://localhost:3000
+@contentType = application/json
+
+### 1. Get all portal apps (Admin)
+GET {{baseUrl}}/api/portal-apps
+Content-Type: {{contentType}}
+
+###
+
+### 2. Get active portal apps (Public)
+GET {{baseUrl}}/api/public/portal-apps
+Content-Type: {{contentType}}
+
+###
+
+### 3. Create new portal app
+POST {{baseUrl}}/api/portal-apps
+Content-Type: {{contentType}}
+
+{
+  "title": "V2Ray Android",
+  "description": "کلاینت V2Ray برای اندروید - نسخه جدید",
+  "downloadLink": "https://example.com/v2ray-android.apk",
+  "qrCode": "https://example.com/qr-code.png",
+  "videoUrl": "https://youtube.com/watch?v=example",
+  "iconUrl": "https://example.com/v2ray-icon.png",
+  "order": 1,
+  "isActive": true
+}
+
+###
+
+### 4. Update portal app
+PUT {{baseUrl}}/api/portal-apps/1
+Content-Type: {{contentType}}
+
+{
+  "title": "V2Ray Android - بروزرسانی شده",
+  "description": "آخرین نسخه با ویژگی‌های جدید"
+}
+
+###
+
+### 5. Delete portal app
+DELETE {{baseUrl}}/api/portal-apps/1
+Content-Type: {{contentType}}
+
+###
+
+### 6. Get all announcements (Admin)
+GET {{baseUrl}}/api/portal-announcements
+Content-Type: {{contentType}}
+
+###
+
+### 7. Get active announcements (Public)
+GET {{baseUrl}}/api/public/portal-announcements
+Content-Type: {{contentType}}
+
+###
+
+### 8. Create new announcement
+POST {{baseUrl}}/api/portal-announcements
+Content-Type: {{contentType}}
+
+{
+  "title": "بروزرسانی مهم سرورها",
+  "content": "سرورهای ایران در تاریخ ۱۴۰۳/۰۸/۱۵ برای بروزرسانی از ساعت ۲ تا ۴ صبح قطع خواهند بود.",
+  "type": "warning",
+  "priority": 10,
+  "isActive": true
+}
+
+###
+
+### 9. Update announcement
+PUT {{baseUrl}}/api/portal-announcements/1
+Content-Type: {{contentType}}
+
+{
+  "type": "success",
+  "content": "بروزرسانی با موفقیت انجام شد. تمام سرورها آنلاین هستند."
+}
+
+###
+
+### 10. Delete announcement
+DELETE {{baseUrl}}/api/portal-announcements/1
+Content-Type: {{contentType}}
+
+###
+
+### Sample data for testing multiple apps
+
+### Create App 1 - V2Ray Android
+POST {{baseUrl}}/api/portal-apps
+Content-Type: {{contentType}}
+
+{
+  "title": "V2Ray Android",
+  "description": "بهترین کلاینت برای اندروید",
+  "downloadLink": "https://github.com/2dust/v2rayNG/releases/latest",
+  "order": 1,
+  "isActive": true
+}
+
+###
+
+### Create App 2 - Clash for Windows
+POST {{baseUrl}}/api/portal-apps
+Content-Type: {{contentType}}
+
+{
+  "title": "Clash for Windows",
+  "description": "کلاینت قدرتمند برای ویندوز",
+  "downloadLink": "https://github.com/Fndroid/clash_for_windows_pkg/releases",
+  "order": 2,
+  "isActive": true
+}
+
+###
+
+### Create App 3 - Shadowrocket iOS
+POST {{baseUrl}}/api/portal-apps
+Content-Type: {{contentType}}
+
+{
+  "title": "Shadowrocket (iOS)",
+  "description": "بهترین اپ برای iOS",
+  "downloadLink": "https://apps.apple.com/us/app/shadowrocket/id932747118",
+  "order": 3,
+  "isActive": true
+}
+
+###
+
+### Create Info Announcement
+POST {{baseUrl}}/api/portal-announcements
+Content-Type: {{contentType}}
+
+{
+  "title": "نکات مهم استفاده از سرویس",
+  "content": "لطفاً از آخرین نسخه اپلیکیشن‌ها استفاده کنید.\nهمیشه از پروتکل‌های جدید استفاده کنید.\nدر صورت مشکل با پشتیبانی تماس بگیرید.",
+  "type": "info",
+  "priority": 5,
+  "isActive": true
+}
+
+###
+
+### Create Warning Announcement
+POST {{baseUrl}}/api/portal-announcements
+Content-Type: {{contentType}}
+
+{
+  "title": "⚠️ هشدار امنیتی",
+  "content": "به هیچ عنوان اطلاعات کانفیگ خود را با دیگران به اشتراک نگذارید.",
+  "type": "warning",
+  "priority": 8,
+  "isActive": true
+}
+
+###

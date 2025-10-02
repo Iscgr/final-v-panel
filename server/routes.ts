@@ -76,6 +76,9 @@ import { featureFlagManager } from './services/feature-flag-manager.js';
 // Import Representatives Routes - Modular & Refactored
 import representativesRoutes from './routes/representatives-routes.js';
 
+// Import Portal Content Routes - Apps & Announcements Management
+import { registerPortalContentRoutes } from './routes/portal-content-routes.js';
+
 // --- Interfaces for Authentication Middleware ---
 interface AuthSession {
   id: string; // Required by Session interface
@@ -259,6 +262,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 🔷 Representatives Routes - Refactored & Modular (5 columns: name, ownerName, totalSales, totalDebt, actions)
   app.use('/api/representatives', authMiddleware, representativesRoutes);
   console.log('✅ Representatives routes registered with authentication');
+
+  // 📱 Portal Content Routes - Apps & Announcements Management
+  registerPortalContentRoutes(app);
+  console.log('✅ Portal content routes registered');
 
   // SHERLOCK v18.4: سیستم مالی یکپارچه واحد - تنها سیستم مالی فعال
   // Previously imported and used directly:

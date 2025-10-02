@@ -57,6 +57,10 @@ import { toPersianDigits } from "@/lib/persian-date";
 // import { BatchRollbackManager } from '../components/batch-rollback-manager';
 // import { MultiGroupConfiguration } from '../components/multi-group-configuration';
 
+// Import Portal Content Management Components
+import { PortalAppsManager } from "@/components/portal-apps-manager";
+import { PortalAnnouncementsManager } from "@/components/portal-announcements-manager";
+
 // Import default template function
 const getDefaultTelegramTemplate = () => `📋 فاکتور شماره {invoice_number}
 
@@ -456,7 +460,7 @@ export default function Settings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="telegram" className="flex items-center">
             <Send className="w-4 h-4 mr-2" />
             تلگرام
@@ -464,6 +468,10 @@ export default function Settings() {
           <TabsTrigger value="portal" className="flex items-center">
             <Globe className="w-4 h-4 mr-2" />
             پرتال عمومی
+          </TabsTrigger>
+          <TabsTrigger value="portal-content" className="flex items-center">
+            <Bell className="w-4 h-4 mr-2" />
+            اپلیکیشن‌ها و اعلانات
           </TabsTrigger>
           <TabsTrigger value="invoice-template" className="flex items-center">
             <FileText className="w-4 h-4 mr-2" />
@@ -1245,6 +1253,43 @@ export default function Settings() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Portal Content Management - Apps & Announcements */}
+        <TabsContent value="portal-content">
+          <div className="grid grid-cols-1 gap-6">
+            {/* Portal Apps Management */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Bell className="w-5 h-5 ml-2" />
+                  مدیریت اپلیکیشن‌ها
+                </CardTitle>
+                <CardDescription>
+                  مدیریت لینک‌های دانلود، QR کد و ویدیوهای آموزشی اپلیکیشن‌ها
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PortalAppsManager />
+              </CardContent>
+            </Card>
+
+            {/* Portal Announcements Management */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <MessageSquare className="w-5 h-5 ml-2" />
+                  مدیریت اعلانات مهم
+                </CardTitle>
+                <CardDescription>
+                  مدیریت اعلانات و اخبار مهم برای نمایش در پرتال عمومی
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PortalAnnouncementsManager />
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
