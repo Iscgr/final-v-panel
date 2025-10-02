@@ -57,12 +57,13 @@ export const representativesColumns: ColumnDef<RepresentativeRow>[] = [
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           className="text-right w-full justify-start"
         >
-          میزان فروش کل (ریال)
+          میزان فروش کل (تومان)
           <ArrowUpDown className="mr-2 h-4 w-4" />
         </Button>
       );
     },
     cell: ({ row }) => {
+      // ✅ ODIN v5.0: Values are already in Toman from backend
       const amount = parseFloat(row.getValue("totalSales"));
       const formatted = new Intl.NumberFormat("fa-IR").format(amount);
       return <div className="text-right font-medium">{formatted}</div>;
@@ -77,19 +78,20 @@ export const representativesColumns: ColumnDef<RepresentativeRow>[] = [
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
           className="text-right w-full justify-start"
         >
-          مانده بدهی (ریال)
+          مانده بدهی (تومان)
           <ArrowUpDown className="mr-2 h-4 w-4" />
         </Button>
       );
     },
     cell: ({ row }) => {
+      // ✅ ODIN v5.0: Values are already in Toman from backend
       const amount = parseFloat(row.getValue("totalDebt"));
       const formatted = new Intl.NumberFormat("fa-IR").format(amount);
       
-      // رنگ‌بندی بر اساس میزان بدهی
-      const colorClass = amount > 10000000 
+      // رنگ‌بندی بر اساس میزان بدهی (در تومان)
+      const colorClass = amount > 1000000 
         ? "text-red-600 font-bold" 
-        : amount > 5000000 
+        : amount > 500000 
         ? "text-orange-600 font-semibold"
         : "text-green-600";
       

@@ -113,26 +113,33 @@ class RepresentativesService {
           try {
             const financialData = await unifiedFinancialEngine.calculateRepresentative(rep.id);
             
+            // ✅ ODIN v5.0 FIX: Convert to number safely and ensure valid numeric values
+            const totalSales = Number(financialData.totalSales) || 0;
+            const actualDebt = Number(financialData.actualDebt) || 0;
+            
             return {
               id: rep.id,
               code: rep.code,
               name: rep.name,
               ownerName: rep.ownerName || '-',
-              totalSales: financialData.totalSales.toFixed(0),
-              totalDebt: financialData.actualDebt.toFixed(0),
+              totalSales: totalSales.toFixed(0),
+              totalDebt: actualDebt.toFixed(0),
               isActive: rep.isActive,
               panelUsername: rep.panelUsername
             };
           } catch (error) {
             console.warn(`⚠️ Failed to calculate financial for rep ${rep.id}, using cached:`, error);
             // Fallback to cached data
+            const cachedSales = Number(rep.totalSales) || 0;
+            const cachedDebt = Number(rep.totalDebt) || 0;
+            
             return {
               id: rep.id,
               code: rep.code,
               name: rep.name,
               ownerName: rep.ownerName || '-',
-              totalSales: rep.totalSales || '0',
-              totalDebt: rep.totalDebt || '0',
+              totalSales: cachedSales.toFixed(0),
+              totalDebt: cachedDebt.toFixed(0),
               isActive: rep.isActive,
               panelUsername: rep.panelUsername
             };
