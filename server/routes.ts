@@ -4,7 +4,9 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { db } from "./db.js";
 import { sql, eq, and, or, like, gte, lte, asc, count, desc } from "drizzle-orm";
-import { invoices, representatives, payments, activityLogs } from "@shared/schema";
+import { invoices, representatives, payments, activityLogs, insertRepresentativeSchema, insertSalesPartnerSchema, insertInvoiceSchema, insertInvoiceBatchSchema, type InsertInvoice } from "@shared/schema";
+import { z } from "zod";
+import bcrypt from "bcryptjs";
 
 // SHERLOCK LOG CONTROL v1.0
 const SHERLOCK_ENABLED = process.env.NODE_ENV !== 'production';
@@ -21,80 +23,48 @@ import multer from "multer";
 // SHERLOCK v34.1: Import payment management router and its dependencies
 import { paymentManagementRouter, requireAuth } from "./routes/payment-management-router.js";
 
+// Import all route registration functions
+import { registerHealthRoutes } from "./routes/health-routes.js";
+import { registerStandardizedInvoiceRoutes } from "./routes/standardized-invoice-routes.js";
+import { registerIntegrationHealthRoutes } from "./routes/integration-health-routes.js";
+import { registerUnifiedFinancialRoutes } from "./routes/unified-financial-routes.js";
+import { registerShadowAllocationRoutes } from "./routes/shadow-allocation-routes.js";
+import { registerUsageLineRoutes } from "./routes/usage-line-routes.js";
+import { registerUnifiedStatisticsRoutes } from "./routes/unified-statistics-routes.js";
+import { registerBatchRollbackRoutes } from "./routes/batch-rollback-routes.js";
+
+// Import route modules
+import featureFlagRoutes from "./routes/feature-flag-routes.js";
+import representativesRoutes from "./routes/representatives-routes.js";
+import adminResourcesRoutes from "./routes/admin-resources-routes.js";
+import portalResourcesRoutes from "./routes/portal-resources-routes.js";
+import fileUploadRoutes from "./routes/file-upload-routes.js";
+import databaseOptimizationRoutes from "./routes/database-optimization-routes.js";
+import debtVerificationRoutes from "./routes/debt-verification-routes.js";
+import activeReconciliationRoutes from "./routes/active-reconciliation-routes.js";
+import guardMetricsRoutes from "./routes/guard-metrics-routes.js";
+
+// Import services
+import { unifiedFinancialEngine } from "./services/unified-financial-engine.js";
+import { featureFlagManager } from "./services/feature-flag-manager.js";
+import { isCanaryRepresentative } from "./services/allocation-canary-helper.js";
+import { sendInvoiceToTelegram, formatInvoiceStatus } from "./services/telegram.js";
+import { PersianDate } from "./utils/type-helpers.js";
+
 // Extend Request interface to include multer file
 interface MulterRequest extends Request {
   file?: Express.Multer.File;
 }
-import { z } from "zod";
-import PersianDate from "persian-date";
-import {
-  insertRepresentativeSchema,
-  insertSalesPartnerSchema,
-  insertInvoiceSchema,
-  insertPaymentSchema,
-  // فاز ۱: Schema برای مدیریت دوره‌ای فاکتورها
-  insertInvoiceBatchSchema
-} from "@shared/schema";
-// ✅ NEW STANDARDIZED IMPORTS:
-import { registerStandardizedInvoiceRoutes } from "./routes/standardized-invoice-routes.js";
-import {
-  sendInvoiceToTelegram,
-  sendBulkInvoicesToTelegram,
-  getDefaultTelegramTemplate,
-  formatInvoiceStatus
-} from "./services/telegram.js";
-import bcrypt from "bcryptjs";
-// Commented out temporarily - import { generateFinancialReport } from "./services/report-generator";
 
-// New import for unified financial engine
-import { unifiedFinancialEngine } from './services/unified-financial-engine.js';
-
-// Import integration health routes for Phase 9
-import { registerIntegrationHealthRoutes } from "./routes/integration-health-routes.js";
-import featureFlagRoutes from './routes/feature-flag-routes.js';
-import { registerHealthRoutes } from './routes/health-routes.js';
-
-// Import unified statistics routes registration
-import { registerUnifiedStatisticsRoutes } from "./routes/unified-statistics-routes.js";
-// Register unified financial routes
-import { registerUnifiedFinancialRoutes } from "./routes/unified-financial-routes.js";
-import { registerShadowAllocationRoutes } from './routes/shadow-allocation-routes.js';
-import { registerUsageLineRoutes } from './routes/usage-line-routes.js';
-import { isCanaryRepresentative } from './services/allocation-canary-helper.js';
-
-// Import database optimization routes registration
-import databaseOptimizationRoutes from './routes/database-optimization-routes.js';
-// Import Batch Rollback Routes
-import { registerBatchRollbackRoutes } from './routes/batch-rollback-routes.js';
-
-// Import Debt Verification Routes
-import debtVerificationRoutes from './routes/debt-verification-routes.js';
-// Import Active Reconciliation Routes - Phase B: E-B4
-import activeReconciliationRoutes from './routes/active-reconciliation-routes.js';
-import guardMetricsRoutes from './routes/guard-metrics-routes.js';
-import { featureFlagManager } from './services/feature-flag-manager.js';
-
-// Import Representatives Routes - Modular & Refactored
-import representativesRoutes from './routes/representatives-routes.js';
-
-// Import Admin Resources Routes - App Downloads & Announcements Management
-import adminResourcesRoutes from './routes/admin-resources-routes.js';
-// Import Portal Resources Routes - Public Resources for Representatives
-import portalResourcesRoutes from './routes/portal-resources-routes.js';
-// Import File Upload & View Tracking Routes
-import fileUploadRoutes from './routes/file-upload-routes.js';
-
-// --- Interfaces for Authentication Middleware ---
-interface AuthSession {
-  id: string; // Required by Session interface
-  cookie: any; // Required by Session interface
-  authenticated?: boolean;
-  userId?: number;
-  username?: string;
-  role?: string;
-  permissions?: string[];
-  user?: any;
-  // ...existing code...
+// Helper function to convert Persian date string (e.g., "1403/05/15") to a Gregorian Date object
+function convertPersianToGregorian(persianDateStr: string): Date | null {
+  if (!persianDateStr || typeof persianDateStr !== 'string' || !/^\d{4}\/\d{2}\/\d{2}$/.test(persianDateStr)) {
+    return null;
+  }
+  const parts = persianDateStr.split('/').map(Number);
+  // Note: persian-date uses 0-indexed months (0-11)
+  const persianDate = new PersianDate([parts[0], parts[1], parts[2]]);
+  return persianDate.toDate();
 }
 
 // Remove AuthRequest interface - use Request directly with type assertions
@@ -1764,7 +1734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const invoices = await storage.getInvoicesForTelegram();
       res.json(invoices);
     } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت فاکتورهای در انتظار ارسال" });
+      res.status(500).json({ error: "خطا در دریافت فاکتورهاى در انتظار ارسال" });
     }
   });
 
@@ -1784,18 +1754,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/invoices/create-manual", authMiddleware, async (req, res) => {
     try {
       console.log('🔧 فاز ۲: ایجاد فاکتور دستی');
-      const validatedData = insertInvoiceSchema.parse(req.body) as ValidatedInvoiceData;
+      const validatedData = insertInvoiceSchema.parse(req.body) as any;
 
       // Check if representative exists
       // تبدیل شناسه نماینده به عدد برای تطبیق با امضای تابع
       const representative = await storage.getRepresentative(Number(validatedData.representativeId));
       if (!representative) {
         return res.status(404).json({ error: "نماینده یافت نشد" });
-      }
+           }
+
+      // Convert dueDate to Gregorian for active calculation (if provided as Persian string)
+      const dueDateGregorian = validatedData.dueDate && typeof validatedData.dueDate === 'string' 
+        ? convertPersianToGregorian(validatedData.dueDate) 
+        : null;
 
       // Create manual invoice
       const invoice = await storage.createInvoice({
         ...validatedData,
+        dueDateGregorian,
+        isManual: true,
         status: validatedData.status || "unpaid",
         usageData: validatedData.usageData || {
           type: "manual",
@@ -1839,7 +1816,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // فاز ۲: Invoice editing API - ویرایش فاکتور
-  app.put("/api/invoices/:id", enhancedUnifiedAuthMiddleware, async (req, res) => {
+  app.put("/api/invoices/:id", authMiddleware, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
 
@@ -1860,6 +1837,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updateData = req.body;
+
+      // If dueDate is being updated, also update the Gregorian version
+      if (updateData.dueDate) {
+        updateData.dueDateGregorian = convertPersianToGregorian(updateData.dueDate);
+      }
+
       const editedAmount = parseFloat(updateData.amount);
       const originalAmount = parseFloat(originalInvoice.amount);
 
@@ -2516,7 +2499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (representativeId) {
         // Recalculate for specific representative
-        const repInvoices = await storage.getInvoicesByRepresentative(representativeId);
+        const repInvoices = await storage.getInvoicesByRepresentative(parseInt(representativeId as string));
         invoicesToProcess = repInvoices.map(inv => inv.id);
         console.log(`📊 Processing ${invoicesToProcess.length} invoices for representative ${representativeId}`);
       } else if (invoiceIds && Array.isArray(invoiceIds)) {
@@ -2562,7 +2545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           results.processed++;
         } catch (invoiceError) {
-          console.warn(`Error processing invoice ${invoiceId}:`, invoiceError);
+          console.warn(`Error reconciling invoice ${invoiceId}:`, invoiceError);
         }
       }
 
@@ -2634,20 +2617,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const batchId = parseInt(req.params.id);
       const batch = await storage.getInvoiceBatch(batchId);
-
-      if (!batch) {
-        return res.status(404).json({ error: "دسته فاکتور یافت نشد" });
-      }
-
-      // Get invoices for this batch
-      const invoices = await storage.getBatchInvoices(batchId);
-
+      const batchInvoices = await storage.getInvoicesByBatch(batchId);
+      
       res.json({
         batch,
-        invoices,
+        invoices: batchInvoices,
         summary: {
-          totalInvoices: invoices.length,
-          totalAmount: invoices.reduce((sum, inv) => sum + parseFloat(inv.amount), 0).toString()
+          totalInvoices: batchInvoices.length,
+          totalAmount: batchInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount), 0).toString()
         }
       });
     } catch (error) {
@@ -2687,6 +2664,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error updating invoice batch:', error);
       res.status(500).json({ error: "خطا در بروزرسانی دسته فاکتور" });
+    }
+  });
+
+  app.post("/api/invoice-batches/:id/complete", authMiddleware, async (req, res) => {
+    try {
+      const batchId = parseInt(req.params.id);
+      await storage.completeBatch(batchId);
+
+      const updatedBatch = await storage.getInvoiceBatch(batchId);
+      res.json({
+        success: true,
+        batch: updatedBatch,
+        message: "دسته فاکتور با موفقیت تکمیل شد"
+      });
+    } catch (error) {
+      console.error('Error completing batch:', error);
+      res.status(500).json({ error: "خطا در تکمیل دسته فاکتور" });
+    }
+  });
+
+
+
+  // Activity Logs API
+  app.get("/api/activity-logs", authMiddleware, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const logs = await storage.getActivityLogs(limit);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "خطا در دریافت فعالیت‌ها" });
+    }
+  });
+
+  // NEW: Recent Activity endpoint با فرمت مناسب کامپوننت ActivityFeed (Dashboard)
+  app.get('/api/activity/recent', authMiddleware, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 30;
+      const logs = await storage.getActivityLogs(limit);
+      // نرمال‌سازی برای ActivityFeed
+      const normalized = logs.map(l => ({
+        id: String(l.id ?? l.createdAt ?? Math.random()),
+        type: ((): any => {
+          if (l.type === 'invoice_created') return 'invoice_created';
+          if (l.type === 'invoice_updated') return 'invoice_updated';
+          if (l.type === 'invoice_deleted') return 'invoice_deleted';
+          return 'system_error';
+        })(),
+        actor: 'سیستم',
+        at: (l.createdAt instanceof Date ? l.createdAt.toISOString() : new Date(l.createdAt as any).toISOString()),
+        description: l.description || 'فعالیت سیستمی'
+      }));
+      
+      res.json(normalized);
+    } catch (error) {
+      console.error('Error fetching recent activity:', error);
+      res.status(500).json({ error: "خطا در دریافت فعالیت‌های اخیر" });
     }
   });
 
