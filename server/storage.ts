@@ -1262,17 +1262,28 @@ export class DatabaseStorage implements IStorage {
 
   // SHERLOCK v18.4 - STANDARDIZED: Always use UNIFIED Financial Engine
   async updateRepresentativeFinancials(repId: number): Promise<void> {
-    const { unifiedFinancialEngine } = await import("./services/unified-financial-engine.js");
+    const { unifiedFinancialEngine, UnifiedFinancialEngine } = await import("./services/unified-financial-engine.js");
     return executeWithRetry(
       async () => {
-        const data = await unifiedFinancialEngine.calculateRepresentative(repId);
-        console.log(`💎 UNIFIED FINANCIAL ENGINE v18.4: Standardized update for representative ${repId}:`, {
-          debt: data.actualDebt,
-          totalSales: data.totalSales,
-          totalPaid: data.totalPaid,
-          debtLevel: data.debtLevel
+        // Trigger full sync (writes to DB + invalidates caches)
+        const snapshot = await unifiedFinancialEngine.syncRepresentativeDebt(repId);
+
+        // Ensure secondary caches (legacy consumers) are aware of change
+        UnifiedFinancialEngine.forceInvalidateRepresentative(repId, {
+          cascadeGlobal: true,
+          reason: 'storage_update_representative_financials',
+          immediate: true
         });
-        return;
+
+        // Log consolidated view for observability
+        if (snapshot) {
+          console.log(`💎 UNIFIED FINANCIAL ENGINE v18.4: Standardized update for representative ${repId}:`, {
+            debt: snapshot.actualDebt,
+            totalSales: snapshot.totalSales,
+            totalPaid: snapshot.totalPaid,
+            debtLevel: snapshot.debtLevel
+          });
+        }
       },
       'updateRepresentativeFinancials'
     );

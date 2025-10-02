@@ -91,7 +91,12 @@ export async function sendInvoiceToTelegram(
     });
 
     const result = await response.json();
-    return result.ok === true;
+    if (result.ok !== true) {
+      console.error('❌ Telegram send failed:', result);
+      return false;
+    }
+
+    return true;
   } catch (error) {
     console.error('خطا در ارسال پیام تلگرام:', error);
     return false;
