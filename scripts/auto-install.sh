@@ -15,7 +15,8 @@ set -euo pipefail
 IFS=$'\n\t'
 
 VERSION="1.0.0"
-REPO_URL="https://github.com/Iscgr/AgentPortalShield.git"
+REPO_URL_DEFAULT="https://github.com/Iscgr/final-v-panel.git"
+REPO_URL="${MARFANET_REPO_URL:-$REPO_URL_DEFAULT}"
 INSTALL_DIR="/opt/marfanet"
 ENV_FILE="$INSTALL_DIR/.env"
 COMPOSE_FILE="$INSTALL_DIR/docker-compose-stack.yml"
@@ -81,8 +82,9 @@ if ! command -v docker compose >/dev/null 2>&1; then
   err "Docker Compose v2 در دسترس نیست"; exit 1; fi
 
 log "مرحله 5: کلون یا بروزرسانی مخزن"
+ok "ریپوی استفاده‌شده: $REPO_URL"
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-  (cd "$INSTALL_DIR" && git fetch --all && git reset --hard origin/prof)
+  (cd "$INSTALL_DIR" && git remote set-url origin "$REPO_URL" && git fetch --all && git reset --hard origin/prof)
 else
   git clone --branch prof "$REPO_URL" "$INSTALL_DIR"
 fi
@@ -257,6 +259,7 @@ INSTALL_DIR="/opt/marfanet"
 COMPOSE_FILE="$INSTALL_DIR/docker-compose-stack.yml"
 ENV_FILE="$INSTALL_DIR/.env"
 BACKUP_DIR="$INSTALL_DIR/backups"
+REPO_URL="__REPO_URL__"
 mkdir -p "$BACKUP_DIR"
 
 usage() {
@@ -295,7 +298,7 @@ backup_db() {
 
 update_panel() {
   echo "آپدیت پنل..."
-  (cd "$INSTALL_DIR" && git fetch --all && git reset --hard origin/prof && docker compose -f "$COMPOSE_FILE" build app && docker compose -f "$COMPOSE_FILE" up -d app)
+  (cd "$INSTALL_DIR" && git remote set-url origin "$REPO_URL" && git fetch --all && git reset --hard origin/prof && docker compose -f "$COMPOSE_FILE" build app && docker compose -f "$COMPOSE_FILE" up -d app)
   echo "آپدیت انجام شد"
 }
 
@@ -348,6 +351,7 @@ while true; do
 done
 AGENT_EOF
 chmod +x "$AGENT_SCRIPT"
+sed -i "s|__REPO_URL__|$REPO_URL|g" "$AGENT_SCRIPT"
 
 log "مرحله 14: خلاصه نهایی"
 cat <<SUMMARY
