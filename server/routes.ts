@@ -43,6 +43,8 @@ import databaseOptimizationRoutes from "./routes/database-optimization-routes.js
 import debtVerificationRoutes from "./routes/debt-verification-routes.js";
 import activeReconciliationRoutes from "./routes/active-reconciliation-routes.js";
 import guardMetricsRoutes from "./routes/guard-metrics-routes.js";
+// Phase 1: Portal Content Management (NEW modular content blocks)
+import portalContentRoutes from "./routes/portal-content-routes.js";
 
 // Import services
 import { unifiedFinancialEngine } from "./services/unified-financial-engine.js";
@@ -241,6 +243,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 🔷 Admin Resources Routes - App Downloads & Announcements Management (Admin Panel Only)
   app.use('/api/admin', authMiddleware, adminResourcesRoutes);
   console.log('✅ Admin resources routes registered (app-downloads, announcements)');
+
+  // 🔷 Phase 1: Portal Content Blocks (Modular public portal textual blocks - additive, not yet consumed by portal UI)
+  app.use('/api/admin/portal-content-blocks', authMiddleware, portalContentRoutes);
+  console.log('✅ Phase 1: Portal content blocks routes registered');
 
   // 🔷 Portal Resources Routes - Public Resources for Representatives Portal
   app.use('/api/portal', portalResourcesRoutes);

@@ -197,6 +197,45 @@ client/  server/  shared/  scripts/  uploads/  docker-compose.yml  Dockerfile
 | GET | /api/invoices | لیست فاکتورها |
 
 ---
+## 21.1 مدیریت محتوای پرتال (Phase 1)
+این فاز یک لایه ماژولار جدید برای بلوک‌های محتوایی پرتال عمومی معرفی می‌کند بدون اینکه مصرف فعلی پرتال (settings قدیمی) را هنوز تغییر دهد.
+
+مسیرهای Admin (احراز هویت لازم):
+| متد | مسیر | توضیح |
+|-----|------|-------|
+| GET | /api/admin/portal-content-blocks | دریافت لیست بلوک‌های استاندارد (guaranteed keys) |
+| PUT | /api/admin/portal-content-blocks/:blockKey | ایجاد/بروزرسانی (upsert) بلوک مشخص |
+
+کلیدهای فعلی:
+guidance, contact_info, downloads_intro, support_hours, announcements_title
+
+UI جدید: صفحه `PortalContentManager` در مسیر `/admin/portal-content` با تب فعلی «بلوک‌ها» و تب‌های Placeholder برای «اطلاعیه‌ها / دانلودها / پیش‌نمایش» (Phase 2 الحاقی).
+
+ایمن‌سازی:
+1. هنوز پرتال عمومی از settings موجود می‌خواند ⇒ بدون ریسک رگرسیون.
+2. حذف تب‌های قدیمی «Portal» و «Invoice Template» از صفحه Settings انجام شد (Deprecated) برای جلوگیری از سردرگمی.
+3. امکان rollback سریع: کافی است commit مربوط به حذف UI قدیمی revert شود و روتر جدید حذف گردد.
+
+گام‌های بعد (Phase 2 پیشنهادی):
+1. مهاجرت پرتال به خواندن از portal_content_blocks (read switch feature flag).
+2. ادغام Announcements & Downloads در همان صفحه با Preview زنده.
+3. افزودن نسخه‌بندی (اختیاری) برای history بلوک‌ها.
+
+Rollback Quick Guide:
+```
+git revert <commit_that_removed_old_settings_tabs>
+# یا حذف دستی مسیر /api/admin/portal-content-blocks و صفحه PortalContentManager
+```
+
+تست سریع صحت:
+```
+curl -s localhost:3000/api/admin/portal-content-blocks -b cookie.txt -c cookie.txt
+```
+خروجی باید شامل همه کلیدهای استاندارد حتی اگر مقدار body اولیه fallback باشد.
+
+---
+
+---
 ## 22. Cheat Sheet
 ```bash
 npm run dev
