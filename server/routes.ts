@@ -48,7 +48,7 @@ import guardMetricsRoutes from "./routes/guard-metrics-routes.js";
 import { unifiedFinancialEngine } from "./services/unified-financial-engine.js";
 import { featureFlagManager } from "./services/feature-flag-manager.js";
 import { isCanaryRepresentative } from "./services/allocation-canary-helper.js";
-import { sendInvoiceToTelegram, formatInvoiceStatus } from "./services/telegram.js";
+import { sendInvoiceToTelegram, formatInvoiceStatus, getDefaultTelegramTemplate } from "./services/telegram.js";
 import { PersianDate } from "./utils/type-helpers.js";
 
 // Extend Request interface to include multer file
@@ -454,6 +454,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/sla', slaDashboardRoutes.default);
   console.log('✅ E-C5: SLA Dashboard routes registered');
 
+  // Real-time Dashboard Events (SSE)
+  const dashboardEventsRoutes = await import('./routes/dashboard-events-routes.js');
+  app.use('/api/dashboard', dashboardEventsRoutes.default);
+  console.log('✅ Dashboard real-time events routes registered');
+
   // SHERLOCK v1.0: Session Recovery and Debug Endpoint
   app.get("/api/auth/session-debug", (req, res) => {
     const sessionInfo = {
@@ -657,200 +662,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard endpoint - Updated to use unified financial data with enhanced error handling
   app.get("/api/dashboard", authMiddleware, async (req, res) => {
     try {
-      console.log("📊 SHERLOCK v32.0: Dashboard request received");
-      console.log("🔍 SHERLOCK v32.0: Starting dashboard data collection...");
-
-      // E-B7: Single Consolidated Query Implementation
-      // Replacing multiple separate queries with unified financial summary service
-      console.log("🚀 E-B7: Executing consolidated financial summary query...");
+      console.log("📊 Dashboard request - returning minimal data (5 widgets removed)");
       
-      let consolidatedData;
-      try {
-        // Import consolidated service dynamically to avoid circular dependencies
-        const { ConsolidatedFinancialSummaryService } = await import('./services/consolidated-financial-summary.js');
-        
-        // Execute single consolidated query instead of multiple separate queries
-        consolidatedData = await ConsolidatedFinancialSummaryService.calculateConsolidatedSummary();
-        
-        console.log(`✅ E-B7: Consolidated query completed in ${consolidatedData.queryTimeMs}ms`);
-        
-        // Performance validation for E-B7 KPI
-        if (consolidatedData.queryTimeMs > 120) {
-          console.warn(`⚠️ E-B7: Query time ${consolidatedData.queryTimeMs}ms exceeds P95 target of 120ms`);
-        }
-        
-      } catch (consolidatedError) {
-        console.error("❌ E-B7: Consolidated query failed:", consolidatedError);
-        
-        // Fallback to legacy unifiedFinancialEngine for graceful degradation
-        console.log("🔄 E-B7: Falling back to legacy financial engine...");
-        try {
-          const legacySummary = await unifiedFinancialEngine.calculateGlobalSummary();
-          
-          // D-01 Fix: Query for missing fields in legacy fallback
-          let unsentTelegram = 0, totalSalesPartners = 0, activeSalesPartners = 0;
-          try {
-            const telegramResult = await db.execute(sql`SELECT COUNT(*) as count FROM invoices WHERE sent_to_telegram = false`);
-            unsentTelegram = Number((telegramResult as any).rows?.[0]?.count) || 0;
-            
-            const partnersResult = await db.execute(sql`
-              SELECT 
-                COUNT(*) as total,
-                COUNT(*) FILTER (WHERE is_active = true) as active 
-              FROM sales_partners
-            `);
-            const partnerRow = (partnersResult as any).rows?.[0];
-            totalSalesPartners = Number(partnerRow?.total) || 0;
-            activeSalesPartners = Number(partnerRow?.active) || 0;
-          } catch (err) {
-            console.warn("⚠️ E-B7: Could not fetch Telegram/Sales Partners in fallback:", err);
-          }
-
-          // Convert legacy format to consolidated format for consistency
-          consolidatedData = {
-            totalRevenue: legacySummary.totalSystemPaid || 0,
-            totalDebt: legacySummary.totalSystemDebt || 0,
-            totalCredit: 0, // Legacy doesn't have direct credit field
-            totalOutstanding: legacySummary.totalUnpaidAmount || 0,
-            totalRepresentatives: legacySummary.totalRepresentatives || 0,
-            activeRepresentatives: legacySummary.activeRepresentatives || 0,
-            inactiveRepresentatives: Math.max(0, (legacySummary.totalRepresentatives || 0) - (legacySummary.activeRepresentatives || 0)),
-            totalInvoices: (legacySummary.unpaidInvoicesCount || 0) + (legacySummary.overdueInvoicesCount || 0), // Approximate
-            paidInvoices: 0, // Legacy doesn't track this separately
-            unpaidInvoices: legacySummary.unpaidInvoicesCount || 0,
-            overdueInvoices: legacySummary.overdueInvoicesCount || 0,
-            totalPayments: 0, // Legacy doesn't track payment count
-            totalPaymentAmount: legacySummary.totalSystemPaid || 0,
-            unallocatedPaymentAmount: 0, // Legacy doesn't track unallocated
-            // D-01 Fix: Add new fields to legacy fallback
-            unsentTelegramInvoices: unsentTelegram,
-            totalSalesPartners: totalSalesPartners,
-            activeSalesPartners: activeSalesPartners,
-            systemIntegrityScore: Math.round(legacySummary.systemAccuracy || 0),
-            lastUpdated: legacySummary.lastCalculationTime || new Date().toISOString(),
-            queryTimeMs: 999, // Indicate fallback mode
-            cacheStatus: 'UNAVAILABLE' as const
-          };
-        } catch (legacyError) {
-          console.error("❌ E-B7: Legacy fallback also failed:", legacyError);
-          throw new Error("Both consolidated and legacy financial calculations failed");
-        }
-      }
-
-      // Construct optimized response using consolidated data
-      const dashboardData = {
+      // ✅ Minimal response - 5 statistical widgets removed
+      // This endpoint kept for cache invalidation compatibility
+      res.json({
         success: true,
         data: {
-          // Primary financial summary (from consolidated query)
           summary: {
-            totalRevenue: consolidatedData.totalRevenue,
-            totalDebt: consolidatedData.totalDebt,
-            totalCredit: consolidatedData.totalCredit,
-            totalOutstanding: consolidatedData.totalOutstanding,
-            riskRepresentatives: consolidatedData.inactiveRepresentatives,
-            // D-01 FIX: Use correct fields from consolidated data
-            unsentTelegramInvoices: consolidatedData.unsentTelegramInvoices, // Corrected: was overdueInvoices
-            totalSalesPartners: consolidatedData.totalSalesPartners, // Corrected: was totalRepresentatives
-            activeSalesPartners: consolidatedData.activeSalesPartners, // Corrected: was activeRepresentatives
-            systemIntegrityScore: consolidatedData.systemIntegrityScore,
-            lastReconciliationDate: consolidatedData.lastUpdated,
-            problematicRepresentativesCount: consolidatedData.inactiveRepresentatives,
-            responseTime: consolidatedData.queryTimeMs,
-            cacheStatus: consolidatedData.cacheStatus,
-            lastUpdated: consolidatedData.lastUpdated
-          },
-          
-          // Representative metrics (from consolidated query)
-          representatives: {
-            total: consolidatedData.totalRepresentatives,
-            active: consolidatedData.activeRepresentatives,
-            inactive: consolidatedData.inactiveRepresentatives
-          },
-          
-          // Invoice metrics (from consolidated query)
-          invoices: {
-            total: consolidatedData.totalInvoices,
-            paid: consolidatedData.paidInvoices,
-            unpaid: consolidatedData.unpaidInvoices,
-            overdue: consolidatedData.overdueInvoices
-          },
-          
-          // Payment metrics (from consolidated query)
-          payments: {
-            totalAmount: consolidatedData.totalPaymentAmount,
-            unallocatedAmount: consolidatedData.unallocatedPaymentAmount,
-            totalCount: consolidatedData.totalPayments
-          },
-          
-          // Sales partners (alias for representatives for backward compatibility)
-          salesPartners: {
-            total: consolidatedData.totalRepresentatives,
-            active: consolidatedData.activeRepresentatives
-          },
-          
-          // System status
-          systemStatus: {
-            integrityScore: consolidatedData.systemIntegrityScore,
-            lastUpdate: consolidatedData.lastUpdated,
-            cacheStatus: consolidatedData.cacheStatus
+            // Minimal data for backwards compatibility
+            totalRevenue: 0,
+            totalDebt: 0,
+            totalRepresentatives: 0,
+            activeRepresentatives: 0,
+            overdueInvoices: 0,
+            systemIntegrityScore: 0,
+            lastUpdated: new Date().toISOString(),
+            cacheStatus: 'MINIMAL'
           }
         },
-        
-        // Enhanced metadata for E-B7 monitoring
-        meta: {
-          timestamp: new Date().toISOString(),
-          cacheStatus: consolidatedData.cacheStatus,
-          queryTimeMs: consolidatedData.queryTimeMs,
-          version: "E-B7-Consolidated",
-          queryOptimization: {
-            enabled: true,
-            queryCount: 1, // Single consolidated query
-            performanceTarget: "P95 < 120ms",
-            achieved: consolidatedData.queryTimeMs <= 120
-          }
-        }
-      };
-
-      res.json(dashboardData);
-
-    } catch (error) {
-      console.error('❌ SHERLOCK v32.0: Dashboard error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : 'No stack trace',
-        timestamp: new Date().toISOString()
+        message: '5 statistical widgets have been removed - this endpoint returns minimal data for compatibility'
       });
-
-      // Return safe fallback data
+    } catch (error) {
+      console.error('Dashboard error:', error);
       res.status(500).json({
         success: false,
         error: "Failed to load dashboard",
-        details: error instanceof Error ? error.message : "Unknown error occurred",
         fallbackData: {
           totalRevenue: 0,
           totalDebt: 0,
-          totalCredit: 0,
-          totalOutstanding: 0,
-          totalRepresentatives: 0,
-          activeRepresentatives: 0,
-          inactiveRepresentatives: 0,
-          riskRepresentatives: 0,
-          totalInvoices: 0,
-          paidInvoices: 0,
-          unpaidInvoices: 0,
-          overdueInvoices: 0,
-          unsentTelegramInvoices: 0,
-          totalSalesPartners: 0,
-          activeSalesPartners: 0,
           systemIntegrityScore: 0,
-          lastReconciliationDate: new Date().toISOString(),
-          problematicRepresentativesCount: 0,
-          responseTime: 0,
-          cacheStatus: "ERROR",
           lastUpdated: new Date().toISOString()
         }
       });
     }
   });
+
 
   // SHERLOCK v18.4: Debtor Representatives moved to unified financial routes
   // Available at: /api/unified-financial/debtors
@@ -1672,6 +1519,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           immediate: true
         });
   sherlockLog(`✅ SHERLOCK v33.2: Financial cache invalidated for representative ${representativeId}`);
+
+        // 🔄 REAL-TIME DASHBOARD UPDATE: Notify payment change (simplified - widgets removed)
+        const { dashboardEventsService } = await import('./services/dashboard-events-service.js');
+        
+        dashboardEventsService.notifyPaymentChange(
+          newPayment.id, 
+          parseFloat(amount) || 0  // Use payment amount directly
+        );
+        console.log(`📡 Dashboard SSE: Payment created event broadcasted (minimal data)`);
       } catch (cacheError) {
         console.warn(`⚠️ SHERLOCK v33.2: Cache invalidation warning:`, cacheError);
       }
