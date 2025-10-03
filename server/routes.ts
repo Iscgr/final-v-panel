@@ -446,11 +446,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/reconciliation', activeReconciliationRoutes);
 
   // Phase C: E-C1 - Outbox Pattern Routes
-  const outboxRoutes = await import('./routes/outbox-routes');
+  const outboxRoutes = await import('./routes/outbox-routes.js');
   app.use('/api/outbox', outboxRoutes.default);
 
   // Phase C: E-C5 - SLA Dashboard Routes
-  const slaDashboardRoutes = await import('./routes/sla-dashboard-routes');
+  const slaDashboardRoutes = await import('./routes/sla-dashboard-routes.js');
   app.use('/api/sla', slaDashboardRoutes.default);
   console.log('✅ E-C5: SLA Dashboard routes registered');
 

@@ -66,23 +66,27 @@
 ## 📦 Container Services
 
 ### 1. PostgreSQL Database (`db`)
-- **Image:** postgres:14-15-alpine
-- **Port:** 5432 (internal only)
-- **Volume:** postgres_data
-- **Health Check:** pg_isready
-- **Character Encoding:** UTF-8
-- **Locale:** C (for performance)
-- **Resources:**
   - CPU: 1 core
   - RAM: 512MB-1GB
   - Storage: 10GB+
   
 **Note:** MarFaNet uses PostgreSQL exclusively. The database is configured with:
-- Optimized connection pooling (25 connections for local, 10 for serverless)
-- Automatic health checks every 30 seconds
-- Graceful shutdown handling
-- Performance monitoring and slow query logging
 
+### 🔬 Standalone Docker Verification
+
+برای تست سریع تصویر نهایی بدون وابستگی به `docker-compose`، کانتینر را همراه با نگاشت آدرس میزبان و مسیر لاگ اجرا کنید تا هم پایگاه داده و هم سیستم لاگ بدون خطا بالا بیاید:
+
+```bash
+docker run --rm \
+  --name marfanet-app-test \
+  --add-host=host.docker.internal:host-gateway \
+  -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/marfanet \
+  -e LOG_DIRECTORY=/app/logs \
+  -p 3001:3000 \
+  marfanet-app
+```
+
+> نکته: در محیط‌های لینوکسی Native (از جمله Ubuntu Server) پرچم `--add-host` ضروری است تا کانتینر بتواند سرویس PostgreSQL نصب‌شده روی میزبان را resolve کند. اگر پایگاه داده نیز داخل Compose اجرا می‌شود، می‌توانید از نام سرویس (`db`) به‌جای `host.docker.internal` استفاده کنید و این پرچم را حذف کنید.
 ### 2. Redis Cache (`redis`)
 - **Image:** redis:7-alpine
 - **Port:** 6379 (internal only)

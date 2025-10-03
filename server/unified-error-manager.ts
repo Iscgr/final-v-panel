@@ -94,7 +94,7 @@ class UnifiedErrorManager {
     };
 
     // Ubuntu Server: Create logs directory
-    this.logDirectory = process.env.LOG_DIRECTORY || '/var/log/marfanet';
+  this.logDirectory = process.env.LOG_DIRECTORY || path.resolve(process.cwd(), 'logs');
     this.initializeLogging();
     this.startErrorRateCalculation();
   }
