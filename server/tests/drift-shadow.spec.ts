@@ -1,6 +1,6 @@
 import { strict as assert } from 'assert';
 import test from 'node:test';
-import { ReconciliationService } from '../../server/services/reconciliation-service';
+import { ReconciliationService } from '../../server/services/reconciliation-service.js';
 
 // توجه: این تست فرض می‌کند اتصال DB برقرار است. در صورت خطا (مثلاً نبود جدول) تست skip می‌شود.
 

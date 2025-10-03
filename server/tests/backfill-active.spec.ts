@@ -1,7 +1,7 @@
 import test from 'node:test';
 import { strict as assert } from 'assert';
-import { BackfillService } from '../../server/services/backfill-service';
-import { featureFlagManager } from '../../server/services/feature-flag-manager';
+import { BackfillService } from '../../server/services/backfill-service.js';
+import { featureFlagManager } from '../../server/services/feature-flag-manager.js';
 
 /**
  * تست active backfill – فقط اگر state ها مناسب نباشد skip.

@@ -5,7 +5,7 @@
  * وظیفه: اسکن ستون TEXT مبلغ پرداخت‌ها، تلاش برای CAST ایمن به DECIMAL و گزارش انحراف مجموع.
  * حالت پیش‌فرض: --dry-run (فقط گزارش). با --apply مقدار ستون amount_dec را پر می‌کند اگر null باشد.
  */
-import { db } from '../server/database-manager';
+import { db } from '../server/database-manager.js';
 import { payments } from '@shared/schema';
 import { sql } from 'drizzle-orm';
 

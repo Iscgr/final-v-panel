@@ -1,6 +1,6 @@
 import test from 'node:test';
 import { strict as assert } from 'assert';
-import { ReconciliationService } from '../../server/services/reconciliation-service';
+import { ReconciliationService } from '../../server/services/reconciliation-service.js';
 
 /**
  * تست خروجی runShadowDriftBreakdown

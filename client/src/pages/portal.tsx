@@ -13,7 +13,7 @@
 
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import PortalResources from "@/components/PortalResources";
 
@@ -91,6 +91,14 @@ interface PortalData {
   portalConfig?: {
     title?: string;
     description?: string;
+    showOwnerName?: boolean;
+    showDetailedUsage?: boolean;
+    showUsageDetails?: boolean;
+    showEventTimestamp?: boolean;
+    showEventType?: boolean;
+    showDescription?: boolean;
+    showAdminUsername?: boolean;
+    customCss?: string;
     // ✅ NEW: تنظیمات جدید کاستومایزیشن
     headerMessage?: string;
     downloadsIntro?: string;
@@ -104,8 +112,13 @@ interface PortalData {
 
 // ==================== INVOICE CARD COMPONENT ====================
 
-function InvoiceCard({ invoice }: { invoice: Invoice }) {
+function InvoiceCard({ invoice, config }: { invoice: Invoice; config?: PortalData['portalConfig']; }) {
   const [showDetails, setShowDetails] = useState(false);
+  const usageSectionEnabled = config?.showDetailedUsage !== false && config?.showUsageDetails !== false;
+  const showEventTimestamp = config?.showEventTimestamp !== false;
+  const showEventType = config?.showEventType !== false;
+  const showDescription = config?.showDescription !== false;
+  const showAdminUsername = config?.showAdminUsername !== false;
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; bg: string; icon: React.ReactNode }> = {
@@ -201,8 +214,8 @@ function InvoiceCard({ invoice }: { invoice: Invoice }) {
         </div>
       </div>
 
-      {/* Toggle Details Button */}
-      {(invoice.usageData && (invoice.usageData.records || invoice.usageData.type === 'manual')) && (
+  {/* Toggle Details Button */}
+  {usageSectionEnabled && invoice.usageData && (invoice.usageData.records || invoice.usageData.type === 'manual') && (
         <button 
           onClick={() => setShowDetails(!showDetails)}
           style={{
@@ -229,7 +242,7 @@ function InvoiceCard({ invoice }: { invoice: Invoice }) {
       )}
 
       {/* Usage Details */}
-      {showDetails && invoice.usageData && (
+  {showDetails && usageSectionEnabled && invoice.usageData && (
         <div style={{
           marginTop: '15px',
           padding: '15px',
@@ -267,12 +280,16 @@ function InvoiceCard({ invoice }: { invoice: Invoice }) {
                       fontSize: '13px' 
                     }}>
                       <div>
-                        <p style={{ color: '#e2e8f0', marginBottom: '6px' }}>
-                          <strong>نوع:</strong> {record.event_type || 'نامشخص'}
-                        </p>
-                        <p style={{ color: '#cbd5e1', fontSize: '12px' }}>
-                          <strong>زمان:</strong> {record.event_timestamp || '-'}
-                        </p>
+                        {showEventType && (
+                          <p style={{ color: '#e2e8f0', marginBottom: '6px' }}>
+                            <strong>نوع:</strong> {record.event_type || 'نامشخص'}
+                          </p>
+                        )}
+                        {showEventTimestamp && (
+                          <p style={{ color: '#cbd5e1', fontSize: '12px' }}>
+                            <strong>زمان:</strong> {record.event_timestamp || '-'}
+                          </p>
+                        )}
                       </div>
                       <div style={{ textAlign: 'left' }}>
                         {record.amount && (
@@ -280,12 +297,14 @@ function InvoiceCard({ invoice }: { invoice: Invoice }) {
                             {parseFloat(record.amount).toLocaleString('fa-IR')} تومان
                           </p>
                         )}
-                        <p style={{ color: '#cbd5e1', fontSize: '12px' }}>
-                          <strong>کاربر:</strong> {record.admin_username || '-'}
-                        </p>
+                        {showAdminUsername && (
+                          <p style={{ color: '#cbd5e1', fontSize: '12px' }}>
+                            <strong>کاربر:</strong> {record.admin_username || '-'}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    {record.description && (
+                    {showDescription && record.description && (
                       <p style={{ 
                         marginTop: '8px', 
                         paddingTop: '8px', 
@@ -328,7 +347,7 @@ function InvoiceCard({ invoice }: { invoice: Invoice }) {
                   <p style={{ color: '#e2e8f0', marginBottom: '8px' }}>
                     <strong>ایجاد شده توسط:</strong> {invoice.usageData.createdBy || 'مدیر سیستم'}
                   </p>
-                  {invoice.usageData.description && (
+                  {showDescription && invoice.usageData.description && (
                     <p style={{ 
                       color: '#cbd5e1', 
                       marginTop: '10px',
@@ -362,6 +381,31 @@ export default function PublicPortal() {
     },
     enabled: !!publicId,
   });
+
+  const customCss = data?.portalConfig?.customCss?.trim();
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const styleId = 'portal-custom-css';
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
+
+    if (customCss) {
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        document.head.appendChild(styleEl);
+      }
+      styleEl.textContent = customCss;
+
+      return () => {
+        styleEl?.remove();
+      };
+    }
+
+    if (styleEl) {
+      styleEl.remove();
+    }
+  }, [customCss]);
 
   // ===== LOADING STATE =====
   if (isLoading) {
@@ -458,6 +502,8 @@ export default function PublicPortal() {
 
   credit = parseFloat(String(data.credit || '0'));
 
+  const showOwnerCard = data.portalConfig?.showOwnerName !== false && !!data.ownerName;
+
   // ===== MAIN PORTAL UI =====
   return (
     <div style={{ 
@@ -502,7 +548,7 @@ export default function PublicPortal() {
               <p style={{ fontSize: '20px', fontWeight: 'bold', color: 'white' }}>{data.name}</p>
             </div>
 
-            {data.ownerName && (
+            {showOwnerCard && (
               <div style={{ 
                 background: 'rgba(255, 255, 255, 0.1)', 
                 padding: '15px', 
@@ -520,7 +566,7 @@ export default function PublicPortal() {
               padding: '15px', 
               borderRadius: '10px',
               border: '1px solid rgba(52, 211, 153, 0.4)',
-              gridColumn: data.ownerName ? 'auto' : 'span 2'
+              gridColumn: showOwnerCard ? 'auto' : 'span 2'
             }}>
               <p style={{ fontSize: '14px', color: '#6ee7b7', lineHeight: '1.6', margin: 0 }}>
                 {data.portalConfig?.headerMessage || 'برای دریافت جدیدترین نسخه نرم‌افزارهای توصیه شده، لطفاً به انتهای پورتال مراجعه فرمایید 📥'}
@@ -656,7 +702,7 @@ export default function PublicPortal() {
             {data.invoices && data.invoices.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 {data.invoices.map((invoice: Invoice) => (
-                  <InvoiceCard key={invoice.id} invoice={invoice} />
+                  <InvoiceCard key={invoice.id} invoice={invoice} config={data.portalConfig} />
                 ))}
               </div>
             ) : (
@@ -743,7 +789,7 @@ export default function PublicPortal() {
               <Bell size={28} color="#f59e0b" />
               {data.portalConfig?.announcementsTitle || '📢 اعلانات و دانلودها'}
             </h3>
-            <PortalResources publicId={publicId} />
+            <PortalResources publicId={publicId} downloadsIntro={data.portalConfig?.downloadsIntro} />
           </div>
         )}
 
@@ -798,70 +844,6 @@ export default function PublicPortal() {
           
           <p style={{ fontSize: '12px', opacity: 0.7, marginTop: '16px' }}>
             ساعات پاسخگویی: {data.portalConfig?.supportHours || 'شنبه تا چهارشنبه، ۹ صبح تا ۶ عصر'}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}        {/* ===== 6. HELP & GUIDANCE - راهنمایی ===== */}
-        <div style={{ 
-          background: 'linear-gradient(135deg, #0f766e, #0d9488)', 
-          padding: '24px', 
-          borderRadius: '12px',
-          border: '2px solid #14b8a6',
-          marginBottom: '40px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <HelpCircle size={28} />
-            <h3 style={{ fontSize: '22px', fontWeight: 'bold', margin: 0 }}>راهنمایی و توصیه‌ها</h3>
-          </div>
-          
-          <div style={{ fontSize: '15px', lineHeight: '1.8', opacity: 0.95 }}>
-            <p style={{ marginBottom: '12px' }}>
-              • برای مشاهده جزئیات هر فاکتور، روی دکمه "نمایش جزئیات" کلیک کنید.
-            </p>
-            <p style={{ marginBottom: '12px' }}>
-              • اعلانات مهم سیستم در بخش "اعلانات و دانلودها" نمایش داده می‌شود.
-            </p>
-            <p style={{ marginBottom: '12px' }}>
-              • برای دانلود اپلیکیشن‌های توصیه شده، از بخش دانلودها استفاده کنید.
-            </p>
-            <p>
-              • در صورت وجود هرگونه سوال یا مشکل، با پشتیبانی تماس بگیرید.
-            </p>
-          </div>
-        </div>
-
-        {/* ===== 7. FOOTER - اطلاعات تماس ===== */}
-        <div style={{ 
-          background: 'rgba(15, 23, 42, 0.6)', 
-          padding: '24px', 
-          borderRadius: '12px',
-          border: '1px solid rgba(71, 85, 105, 0.5)',
-          textAlign: 'center'
-        }}>
-          <h4 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: 'bold' }}>اطلاعات تماس و پشتیبانی</h4>
-          
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            flexWrap: 'wrap',
-            gap: '24px',
-            fontSize: '14px',
-            opacity: 0.9
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Phone size={16} />
-              <span>۰۲۱-۱۲۳۴۵۶۷۸</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Mail size={16} />
-              <span>support@example.com</span>
-            </div>
-          </div>
-          
-          <p style={{ fontSize: '12px', opacity: 0.7, marginTop: '16px' }}>
-            ساعات پاسخگویی: شنبه تا چهارشنبه، ۹ صبح تا ۶ عصر
           </p>
         </div>
       </div>

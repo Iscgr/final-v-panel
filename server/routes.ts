@@ -1076,16 +1076,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const portalConfig = {
         title: portalTitle?.value || 'پرتال عمومی نماینده',
         description: portalDescription?.value || 'مشاهده وضعیت مالی و فاکتورهای شما',
-        showOwnerName: showOwnerName?.value === 'true',
-        showDetailedUsage: showDetailedUsage?.value === 'true',
+        showOwnerName: showOwnerName?.value !== 'false',
+        showDetailedUsage: showDetailedUsage?.value !== 'false',
         customCss: customCss?.value || '',
 
         // Invoice display settings
-        showUsageDetails: showUsageDetails?.value === 'true',
-        showEventTimestamp: showEventTimestamp?.value === 'true',
-        showEventType: showEventType?.value === 'true',
-        showDescription: showDescription?.value === 'true',
-        showAdminUsername: showAdminUsername?.value === 'true',
+        showUsageDetails: showUsageDetails?.value !== 'false',
+        showEventTimestamp: showEventTimestamp?.value !== 'false',
+        showEventType: showEventType?.value !== 'false',
+        showDescription: showDescription?.value !== 'false',
+        showAdminUsername: showAdminUsername?.value !== 'false',
 
         // ✅ NEW: تنظیمات جدید کاستومایزیشن کامل پورتال
         headerMessage: headerMessage?.value || 'برای دریافت جدیدترین نسخه نرم‌افزارهای توصیه شده، لطفاً به انتهای پورتال مراجعه فرمایید 📥',

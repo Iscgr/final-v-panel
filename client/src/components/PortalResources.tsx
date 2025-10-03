@@ -24,9 +24,10 @@ interface Announcement {
 
 interface PortalResourcesProps {
   publicId: string;
+  downloadsIntro?: string;
 }
 
-export default function PortalResources({ publicId }: PortalResourcesProps) {
+export default function PortalResources({ publicId, downloadsIntro }: PortalResourcesProps) {
   const [resources, setResources] = React.useState<{
     appDownloads: AppDownload[];
     announcements: Announcement[];
@@ -189,14 +190,17 @@ export default function PortalResources({ publicId }: PortalResourcesProps) {
       {/* لینک‌های دانلود اپلیکیشن */}
       {resources.appDownloads.length > 0 && (
         <div>
-          <h2 style={{ 
-            fontSize: '24px', 
-            fontWeight: 'bold', 
-            marginBottom: '20px',
-            color: 'white',
-            textAlign: 'center'
-          }}>
-            📱 دانلود اپلیکیشن‌های توصیه شده
+          <h2
+            style={{ 
+              fontSize: '24px', 
+              fontWeight: 'bold', 
+              marginBottom: '20px',
+              color: 'white',
+              textAlign: 'center',
+              whiteSpace: 'pre-line'
+            }}
+          >
+            {downloadsIntro?.trim() || '📱 دانلود اپلیکیشن‌های توصیه شده\n\nبرای استفاده بهینه از سرویس‌ها، نصب نرم‌افزارهای زیر ضروری است:'}
           </h2>
           
           <div style={{ 

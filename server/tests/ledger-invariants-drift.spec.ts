@@ -1,6 +1,6 @@
 import test from 'node:test';
 import { strict as assert } from 'assert';
-import { ReconciliationService } from '../services/reconciliation-service';
+import { ReconciliationService } from '../services/reconciliation-service.js';
 
 /**
  * I10: Drift per representative باید زیر آستانه نرم تعریف‌شده (مثلاً 1%) بماند.

@@ -285,11 +285,11 @@ export async function createRepresentativeFromUsageData(
 
 // Helper to get or create default sales partner
 export async function getOrCreateDefaultSalesPartner(dbInstance: any): Promise<number> {
-  const { salesPartners } = await import("../../shared/schema");
+  const { salesPartners } = await import("../../shared/schema.js");
   const { eq } = await import("drizzle-orm");
   
   if (!dbInstance || !dbInstance.select) {
-    const { db } = await import("../db");
+  const { db } = await import("../db.js");
     dbInstance = db;
   }
   
@@ -412,7 +412,7 @@ export async function processUsageDataSequential(
   // مرحله 3: پردازش sequential هر نماینده با بهینه‌سازی حافظه
   const processedInvoices: ProcessedInvoice[] = [];
   const newRepresentatives: any[] = [];
-  const { db: dbInstance } = await import("../db");
+  const { db: dbInstance } = await import("../db.js");
   const defaultSalesPartnerId = await getOrCreateDefaultSalesPartner(dbInstance);
   
   let processedCount = 0;

@@ -1,7 +1,7 @@
 import { strict as assert } from 'assert';
-import { OutboxService } from '../services/outbox';
-import { featureFlagManager } from '../services/feature-flag-manager';
-import { db } from '../db';
+import { OutboxService } from '../services/outbox.js';
+import { featureFlagManager } from '../services/feature-flag-manager.js';
+import { db } from '../db.js';
 import { outbox } from '../../shared/schema.js';
 import { sql, eq } from 'drizzle-orm';
 

@@ -4,7 +4,7 @@
  * اجرای محاسبه drift و چاپ خروجی JSON.
  * استفاده: npm run drift:shadow
  */
-import { ReconciliationService } from '../server/services/reconciliation-service';
+import { ReconciliationService } from '../server/services/reconciliation-service.js';
 
 (async () => {
   try {

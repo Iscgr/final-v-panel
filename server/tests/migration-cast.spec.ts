@@ -1,6 +1,6 @@
 import test from 'node:test';
 import { strict as assert } from 'assert';
-import { db } from '../../server/database-manager';
+import { db } from '../../server/database-manager.js';
 import { payments } from '@shared/schema';
 import { sql } from 'drizzle-orm';
 
