@@ -14,7 +14,7 @@
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import React, { useState } from "react";
-import { getQueryFn } from "@/lib/queryClient";
+import { apiRequest } from "@/lib/queryClient";
 import PortalResources from "@/components/PortalResources";
 
 // Lucide Icons
@@ -91,6 +91,14 @@ interface PortalData {
   portalConfig?: {
     title?: string;
     description?: string;
+    // ✅ NEW: تنظیمات جدید کاستومایزیشن
+    headerMessage?: string;
+    downloadsIntro?: string;
+    guidanceText?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    supportHours?: string;
+    announcementsTitle?: string;
   };
 }
 
@@ -348,7 +356,10 @@ export default function PublicPortal() {
 
   const { data, isLoading, error } = useQuery<PortalData>({
     queryKey: [`/api/public/portal/${publicId}`],
-    queryFn: getQueryFn({ on401: "throw" }),
+    queryFn: async () => {
+      const response = await apiRequest(`/api/public/portal/${publicId}`);
+      return response;
+    },
     enabled: !!publicId,
   });
 
@@ -490,30 +501,6 @@ export default function PublicPortal() {
               <p style={{ fontSize: '13px', color: '#bfdbfe', marginBottom: '6px' }}>نام فروشگاه</p>
               <p style={{ fontSize: '20px', fontWeight: 'bold', color: 'white' }}>{data.name}</p>
             </div>
-            
-            {data.code && (
-              <div style={{ 
-                background: 'rgba(255, 255, 255, 0.1)', 
-                padding: '15px', 
-                borderRadius: '10px',
-                border: '1px solid rgba(219, 234, 254, 0.3)'
-              }}>
-                <p style={{ fontSize: '13px', color: '#bfdbfe', marginBottom: '6px' }}>کد نماینده</p>
-                <p style={{ fontSize: '20px', fontWeight: 'bold', color: 'white', fontFamily: 'monospace' }}>{data.code}</p>
-              </div>
-            )}
-
-            {data.panelUsername && (
-              <div style={{ 
-                background: 'rgba(255, 255, 255, 0.1)', 
-                padding: '15px', 
-                borderRadius: '10px',
-                border: '1px solid rgba(219, 234, 254, 0.3)'
-              }}>
-                <p style={{ fontSize: '13px', color: '#bfdbfe', marginBottom: '6px' }}>شناسه پنل</p>
-                <p style={{ fontSize: '20px', fontWeight: 'bold', color: 'white' }}>{data.panelUsername}</p>
-              </div>
-            )}
 
             {data.ownerName && (
               <div style={{ 
@@ -526,6 +513,19 @@ export default function PublicPortal() {
                 <p style={{ fontSize: '20px', fontWeight: 'bold', color: 'white' }}>{data.ownerName}</p>
               </div>
             )}
+
+            {/* ✅ NEW: پیام راهنمای دانلود (جایگزین code و panelUsername) */}
+            <div style={{ 
+              background: 'rgba(16, 185, 129, 0.15)', 
+              padding: '15px', 
+              borderRadius: '10px',
+              border: '1px solid rgba(52, 211, 153, 0.4)',
+              gridColumn: data.ownerName ? 'auto' : 'span 2'
+            }}>
+              <p style={{ fontSize: '14px', color: '#6ee7b7', lineHeight: '1.6', margin: 0 }}>
+                {data.portalConfig?.headerMessage || 'برای دریافت جدیدترین نسخه نرم‌افزارهای توصیه شده، لطفاً به انتهای پورتال مراجعه فرمایید 📥'}
+              </p>
+            </div>
           </div>
 
           {data.financialMeta?.accuracyGuaranteed && (
@@ -628,30 +628,6 @@ export default function PublicPortal() {
                   {credit.toLocaleString('fa-IR')}
                 </p>
                 <p style={{ fontSize: '14px', opacity: 0.8 }}>تومان</p>
-              </div>
-            )}
-
-            {/* Payment Ratio */}
-            {data.financialMeta?.paymentRatio !== undefined && (
-              <div style={{ 
-                background: 'linear-gradient(135deg, #7c3aed, #6d28d9)', 
-                padding: '24px', 
-                borderRadius: '12px',
-                border: '2px solid #8b5cf6',
-                boxShadow: '0 4px 6px rgba(124, 58, 237, 0.3)',
-                position: 'relative',
-                overflow: 'hidden'
-              }}>
-                <div style={{ position: 'absolute', top: '10px', right: '10px', opacity: 0.2 }}>
-                  <CheckCircle size={60} />
-                </div>
-                <p style={{ fontSize: '15px', marginBottom: '12px', opacity: 0.9 }}>نسبت پرداخت</p>
-                <p style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '8px', zIndex: 1, position: 'relative' }}>
-                  {Math.round(data.financialMeta.paymentRatio * 100)}%
-                </p>
-                <p style={{ fontSize: '14px', opacity: 0.8 }}>
-                  {data.financialMeta.debtLevel || 'عادی'}
-                </p>
               </div>
             )}
           </div>
@@ -765,13 +741,69 @@ export default function PublicPortal() {
               gap: '10px'
             }}>
               <Bell size={28} color="#f59e0b" />
-              اعلانات و دانلودها
+              {data.portalConfig?.announcementsTitle || '📢 اعلانات و دانلودها'}
             </h3>
             <PortalResources publicId={publicId} />
           </div>
         )}
 
         {/* ===== 6. HELP & GUIDANCE - راهنمایی ===== */}
+        <div style={{ 
+          background: 'linear-gradient(135deg, #0f766e, #0d9488)', 
+          padding: '24px', 
+          borderRadius: '12px',
+          border: '2px solid #14b8a6',
+          marginBottom: '40px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+            <HelpCircle size={28} />
+            <h3 style={{ fontSize: '22px', fontWeight: 'bold', margin: 0 }}>راهنمایی و توصیه‌ها</h3>
+          </div>
+          
+          <div style={{ fontSize: '15px', lineHeight: '1.8', opacity: 0.95, whiteSpace: 'pre-line' }}>
+            {data.portalConfig?.guidanceText || `• برای مشاهده جزئیات هر فاکتور، روی دکمه "نمایش جزئیات" کلیک کنید.
+• اعلانات مهم سیستم در بخش "اعلانات و دانلودها" نمایش داده می‌شود.
+• برای دانلود اپلیکیشن‌های توصیه شده، از بخش دانلودها استفاده کنید.
+• در صورت وجود هرگونه سوال یا مشکل، با پشتیبانی تماس بگیرید.`}
+          </div>
+        </div>
+
+        {/* ===== 7. FOOTER - اطلاعات تماس ===== */}
+        <div style={{ 
+          background: 'rgba(15, 23, 42, 0.6)', 
+          padding: '24px', 
+          borderRadius: '12px',
+          border: '1px solid rgba(71, 85, 105, 0.5)',
+          textAlign: 'center'
+        }}>
+          <h4 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: 'bold' }}>اطلاعات تماس و پشتیبانی</h4>
+          
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            flexWrap: 'wrap',
+            gap: '24px',
+            fontSize: '14px',
+            opacity: 0.9
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Phone size={16} />
+              <span>{data.portalConfig?.contactPhone || '۰۲۱-۱۲۳۴۵۶۷۸'}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Mail size={16} />
+              <span>{data.portalConfig?.contactEmail || 'support@example.com'}</span>
+            </div>
+          </div>
+          
+          <p style={{ fontSize: '12px', opacity: 0.7, marginTop: '16px' }}>
+            ساعات پاسخگویی: {data.portalConfig?.supportHours || 'شنبه تا چهارشنبه، ۹ صبح تا ۶ عصر'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}        {/* ===== 6. HELP & GUIDANCE - راهنمایی ===== */}
         <div style={{ 
           background: 'linear-gradient(135deg, #0f766e, #0d9488)', 
           padding: '24px', 

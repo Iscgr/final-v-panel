@@ -1043,7 +1043,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         showEventTimestamp,
         showEventType,
         showDescription,
-        showAdminUsername
+        showAdminUsername,
+        // ✅ NEW: تنظیمات جدید کاستومایزیشن پورتال
+        headerMessage,
+        downloadsIntro,
+        guidanceText,
+        contactPhone,
+        contactEmail,
+        supportHours,
+        announcementsTitle
       ] = await Promise.all([
         storage.getSetting('portal_title'),
         storage.getSetting('portal_description'),
@@ -1054,7 +1062,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getSetting('invoice_show_event_timestamp'),
         storage.getSetting('invoice_show_event_type'),
         storage.getSetting('invoice_show_description'),
-        storage.getSetting('invoice_show_admin_username')
+        storage.getSetting('invoice_show_admin_username'),
+        // ✅ NEW: دریافت تنظیمات جدید
+        storage.getSetting('portal_header_message'),
+        storage.getSetting('portal_downloads_intro'),
+        storage.getSetting('portal_guidance_text'),
+        storage.getSetting('portal_contact_phone'),
+        storage.getSetting('portal_contact_email'),
+        storage.getSetting('portal_support_hours'),
+        storage.getSetting('portal_announcements_title')
       ]);
 
       const portalConfig = {
@@ -1069,7 +1085,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         showEventTimestamp: showEventTimestamp?.value === 'true',
         showEventType: showEventType?.value === 'true',
         showDescription: showDescription?.value === 'true',
-        showAdminUsername: showAdminUsername?.value === 'true'
+        showAdminUsername: showAdminUsername?.value === 'true',
+
+        // ✅ NEW: تنظیمات جدید کاستومایزیشن کامل پورتال
+        headerMessage: headerMessage?.value || 'برای دریافت جدیدترین نسخه نرم‌افزارهای توصیه شده، لطفاً به انتهای پورتال مراجعه فرمایید 📥',
+        downloadsIntro: downloadsIntro?.value || '📱 دانلود اپلیکیشن‌های توصیه شده\n\nبرای استفاده بهینه از سرویس‌ها، نصب نرم‌افزارهای زیر ضروری است:',
+        guidanceText: guidanceText?.value || '• برای مشاهده جزئیات هر فاکتور، روی دکمه "نمایش جزئیات" کلیک کنید.\n• اعلانات مهم سیستم در بخش "اعلانات و دانلودها" نمایش داده می‌شود.\n• برای دانلود اپلیکیشن‌های توصیه شده، از بخش دانلودها استفاده کنید.\n• در صورت وجود هرگونه سوال یا مشکل، با پشتیبانی تماس بگیرید.',
+        contactPhone: contactPhone?.value || '۰۲۱-۱۲۳۴۵۶۷۸',
+        contactEmail: contactEmail?.value || 'support@example.com',
+        supportHours: supportHours?.value || 'شنبه تا چهارشنبه، ۹ صبح تا ۶ عصر',
+        announcementsTitle: announcementsTitle?.value || '📢 اعلانات و اطلاعیه‌ها'
       };
 
       // SHERLOCK v11.5: Sort invoices by FIFO principle (oldest first)

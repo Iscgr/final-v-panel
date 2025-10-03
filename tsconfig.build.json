@@ -5,13 +5,16 @@
     "outDir": "dist",
     "module": "ESNext",
     "target": "ES2022",
-    "moduleResolution": "Bundler",
+    "moduleResolution": "node16",
     "sourceMap": false,
     "declaration": false,
     "declarationMap": false,
     "isolatedModules": false,
     "allowJs": false,
-    "rootDir": "."
+    "rootDir": ".",
+    "paths": {
+      "@shared/*": ["./shared/*"]
+    }
   },
   "include": [
     "server/**/*.ts",
