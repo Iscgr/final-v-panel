@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { 
   Upload, 
@@ -28,6 +28,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, toPersianDigits, getCurrentPersianDate } from "@/lib/persian-date";
+import { createImportJob, useImportJobPolling, calculateProgress } from "@/services/import-jobs";
+import { JobProgress } from "@/components/JobProgress";
+import { nanoid } from 'nanoid';
 
 interface ProcessedInvoice {
   id: number;
@@ -49,24 +52,12 @@ interface UploadResult {
   newRepresentatives?: number;
 }
 
-interface ProcessingStep {
-  stage: string;
-  message: string;
-  progress: number;
-  total: number;
-  timestamp: string;
-  status: 'processing' | 'completed' | 'error';
-  details?: string;
-}
-
 export default function InvoiceUpload() {
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
   const [selectedInvoices, setSelectedInvoices] = useState<number[]>([]);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>([]);
   const [showProcessingModal, setShowProcessingModal] = useState(false);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
+  const [currentJobCode, setCurrentJobCode] = useState<string | null>(null);
   
   // NEW: Invoice date selection states
   const [invoiceDateMode, setInvoiceDateMode] = useState<'today' | 'custom'>('today');
@@ -75,68 +66,11 @@ export default function InvoiceUpload() {
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const processingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Cleanup interval on unmount
-  useEffect(() => {
-    return () => {
-      if (processingIntervalRef.current) {
-        clearInterval(processingIntervalRef.current);
-      }
-    };
-  }, []);
-
-  // شبیه‌سازی مراحل پردازش بر اساس اندازه فایل
-  const simulateProcessingSteps = (fileSize: number) => {
-    const estimatedRecords = Math.floor(fileSize / 200); // تخمین تعداد رکوردها
-    const estimatedRepresentatives = Math.floor(estimatedRecords / 20); // تخمین نمایندگان
-    
-    let currentStep = 0;
-    const totalSteps = estimatedRepresentatives + 5; // مراحل اضافی برای parsing و setup
-    
-    const addStep = (stage: string, message: string, details?: string) => {
-      currentStep++;
-      const progress = Math.floor((currentStep / totalSteps) * 100);
-      
-      setProcessingSteps(prev => [...prev, {
-        stage,
-        message,
-        progress: currentStep,
-        total: totalSteps,
-        timestamp: new Date().toLocaleTimeString('fa-IR'),
-        status: 'processing',
-        details
-      }]);
-      
-      setUploadProgress(progress);
-    };
-
-    // مرحله اول: آپلود
-    setTimeout(() => addStep('آپلود', 'آپلود فایل JSON...', `حجم فایل: ${Math.round(fileSize/1024)} KB`), 500);
-    
-    // مرحله دوم: پارس کردن
-    setTimeout(() => addStep('تحلیل', 'تحلیل ساختار JSON...', `تشخیص فرمت PHPMyAdmin`), 1000);
-    
-    // مرحله سوم: استخراج داده
-    setTimeout(() => addStep('استخراج', `استخراج ${toPersianDigits(estimatedRecords.toString())} رکورد...`, 'گروه‌بندی بر اساس نمایندگان'), 1500);
-    
-    // شبیه‌سازی پردازش نمایندگان
-    let processedReps = 0;
-    const interval = setInterval(() => {
-      processedReps++;
-      const repName = `نماینده ${toPersianDigits(processedReps.toString())}`;
-      addStep('پردازش', `ایجاد فاکتور برای ${repName}`, `${toPersianDigits(processedReps.toString())}/${toPersianDigits(estimatedRepresentatives.toString())} نماینده`);
-      
-      if (processedReps >= estimatedRepresentatives - 2) {
-        clearInterval(interval);
-        // مراحل نهایی
-        setTimeout(() => addStep('نهایی‌سازی', 'به‌روزرسانی آمار مالی...'), 100);
-        setTimeout(() => addStep('تکمیل', 'پردازش با موفقیت تکمیل شد!'), 200);
-      }
-    }, Math.max(100, 1000 / estimatedRepresentatives)); // حداقل 100ms فاصله بین مراحل
-    
-    processingIntervalRef.current = interval;
-  };
+  // Hook polling برای job فعلی
+  const { data: jobData } = useImportJobPolling(currentJobCode, showProcessingModal && !!currentJobCode);
+  
+  const uploadProgress = jobData ? calculateProgress(jobData) : 0;
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -160,14 +94,18 @@ export default function InvoiceUpload() {
       console.log('Uploading file:', file.name, 'Size:', file.size);
       console.log('Invoice date mode:', invoiceDateMode, 'Custom date:', customInvoiceDate);
       
-      // شروع نمایش modal و شبیه‌سازی مراحل
-      setIsProcessing(true);
+      // ایجاد job tracking
+      const jobCode = `upload-${nanoid(10)}`;
+      setCurrentJobCode(jobCode);
       setShowProcessingModal(true);
-      setProcessingSteps([]);
       setCurrentFile(file);
       
-      // شروع شبیه‌سازی مراحل
-      simulateProcessingSteps(file.size);
+      // ثبت job در سرور
+      await createImportJob({
+        jobCode,
+        sourceFileName: file.name,
+        totalRecords: 0 // به‌روزرسانی خواهد شد
+      });
       
       // Use fetch directly for file upload with proper headers and extended timeout
       const controller = new AbortController();
@@ -205,17 +143,7 @@ export default function InvoiceUpload() {
       return responseData;
     },
     onSuccess: (data: UploadResult) => {
-      // پاک کردن interval
-      if (processingIntervalRef.current) {
-        clearInterval(processingIntervalRef.current);
-      }
-      
-      // به‌روزرسانی مرحله آخر به موفقیت
-      setProcessingSteps(prev => prev.map(step => ({ ...step, status: 'completed' })));
-      
       setUploadResult(data);
-      setUploadProgress(100);
-      setIsProcessing(false);
       
       console.log('فایل با موفقیت پردازش شد:', data);
       toast({
@@ -226,24 +154,12 @@ export default function InvoiceUpload() {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
     },
     onError: (error: any) => {
-      // پاک کردن interval
-      if (processingIntervalRef.current) {
-        clearInterval(processingIntervalRef.current);
-      }
-      
-      // به‌روزرسانی مرحله آخر به خطا
-      setProcessingSteps(prev => prev.map((step, index) => 
-        index === prev.length - 1 ? { ...step, status: 'error' } : step
-      ));
-      
-      setUploadProgress(0);
-      setIsProcessing(false);
-      
       toast({
         title: "خطا در پردازش فایل",
         description: error.message,
         variant: "destructive",
       });
+      setCurrentJobCode(null);
     }
   });
 
@@ -301,7 +217,6 @@ export default function InvoiceUpload() {
                         file.type === 'text/plain';
       
       if (isJsonFile) {
-        setUploadProgress(10);
         uploadMutation.mutate(file);
       } else {
         toast({
@@ -484,10 +399,10 @@ export default function InvoiceUpload() {
             <Progress value={uploadProgress} className="w-full" />
             
             {/* Latest processing step preview */}
-            {processingSteps.length > 0 && (
+            {jobData && (
               <div className="flex items-center text-xs text-gray-600 dark:text-gray-400">
-                <Activity className="w-3 h-3 ml-1 animate-spin" />
-                <span>{processingSteps[processingSteps.length - 1]?.message}</span>
+                <Activity className={`w-3 h-3 ml-1 ${jobData.status !== 'completed' && jobData.status !== 'failed' ? 'animate-spin' : ''}`} />
+                <span>مرحله: {jobData.status}</span>
               </div>
             )}
           </div>
@@ -647,92 +562,59 @@ export default function InvoiceUpload() {
                   </span>
                 </div>
                 <Progress value={uploadProgress} className="w-full h-3" />
-                {processingSteps.length > 0 && (
+                {jobData && (
                   <div className="text-sm text-gray-600 dark:text-gray-400">
-                    {toPersianDigits(processingSteps.filter(s => s.status === 'completed').length.toString())} از {' '}
-                    {toPersianDigits(processingSteps.length.toString())} مرحله تکمیل شده
+                    {toPersianDigits(jobData.processedRecords.toString())} از {' '}
+                    {toPersianDigits(jobData.totalRecords.toString())} رکورد پردازش شده
                   </div>
                 )}
               </div>
               
               <Separator />
               
-              {/* Processing Steps */}
-              <div>
-                <h4 className="font-medium mb-3">مراحل پردازش</h4>
-                <ScrollArea className="h-64">
-                  <div className="space-y-3">
-                    {processingSteps.map((step, index) => (
-                      <div 
-                        key={index}
-                        className={`flex items-start space-x-3 space-x-reverse p-3 rounded-lg border ${
-                          step.status === 'completed' 
-                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                            : step.status === 'error'
-                            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                            : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
-                        }`}
-                      >
-                        <div className="flex-shrink-0 mt-0.5">
-                          {step.status === 'completed' ? (
-                            <CheckCircle className="w-4 h-4 text-green-600" />
-                          ) : step.status === 'error' ? (
-                            <AlertCircle className="w-4 h-4 text-red-600" />
-                          ) : (
-                            <Activity className="w-4 h-4 text-blue-600 animate-spin" />
-                          )}
+              {/* Job Progress Timeline */}
+              {jobData ? (
+                <div>
+                  <h4 className="font-medium mb-3">مراحل پردازش</h4>
+                  <JobProgress job={jobData} showDetails={false} className="mb-4" />
+                  
+                  <div className="mt-4 space-y-2">
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-sm">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <span className="text-gray-500">وضعیت:</span>
+                          <span className="mr-2 font-medium">{jobData.status}</span>
                         </div>
-                        
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-sm">
-                              {step.stage}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              {step.timestamp}
-                            </span>
-                          </div>
-                          
-                          <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                            {step.message}
-                          </p>
-                          
-                          {step.details && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              {step.details}
-                            </p>
-                          )}
-                          
-                          {step.total > 0 && (
-                            <div className="mt-2">
-                              <div className="flex items-center justify-between text-xs">
-                                <span>پیشرفت این مرحله</span>
-                                <span>
-                                  {toPersianDigits(step.progress.toString())}/
-                                  {toPersianDigits(step.total.toString())}
-                                </span>
-                              </div>
-                              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 mt-1">
-                                <div 
-                                  className="bg-primary h-1.5 rounded-full transition-all duration-300"
-                                  style={{ width: `${(step.progress / step.total) * 100}%` }}
-                                ></div>
-                              </div>
-                            </div>
-                          )}
+                        <div>
+                          <span className="text-gray-500">خطاها:</span>
+                          <span className="mr-2">{toPersianDigits(jobData.errorCount.toString())}</span>
+                        </div>
+                        <div className="col-span-2">
+                          <span className="text-gray-500">فایل:</span>
+                          <span className="mr-2 font-mono text-xs">{jobData.sourceFileName || '—'}</span>
                         </div>
                       </div>
-                    ))}
+                    </div>
                     
-                    {processingSteps.length === 0 && (
-                      <div className="text-center py-8 text-gray-500">
-                        <Activity className="w-8 h-8 mx-auto mb-2 animate-spin" />
-                        <p>در انتظار شروع پردازش...</p>
+                    {jobData.lastError && (
+                      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                          <div className="text-sm text-red-700 dark:text-red-400">
+                            <div className="font-medium mb-1">خطای رخ داده:</div>
+                            <div className="text-xs">{jobData.lastError}</div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
-                </ScrollArea>
-              </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Activity className="w-8 h-8 mx-auto mb-2 animate-spin" />
+                  <p>در انتظار شروع پردازش...</p>
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>

@@ -4,7 +4,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { db } from "./db.js";
 import { sql, eq, and, or, like, gte, lte, asc, count, desc } from "drizzle-orm";
-import { invoices, representatives, payments, activityLogs, insertRepresentativeSchema, insertSalesPartnerSchema, insertInvoiceSchema, insertInvoiceBatchSchema, type InsertInvoice } from "@shared/schema";
+import { invoices, representatives, payments, activityLogs, insertRepresentativeSchema, insertSalesPartnerSchema, insertInvoiceSchema, insertInvoiceBatchSchema, type InsertInvoice, portalContentBlocks, importJobs } from "@shared/schema";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 
@@ -45,6 +45,8 @@ import activeReconciliationRoutes from "./routes/active-reconciliation-routes.js
 import guardMetricsRoutes from "./routes/guard-metrics-routes.js";
 // Phase 1: Portal Content Management (NEW modular content blocks)
 import portalContentRoutes from "./routes/portal-content-routes.js";
+// (Phase A) Import Jobs instrumentation routes (scaffold)
+
 
 // Import services
 import { unifiedFinancialEngine } from "./services/unified-financial-engine.js";
@@ -251,6 +253,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 🔷 Portal Resources Routes - Public Resources for Representatives Portal
   app.use('/api/portal', portalResourcesRoutes);
   console.log('✅ Portal resources routes registered (public access)');
+
+  // (Phase A) Import Jobs instrumentation scaffold (no breaking changes)
+  app.get('/api/admin/import-jobs', authMiddleware, async (req, res) => {
+    try {
+      const jobs = await db.select().from(importJobs).orderBy(desc(importJobs.id)).limit(50);
+      res.json({ success: true, data: jobs });
+    } catch (e) {
+      res.status(500).json({ success: false, error: 'failed_list_import_jobs', message: (e as Error).message });
+    }
+  });
+  app.post('/api/admin/import-jobs', authMiddleware, async (req, res) => {
+    try {
+      const { jobCode, sourceFileName, totalRecords } = req.body || {};
+      if (!jobCode) return res.status(400).json({ success:false, error:'missing_job_code' });
+      await db.insert(importJobs).values({ jobCode, sourceFileName, totalRecords: totalRecords||0 }).onConflictDoNothing();
+      res.json({ success:true });
+    } catch (e) {
+      res.status(500).json({ success:false, error:'failed_create_import_job', message:(e as Error).message });
+    }
+  });
+  app.patch('/api/admin/import-jobs/:jobCode', authMiddleware, async (req, res) => {
+    try {
+      const { jobCode } = req.params;
+      const { status, processedRecords, errorIncrement, lastError } = req.body || {};
+      // TODO: add more granular atomic update logic & constraints
+      const updates: any = {};
+      if (status) updates.status = status;
+      if (typeof processedRecords === 'number') updates.processedRecords = processedRecords;
+      if (lastError) updates.lastError = lastError;
+      if (errorIncrement) updates.errorCount = sql`${importJobs.errorCount} + ${errorIncrement}`;
+      if (status === 'completed' || status === 'failed') updates.finishedAt = new Date();
+      if (Object.keys(updates).length === 0) return res.json({ success:true, noop:true });
+      await db.update(importJobs).set(updates).where(eq(importJobs.jobCode, jobCode));
+      res.json({ success:true });
+    } catch (e) {
+      res.status(500).json({ success:false, error:'failed_update_import_job', message:(e as Error).message });
+    }
+  });
+
+  // Aggregated active actions: import jobs (not completed/failed) + active multi-stage flags
+  app.get('/api/admin/active-actions', authMiddleware, async (req, res) => {
+    try {
+      const activeJobs = await db.select().from(importJobs)
+        .where(or(eq(importJobs.status,'pending'), eq(importJobs.status,'validating'), eq(importJobs.status,'ingesting'), eq(importJobs.status,'enriching')))
+        .orderBy(desc(importJobs.id))
+        .limit(100);
+      const flagsStatus = featureFlagManager.getStatus();
+      const multiStageActive = Object.entries(flagsStatus)
+        .filter(([k,v]: any) => v.state && v.state !== 'off')
+        .map(([k,v]: any) => ({ flag: k, state: v.state }));
+      res.json({ success:true, data: { activeJobs, multiStageActive } });
+    } catch (e) {
+      res.status(500).json({ success:false, error:'failed_active_actions', message:(e as Error).message });
+    }
+  });
 
   // 🔷 File Upload & View Tracking Routes
   app.use('/api/admin', authMiddleware, fileUploadRoutes);
@@ -1102,6 +1159,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
         supportHours: supportHours?.value || 'شنبه تا چهارشنبه، ۹ صبح تا ۶ عصر',
         announcementsTitle: announcementsTitle?.value || '📢 اعلانات و اطلاعیه‌ها'
       };
+
+      // ⚙️ PORTAL_CONTENT_READ_SWITCH: shadow/full migration برای محتوای متنی
+      try {
+        const portalContentFlag = featureFlagManager.getMultiStageFlagState('portal_content_read_switch');
+        if (portalContentFlag === 'shadow' || portalContentFlag === 'full') {
+          // خواندن بلوک‌های جدید
+            const blocks = await db.select().from(portalContentBlocks);
+            const map: Record<string, string> = {};
+            for (const b of blocks) {
+              map[b.blockKey] = b.body || '';
+            }
+            // Shadow: مقایسه و لاگ تفاوت بدون تغییر خروجی اصلی
+            const diffs: any[] = [];
+            const comparePairs: [keyof typeof portalConfig, string, string][] = [
+              ['downloadsIntro','downloads_intro', portalConfig.downloadsIntro],
+              ['guidanceText','guidance', portalConfig.guidanceText],
+              ['contactPhone','contact_info', portalConfig.contactPhone],
+              ['supportHours','support_hours', portalConfig.supportHours],
+              ['announcementsTitle','announcements_title', portalConfig.announcementsTitle]
+            ];
+            for (const [cfgKey, blockKey, legacyVal] of comparePairs) {
+              if (map[blockKey] && map[blockKey] !== legacyVal) {
+                diffs.push({ field: cfgKey, blockKey, legacyLen: legacyVal?.length || 0, newLen: map[blockKey].length });
+              }
+            }
+            if (diffs.length && portalContentFlag === 'shadow') {
+              console.log('🌓 portal_content_read_switch shadow diffs:', diffs);
+            }
+            if (portalContentFlag === 'full') {
+              // جایگزینی کامل
+              if (map['downloads_intro']) portalConfig.downloadsIntro = map['downloads_intro'];
+              if (map['guidance']) portalConfig.guidanceText = map['guidance'];
+              if (map['contact_info']) portalConfig.contactPhone = map['contact_info']; // فرض: contact_info شامل multiline است (Phase 2: structure)
+              if (map['support_hours']) portalConfig.supportHours = map['support_hours'];
+              if (map['announcements_title']) portalConfig.announcementsTitle = map['announcements_title'];
+              // لاگ مختصر جهت Traceability
+              console.log('✅ portal_content_read_switch FULL applied');
+            }
+        }
+      } catch (e) {
+        console.warn('WARN: portal_content_read_switch handling error:', (e as Error).message);
+      }
 
       // SHERLOCK v11.5: Sort invoices by FIFO principle (oldest first)
       const sortedInvoices = invoices.sort((a, b) => {

@@ -32,6 +32,8 @@ const KpiDashboard = lazy(() => import("@/pages/kpi-dashboard"));
 const AppDownloadsManager = lazy(() => import("@/pages/admin/AppDownloadsManager"));
 const AnnouncementsManager = lazy(() => import("@/pages/admin/AnnouncementsManager"));
 const PortalContentManager = lazy(() => import("@/pages/admin/PortalContentManager"));
+const ImportJobsMonitor = lazy(() => import("@/pages/admin/ImportJobsMonitor"));
+const DebugActionsPanel = lazy(() => import("@/pages/admin/DebugActionsPanel"));
 
 // Error boundary component
 
@@ -121,6 +123,8 @@ function AuthenticatedRouter() {
             <Route path="/admin/app-downloads" component={AppDownloadsManager} />
             <Route path="/admin/announcements" component={AnnouncementsManager} />
             <Route path="/admin/portal-content" component={PortalContentManager} />
+            <Route path="/admin/import-jobs" component={ImportJobsMonitor} />
+            <Route path="/admin/debug-actions" component={DebugActionsPanel} />
             <Route path="/settings" component={Settings} />
             <Route path="/admin-login">
               <AdminLogin onLoginSuccess={() => { console.log('Admin login successful'); }} />

@@ -30,7 +30,7 @@ export interface MultiStageFlag {
   description?: string;
 }
 
-type MultiStageFlagKey = 'allocation_dual_write' | 'ledger_backfill_mode' | 'allocation_read_switch' | 'active_reconciliation' | 'outbox_enabled' | 'allocation_runtime_guards' | 'usage_line_visibility' | 'allocation_partial_mode' | 'guard_metrics_persistence' | 'guard_metrics_alerts';
+type MultiStageFlagKey = 'allocation_dual_write' | 'ledger_backfill_mode' | 'allocation_read_switch' | 'active_reconciliation' | 'outbox_enabled' | 'allocation_runtime_guards' | 'usage_line_visibility' | 'allocation_partial_mode' | 'guard_metrics_persistence' | 'guard_metrics_alerts' | 'portal_content_read_switch';
 
 // Export class for external typed usage (OutboxWorker, routes)
 export class FeatureFlagManager {
@@ -163,6 +163,13 @@ export class FeatureFlagManager {
         lastModified: new Date().toISOString(),
         modifiedBy: 'phase_c_optimization',
         description: 'فعال کردن تحلیل Threshold و اعلان داخلی داشبورد متریک گارد (E-B5 مرحله 2)'
+      },
+      portal_content_read_switch: {
+        state: 'off',
+        allowed: ['off','shadow','full'],
+        lastModified: new Date().toISOString(),
+        modifiedBy: 'init',
+        description: 'سوییچ مهاجرت خواندن محتوای پرتال از settings قدیمی به portal_content_blocks (shadow=مقایسه بی‌صدا، full=سوئیچ کامل)'
       }
     };
     console.log('🚩 ATOMOS Feature Flag Manager v1.0 initialized with safe defaults');

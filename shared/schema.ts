@@ -1087,6 +1087,24 @@ export const uploadedFiles = pgTable("uploaded_files", {
   createdAt: timestamp("created_at").defaultNow()
 });
 
+// Import Jobs (پایش فرایند پردازش فایل‌های JSON) - Phase A instrumentation scaffold
+export const importJobs = pgTable('import_jobs', {
+  id: serial('id').primaryKey(),
+  jobCode: text('job_code').notNull().unique(),
+  sourceFileName: text('source_file_name'),
+  status: text('status').notNull().default('pending'), // pending, validating, ingesting, enriching, completed, failed
+  totalRecords: integer('total_records').default(0),
+  processedRecords: integer('processed_records').default(0),
+  errorCount: integer('error_count').default(0),
+  startedAt: timestamp('started_at').defaultNow(),
+  finishedAt: timestamp('finished_at'),
+  lastError: text('last_error'),
+  metadata: json('metadata').default({})
+});
+export type ImportJob = typeof importJobs.$inferSelect;
+export type InsertImportJob = typeof importJobs.$inferInsert;
+// TODO: Add relations if needed and extend services for create/update progress.
+
 // ==================== ZOD SCHEMAS ====================
 
 export const insertEmployeeSchema = omitInsert(createInsertSchema(employees), "id", "createdAt", "updatedAt");

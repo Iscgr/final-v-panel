@@ -460,18 +460,10 @@ export default function Settings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="telegram" className="flex items-center">
             <Send className="w-4 h-4 mr-2" />
             تلگرام
-          </TabsTrigger>
-          <TabsTrigger value="portal" className="flex items-center">
-            <Globe className="w-4 h-4 mr-2" />
-            پرتال عمومی
-          </TabsTrigger>
-          <TabsTrigger value="invoice-template" className="flex items-center">
-            <FileText className="w-4 h-4 mr-2" />
-            قالب فاکتور
           </TabsTrigger>
           <TabsTrigger value="data-reset" className="flex items-center">
             <Database className="w-4 h-4 mr-2" />
@@ -623,6 +615,14 @@ export default function Settings() {
 
         {/* Portal Settings */}
         <TabsContent value="portal">
+          <div className="mb-4 p-4 rounded border border-amber-300 bg-amber-50 text-amber-800 text-xs leading-relaxed">
+            <strong className="font-semibold ml-1">Deprecated:</strong>
+            این تب فقط برای سازگاری موقت باقی مانده است. مدیریت محتوای متنی پرتال اکنون از مسیر
+            <span className="mx-1 font-mono text-[11px]">/admin/portal-content</span>
+            انجام می‌شود. پس از فعال‌سازی فلگ
+            <code className="mx-1 bg-white px-1 py-0.5 rounded border border-amber-300">portal_content_read_switch</code>
+            (shadow/full) این فرم صرفاً برای مشاهده و rollback موقت خواهد بود.
+          </div>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
@@ -766,6 +766,10 @@ export default function Settings() {
 
         {/* Invoice Template Settings */}
         <TabsContent value="invoice-template">
+          <div className="mb-4 p-4 rounded border border-amber-300 bg-amber-50 text-amber-800 text-xs leading-relaxed">
+            <strong className="font-semibold ml-1">Deprecated:</strong>
+            نمایش جزئیات و تنظیمات نمایشی مرتبط با فاکتور در فاز بعدی به بخش مدیریت محتوای پرتال و نسخه‌بندی قالب منتقل می‌شود. فعلاً از این تب فقط برای مقادیر legacy استفاده کنید.
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -1047,7 +1051,7 @@ export default function Settings() {
                                     نمایندگان ({toPersianDigits(dataCounts.representatives.toString())})
                                   </FormLabel>
                                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    حذف تمام اطلاعات نمایندگان و کدهای دسترسی آن‌ها
+                                    حذف همه نمایندگان و داده‌های وابسته (پرداخت‌ها، فاکتورها)
                                   </p>
                                 </div>
                               </FormItem>
