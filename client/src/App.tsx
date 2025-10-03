@@ -21,7 +21,7 @@ const Representatives = lazy(() => import("@/pages/representatives"));
 const RepresentativeProfile = lazy(() => import("@/pages/representative-profile"));
 const SalesPartners = lazy(() => import("@/pages/sales-partners"));
 const Settings = lazy(() => import("@/pages/settings"));
-const PublicPortal = lazy(() => import("@/components/PublicPortal/PublicPortal"));
+const PublicPortal = lazy(() => import("@/pages/portal"));
 const AdminLogin = lazy(() => import("@/pages/admin-login"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 const UnifiedAuth = lazy(() => import("@/pages/unified-auth"));
