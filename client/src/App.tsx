@@ -21,7 +21,7 @@ const Representatives = lazy(() => import("@/pages/representatives"));
 const RepresentativeProfile = lazy(() => import("@/pages/representative-profile"));
 const SalesPartners = lazy(() => import("@/pages/sales-partners"));
 const Settings = lazy(() => import("@/pages/settings"));
-const Portal = lazy(() => import("@/pages/portal"));
+const PublicPortal = lazy(() => import("@/components/PublicPortal/PublicPortal"));
 const AdminLogin = lazy(() => import("@/pages/admin-login"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 const UnifiedAuth = lazy(() => import("@/pages/unified-auth"));
@@ -48,8 +48,8 @@ function AuthenticatedRouter() {
       <div className="dark public-portal-isolated">
         <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">در حال بارگذاری پورتال...</div>}>
           <Switch>
-            <Route path="/portal/:publicId" component={Portal} />
-            <Route path="/representative/:publicId" component={Portal} />
+            <Route path="/portal/:publicId" component={PublicPortal} />
+            <Route path="/representative/:publicId" component={PublicPortal} />
             <Route path="/portal/*">
               {() => (
                 <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">

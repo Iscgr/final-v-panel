@@ -1,0 +1,137 @@
+.invoice-list-container {
+  background-color: var(--bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.invoice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-md);
+}
+
+.invoice-card {
+  background-color: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-md);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.invoice-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+.invoice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.invoice-number {
+  font-family: monospace;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.invoice-status {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.invoice-status.paid {
+  background-color: rgba(46, 204, 113, 0.2);
+  color: var(--success);
+}
+
+.invoice-status.pending {
+  background-color: rgba(243, 156, 18, 0.2);
+  color: var(--warning);
+}
+
+.invoice-status.overdue {
+  background-color: rgba(231, 76, 60, 0.2);
+  color: var(--danger);
+}
+
+.invoice-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.invoice-amount, .invoice-date {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.invoice-amount .label, .invoice-date .label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.invoice-amount .value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.invoice-date .value {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.invoice-details {
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-sm);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.details-button {
+  width: 100%;
+  background-color: transparent;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.details-button:hover {
+  background-color: var(--primary);
+  color: white;
+}
+
+.no-invoices {
+  text-align: center;
+  padding: var(--spacing-xl) 0;
+  color: var(--text-muted);
+}
+
+.dark .invoice-card {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark .invoice-header {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark .invoice-details {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 768px) {
+  .invoice-grid {
+    grid-template-columns: 1fr;
+  }
+}
