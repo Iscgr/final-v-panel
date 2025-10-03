@@ -197,8 +197,8 @@ client/  server/  shared/  scripts/  uploads/  docker-compose.yml  Dockerfile
 | GET | /api/invoices | لیست فاکتورها |
 
 ---
-## 21.1 مدیریت محتوای پرتال (Phase 1)
-این فاز یک لایه ماژولار جدید برای بلوک‌های محتوایی پرتال عمومی معرفی می‌کند بدون اینکه مصرف فعلی پرتال (settings قدیمی) را هنوز تغییر دهد.
+## 21.1 مدیریت محتوای پرتال (Phase 1 و 2 ادغام شده)
+فاز اولیه پیاده‌سازی بلوک‌های محتوایی، اکنون با ادغام «اطلاعیه‌ها» و «لینک‌های دانلود اپ‌ها» در یک صفحه واحد (`/admin/portal-content`) تکمیل شده است. تب‌های قدیمی مستقل حذف از ناوبری شده‌اند اما فایل‌های legacy تا نهایی‌سازی پاکسازی باقی هستند (مسیر rollback آسان).
 
 مسیرهای Admin (احراز هویت لازم):
 | متد | مسیر | توضیح |
@@ -209,17 +209,27 @@ client/  server/  shared/  scripts/  uploads/  docker-compose.yml  Dockerfile
 کلیدهای فعلی:
 guidance, contact_info, downloads_intro, support_hours, announcements_title
 
-UI جدید: صفحه `PortalContentManager` در مسیر `/admin/portal-content` با تب فعلی «بلوک‌ها» و تب‌های Placeholder برای «اطلاعیه‌ها / دانلودها / پیش‌نمایش» (Phase 2 الحاقی).
+UI فعلی: صفحه `PortalContentManager` شامل تب‌های:
+- Blocks (ویرایش ساخت‌یافته بلوک‌های محتوایی با Save, Save All)
+- Announcements (CRUD + اعتبارسنجی طول، نوع، اولویت)
+- Downloads (CRUD + Drag & Drop reorder + ذخیره ترتیب)
+- Preview (نمای ترکیبی read-only از blocks + announcements + downloads)
 
 ایمن‌سازی:
 1. هنوز پرتال عمومی از settings موجود می‌خواند ⇒ بدون ریسک رگرسیون.
 2. حذف تب‌های قدیمی «Portal» و «Invoice Template» از صفحه Settings انجام شد (Deprecated) برای جلوگیری از سردرگمی.
 3. امکان rollback سریع: کافی است commit مربوط به حذف UI قدیمی revert شود و روتر جدید حذف گردد.
 
-گام‌های بعد (Phase 2 پیشنهادی):
-1. مهاجرت پرتال به خواندن از portal_content_blocks (read switch feature flag).
-2. ادغام Announcements & Downloads در همان صفحه با Preview زنده.
-3. افزودن نسخه‌بندی (اختیاری) برای history بلوک‌ها.
+گام‌های انجام‌شده (Phase 2):
+1. ادغام تب‌های Announcements و Downloads + Preview.
+2. Drag & Drop برای ترتیب نمایش دانلودها + دکمه «ذخیره ترتیب» (POST /app-downloads/reorder).
+3. Service ماژولار `portal-content.ts` برای جداسازی منطق API.
+4. اعتبارسنجی فرم‌ها (طول، فرمت لینک، محدودیت اولویت).
+
+گام‌های بعد (Phase 3):
+1. افزودن نسخه‌بندی بلوک‌ها (history snapshot).
+2. A11Y بهبود یافته (کیبوردی برای Drag & Drop، aria-label ها).
+3. حذف کامل فایل‌های legacy پس از یک دوره پایش.
 
 Rollback Quick Guide:
 ```
@@ -269,13 +279,10 @@ curl -X POST -H 'Content-Type: application/json' \
 
 Deprecated Tabs: در صفحه Settings تب‌های Portal و Invoice Template حذف نشده‌اند بلکه با برچسب Deprecated و هشدار هدایت به صفحه جدید (/admin/portal-content) نشانه‌گذاری شده‌اند (اصل "حذف نه، ارتقا").
 
-Instrumentation اولیه پردازش Import:
-- جدول جدید import_jobs (migration 011) برای رهگیری وضعیت پردازش فایل‌های JSON.
-- API های اسکلت:
-	- GET /api/admin/import-jobs
-	- POST /api/admin/import-jobs (ایجاد رکورد ابتدایی)
-	- PATCH /api/admin/import-jobs/:jobCode (به‌روزرسانی وضعیت و شمارنده‌ها)
-	(TODO: اتصال کامل به جریان آپلود و نمایش UI مرحله‌ای)
+Instrumentation پردازش Import (گسترش یافته):
+- جدول import_jobs (migration 011) + مسیر جدید `/api/admin/import-jobs/:jobCode/start` برای شبیه‌سازی pipeline سمت سرور.
+- مراحل واقعی سمت سرور: pending → validating → ingesting (به‌روزرسانی processedRecords) → enriching → completed (یا failed در صورت خطا).
+- کلاینت: محاسبه درصد پیشرفت ترکیبی (stage weight + رکوردهای پردازش‌شده).
 
 Regression Script به‌روزرسانی شده:
 ```
@@ -287,11 +294,10 @@ BASE_URL=http://localhost:3000 ts-node scripts/portal-content-regression.ts
 3. Snapshot SHA256 برای تشخیص drift
 4. (اختیاری) تست round-trip دوم با EXTRA_ROUND_TRIP=1
 
-گام‌های بعد (Phase 2):
-1. UI نمایش وضعیت import_jobs و نوار پیشرفت مرحله‌ای
-2. نسخه‌بندی portal_content_block_versions
-3. Preview زنده در PortalContentManager + آنونسمنت/دانلودها
-4. حذف تدریجی وابستگی portal_* legacy بعد از تثبیت full
+وضعیت کنونی Import Jobs:
+1. UI پیشرفت مرحله‌ای و Event Log تکمیل.
+2. سرور اکنون قابلیت progression خودکار دارد (endpoint start).
+3. گام بعد: اتصال آپلود واقعی فایل به ایجاد و start خودکار job + احتمالا SSE/WebSocket برای کاهش Polling.
 
 ---
 ## 21.3 مانیتور مرحله‌ای پردازش فایل‌ها (Import Jobs)

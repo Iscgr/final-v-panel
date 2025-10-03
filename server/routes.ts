@@ -273,6 +273,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ success:false, error:'failed_create_import_job', message:(e as Error).message });
     }
   });
+
+  // NEW: Trigger server-side simulated pipeline (optional) - converts from pending -> validating -> ingesting -> enriching -> completed
+  app.post('/api/admin/import-jobs/:jobCode/start', authMiddleware, async (req, res) => {
+    try {
+      const { jobCode } = req.params;
+      const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+      // Set startedAt if not set; move to validating
+      await db.update(importJobs).set({ status: 'validating', startedAt: new Date() }).where(eq(importJobs.jobCode, jobCode));
+      res.json({ success:true, started:true });
+      // Fire and forget async progression
+      (async () => {
+        try {
+          await delay(1500);
+          await db.update(importJobs).set({ status: 'ingesting' }).where(eq(importJobs.jobCode, jobCode));
+          // simulate record ingestion
+          const recordTargetRes = await db.select({ total: importJobs.totalRecords }).from(importJobs).where(eq(importJobs.jobCode, jobCode));
+          const total = recordTargetRes[0]?.total || 0;
+          let processed = 0;
+          while (processed < total) {
+            processed += Math.max(1, Math.round(total / 10));
+            if (processed > total) processed = total;
+            await db.update(importJobs).set({ processedRecords: processed }).where(eq(importJobs.jobCode, jobCode));
+            await delay(500);
+          }
+          await db.update(importJobs).set({ status: 'enriching' }).where(eq(importJobs.jobCode, jobCode));
+          await delay(1200);
+          await db.update(importJobs).set({ status: 'completed', finishedAt: new Date() }).where(eq(importJobs.jobCode, jobCode));
+        } catch (err) {
+          await db.update(importJobs).set({ status: 'failed', lastError: (err as Error).message, finishedAt: new Date() }).where(eq(importJobs.jobCode, jobCode));
+        }
+      })();
+    } catch (e) {
+      res.status(500).json({ success:false, error:'failed_start_pipeline', message:(e as Error).message });
+    }
+  });
   app.patch('/api/admin/import-jobs/:jobCode', authMiddleware, async (req, res) => {
     try {
       const { jobCode } = req.params;

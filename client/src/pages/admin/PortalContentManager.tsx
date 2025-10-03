@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Save, RefreshCcw, FileText, Megaphone, Download, Eye, Plus, Trash2 } from 'lucide-react';
+import { PortalContentService } from '@/services/portal-content';
 import { useToast } from '@/hooks/use-toast';
 
 interface PortalContentBlock {
@@ -53,18 +54,33 @@ export default function PortalContentManager() {
 
   // Announcements state
   const [newAnn, setNewAnn] = useState({ title: '', content: '', priority: 0, type: 'info' });
+  const annErrors = (() => {
+    const errs: string[] = [];
+    if(newAnn.title.trim().length < 3) errs.push('عنوان حداقل ۳ کاراکتر');
+    if(newAnn.title.length > 120) errs.push('عنوان حداکثر ۱۲۰ کاراکتر');
+    if(newAnn.content.trim().length < 5) errs.push('محتوا حداقل ۵ کاراکتر');
+    if(newAnn.content.length > 1000) errs.push('محتوا حداکثر ۱۰۰۰ کاراکتر');
+    if(newAnn.priority < 0 || newAnn.priority>9999) errs.push('اولویت بین 0 تا 9999');
+    return errs;
+  })();
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   // Downloads state
   const [newDownload, setNewDownload] = useState({ title: '', downloadLink: '', description: '' });
+  const downloadErrors = (() => {
+    const errs: string[] = [];
+    if(newDownload.title.trim().length < 2) errs.push('عنوان دانلود حداقل ۲ کاراکتر');
+    if(newDownload.title.length > 120) errs.push('عنوان دانلود حداکثر ۱۲۰ کاراکتر');
+    if(!/^https?:\/\//i.test(newDownload.downloadLink.trim())) errs.push('لینک باید با http/https شروع شود');
+    if(newDownload.downloadLink.length > 500) errs.push('طول لینک بیش از ۵۰۰');
+    if(newDownload.description && newDownload.description.length > 500) errs.push('توضیح حداکثر ۵۰۰ کاراکتر');
+    return errs;
+  })();
   const [editingDownload, setEditingDownload] = useState<AppDownload | null>(null);
 
   // Fetch blocks
   const { data, isLoading, refetch, isFetching } = useQuery<{ success: boolean; data: PortalContentBlock[] }>({
     queryKey: ['/api/admin/portal-content-blocks'],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/portal-content-blocks');
-      return res.json();
-    }
+    queryFn: () => PortalContentService.blocks.list()
   });
 
   const blocks: PortalContentBlock[] = data?.data || [];
@@ -72,12 +88,7 @@ export default function PortalContentManager() {
   // Mutation for save
   const saveMutation = useMutation({
     mutationFn: async (payload: { blockKey: string; title: string; body: string }) => {
-      const res = await fetch(`/api/admin/portal-content-blocks/${payload.blockKey}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: payload.title, body: payload.body })
-      });
-      return res.json();
+      return PortalContentService.blocks.update(payload.blockKey, { title: payload.title, body: payload.body });
     },
     onMutate: async (payload) => {
       // Optimistic update cache
@@ -138,33 +149,60 @@ export default function PortalContentManager() {
 
   const isDirty = selectedKey && (editBody !== originalBody || editTitle !== originalTitle);
   const isSaving = saveMutation.isPending;
+  const [dirtyMap, setDirtyMap] = useState<Record<string, { title: string; body: string }>>({});
+
+  // Track dirty changes per block for future batch save
+  useEffect(() => {
+    if(selectedKey){
+      if(editBody !== originalBody || editTitle !== originalTitle){
+        setDirtyMap(m => ({ ...m, [selectedKey]: { title: editTitle, body: editBody } }));
+      } else {
+        setDirtyMap(m => { const clone = { ...m }; delete clone[selectedKey]; return clone; });
+      }
+    }
+  }, [selectedKey, editBody, editTitle, originalBody, originalTitle]);
+
+  const batchSave = async () => {
+    const entries = Object.entries(dirtyMap);
+    if(!entries.length) return;
+    for(const [blockKey, value] of entries){
+      await saveMutation.mutateAsync({ blockKey, title: value.title.trim(), body: value.body });
+    }
+    setDirtyMap({});
+    toast({ title: 'همه تغییرات ذخیره شد' });
+  };
 
   // Fetch announcements
   const { data: announcementsData, refetch: refetchAnnouncements } = useQuery<{ success: boolean; data: Announcement[] }>({
     queryKey: ['/api/admin/announcements'],
-    queryFn: async () => (await fetch('/api/admin/announcements')).json()
+    queryFn: () => PortalContentService.announcements.list()
   });
   const announcements = announcementsData?.data || [];
 
   // Fetch downloads
   const { data: downloadsData, refetch: refetchDownloads } = useQuery<{ success: boolean; data: AppDownload[] }>({
     queryKey: ['/api/admin/app-downloads'],
-    queryFn: async () => (await fetch('/api/admin/app-downloads')).json()
+    queryFn: () => PortalContentService.downloads.list()
   });
   const downloads = downloadsData?.data || [];
+  const [localDownloads, setLocalDownloads] = useState<AppDownload[]>([]);
+
+  // sync local state for DnD
+  useEffect(() => {
+    setLocalDownloads(downloads.slice().sort((a,b)=>a.displayOrder - b.displayOrder));
+  }, [downloads]);
 
   // Full content for preview
   const { data: fullContentData, refetch: refetchFull } = useQuery<{ success: boolean; data: any }>({
     queryKey: ['/api/admin/portal-content-blocks/full'],
-    queryFn: async () => (await fetch('/api/admin/portal-content-blocks/full')).json(),
+    queryFn: () => PortalContentService.blocks.full(),
     enabled: activeTab === 'preview'
   });
 
   // Announcement mutations
   const createAnnMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/admin/announcements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newAnn, priority: Number(newAnn.priority) || 0 }) });
-      return res.json();
+      return PortalContentService.announcements.create({ ...newAnn, priority: Number(newAnn.priority) || 0 });
     },
     onSuccess: (r: any) => {
       if (r.success) {
@@ -176,33 +214,30 @@ export default function PortalContentManager() {
   });
   const updateAnnMutation = useMutation({
     mutationFn: async (ann: Announcement) => {
-      const res = await fetch(`/api/admin/announcements/${ann.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ann) });
-      return res.json();
+      return PortalContentService.announcements.update(ann.id, ann);
     },
     onSuccess: (r: any) => { if (r.success) { toast({ title: 'ویرایش اطلاعیه' }); setEditingAnnouncement(null); refetchAnnouncements(); } }
   });
   const deleteAnnMutation = useMutation({
-    mutationFn: async (id: number) => { const res = await fetch(`/api/admin/announcements/${id}`, { method: 'DELETE' }); return res.json(); },
+  mutationFn: async (id: number) => PortalContentService.announcements.delete(id),
     onSuccess: (r: any) => { if (r.success) { toast({ title: 'حذف شد' }); refetchAnnouncements(); } }
   });
 
   // Download mutations
   const createDownloadMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('/api/admin/app-downloads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newDownload }) });
-      return res.json();
+      return PortalContentService.downloads.create({ ...newDownload });
     },
     onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ افزوده شد' }); setNewDownload({ title: '', downloadLink: '', description: '' }); refetchDownloads(); } }
   });
   const updateDownloadMutation = useMutation({
     mutationFn: async (d: AppDownload) => {
-      const res = await fetch(`/api/admin/app-downloads/${d.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
-      return res.json();
+      return PortalContentService.downloads.update(d.id, d);
     },
     onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ ویرایش شد' }); setEditingDownload(null); refetchDownloads(); } }
   });
   const deleteDownloadMutation = useMutation({
-    mutationFn: async (id: number) => { const res = await fetch(`/api/admin/app-downloads/${id}`, { method: 'DELETE' }); return res.json(); },
+  mutationFn: async (id: number) => PortalContentService.downloads.delete(id),
     onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ حذف شد' }); refetchDownloads(); } }
   });
 
@@ -258,6 +293,14 @@ export default function PortalContentManager() {
                     <button disabled={!isDirty || isSaving} onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50">
                       <Save className="w-4 h-4" /> {isSaving ? 'در حال ذخیره...' : isDirty ? 'ذخیره' : 'ذخیره شده'}
                     </button>
+                    <button
+                      disabled={!Object.keys(dirtyMap).length || isSaving}
+                      onClick={batchSave}
+                      className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs flex items-center gap-1 hover:bg-indigo-700 disabled:opacity-50"
+                      title="ذخیره همه بلوک‌های تغییر کرده"
+                    >
+                      <Save className="w-3 h-3" /> Save All ({Object.keys(dirtyMap).length})
+                    </button>
                   </div>
                 </div>
                 <div>
@@ -297,7 +340,8 @@ export default function PortalContentManager() {
                     <option value="info">info</option><option value="warning">warning</option><option value="success">success</option><option value="error">error</option>
                   </select>
                 </div>
-                <button disabled={!newAnn.title || !newAnn.content} onClick={() => createAnnMutation.mutate()} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1"><Plus className="w-3 h-3" />افزودن</button>
+                {annErrors.length>0 && <ul className="text-red-600 text-[10px] list-disc pr-4 space-y-0.5">{annErrors.map(er=> <li key={er}>{er}</li>)}</ul>}
+                <button disabled={annErrors.length>0} onClick={() => createAnnMutation.mutate()} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-40"><Plus className="w-3 h-3" />افزودن</button>
               </div>
               {/* List */}
               <div className="space-y-2 max-h-72 overflow-auto">
@@ -313,9 +357,16 @@ export default function PortalContentManager() {
                             <option value="info">info</option><option value="warning">warning</option><option value="success">success</option><option value="error">error</option>
                           </select>
                           <label className="text-[10px] flex items-center gap-1"><input type="checkbox" checked={editingAnnouncement.isActive} onChange={e => setEditingAnnouncement(o => o ? { ...o, isActive: e.target.checked } : o)} />فعال</label>
-                          <button onClick={() => editingAnnouncement && updateAnnMutation.mutate(editingAnnouncement)} className="text-xs px-2 py-1 bg-green-600 text-white rounded">ذخیره</button>
+                          <button
+                            disabled={!(editingAnnouncement.title.trim().length>=3 && editingAnnouncement.content.trim().length>=5)}
+                            onClick={() => editingAnnouncement && updateAnnMutation.mutate(editingAnnouncement)}
+                            className="text-xs px-2 py-1 bg-green-600 text-white rounded disabled:opacity-40"
+                          >ذخیره</button>
                           <button onClick={() => setEditingAnnouncement(null)} className="text-xs px-2 py-1 border rounded">لغو</button>
                         </div>
+                        {editingAnnouncement && (editingAnnouncement.title.trim().length<3 || editingAnnouncement.content.trim().length<5) && (
+                          <div className="text-[10px] text-red-600">حداقل طول عنوان ۳ و محتوا ۵ کاراکتر</div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex items-start justify-between gap-4">
@@ -348,13 +399,35 @@ export default function PortalContentManager() {
                   <input value={newDownload.title} onChange={e => setNewDownload(d => ({ ...d, title: e.target.value }))} placeholder="عنوان" className="px-2 py-1 border rounded text-xs" />
                   <input value={newDownload.downloadLink} onChange={e => setNewDownload(d => ({ ...d, downloadLink: e.target.value }))} placeholder="لینک" className="px-2 py-1 border rounded text-xs col-span-2" />
                   <input value={newDownload.description} onChange={e => setNewDownload(d => ({ ...d, description: e.target.value }))} placeholder="توضیح" className="px-2 py-1 border rounded text-xs" />
-                  <button disabled={!newDownload.title || !newDownload.downloadLink} onClick={() => createDownloadMutation.mutate()} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1"><Plus className="w-3 h-3" />افزودن</button>
+                  <button disabled={downloadErrors.length>0} onClick={() => createDownloadMutation.mutate()} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-40"><Plus className="w-3 h-3" />افزودن</button>
                 </div>
+                {downloadErrors.length>0 && <ul className="text-red-600 text-[10px] list-disc pr-4 space-y-0.5">{downloadErrors.map(er=> <li key={er}>{er}</li>)}</ul>}
               </div>
               {/* List */}
-              <div className="space-y-2 max-h-72 overflow-auto">
-                {downloads.map(d => (
-                  <div key={d.id} className="border rounded p-3 bg-white flex items-start justify-between gap-4">
+              <div className="space-y-2 max-h-72 overflow-auto"
+                   onDragOver={(e)=>e.preventDefault()}
+              >
+                {localDownloads.map(d => (
+                  <div key={d.id}
+                       draggable
+                       onDragStart={(e)=>{e.dataTransfer.setData('text/plain', String(d.id));}}
+                       onDrop={(e)=>{
+                          e.preventDefault();
+                          const sourceId = Number(e.dataTransfer.getData('text/plain'));
+                          if(!sourceId || sourceId===d.id) return;
+                          setLocalDownloads(prev => {
+                            const srcIndex = prev.findIndex(x=>x.id===sourceId);
+                            const targetIndex = prev.findIndex(x=>x.id===d.id);
+                            if(srcIndex===-1||targetIndex===-1) return prev;
+                            const clone = prev.slice();
+                            const [moved] = clone.splice(srcIndex,1);
+                            clone.splice(targetIndex,0,moved);
+                            // reassign displayOrder sequentially (step 10)
+                            return clone.map((item,idx)=>({...item, displayOrder: idx*10}));
+                          });
+                       }}
+                       className="border rounded p-3 bg-white flex items-start justify-between gap-4 cursor-move opacity-100 hover:shadow transition-shadow"
+                  >
                     {editingDownload?.id === d.id ? (
                       <div className="flex-1 space-y-2">
                         <input value={editingDownload.title} onChange={e => setEditingDownload(o => o ? { ...o, title: e.target.value } : o)} className="w-full text-xs border px-2 py-1 rounded" />
@@ -362,9 +435,16 @@ export default function PortalContentManager() {
                         <textarea value={editingDownload.description || ''} onChange={e => setEditingDownload(o => o ? { ...o, description: e.target.value } : o)} rows={2} className="w-full text-xs border px-2 py-1 rounded" />
                         <div className="flex gap-2 items-center">
                           <label className="text-[10px] flex items-center gap-1"><input type="checkbox" checked={editingDownload.isActive} onChange={e => setEditingDownload(o => o ? { ...o, isActive: e.target.checked } : o)} />فعال</label>
-                          <button onClick={() => editingDownload && updateDownloadMutation.mutate(editingDownload)} className="text-[10px] px-2 py-1 bg-green-600 text-white rounded">ذخیره</button>
+                          <button
+                            disabled={!(editingDownload.title.trim().length>=2 && /^https?:\/\//i.test(editingDownload.downloadLink.trim()))}
+                            onClick={() => editingDownload && updateDownloadMutation.mutate(editingDownload)}
+                            className="text-[10px] px-2 py-1 bg-green-600 text-white rounded disabled:opacity-40"
+                          >ذخیره</button>
                           <button onClick={() => setEditingDownload(null)} className="text-[10px] px-2 py-1 border rounded">لغو</button>
                         </div>
+                        {editingDownload && (!(editingDownload.title.trim().length>=2) || !/^https?:\/\//i.test(editingDownload.downloadLink.trim())) && (
+                          <div className="text-[10px] text-red-600">عنوان حداقل ۲ کاراکتر و لینک معتبر http/https لازم است</div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex-1 text-xs space-y-1">
@@ -379,9 +459,31 @@ export default function PortalContentManager() {
                     </div>
                   </div>
                 ))}
-                {downloads.length === 0 && <div className="text-center text-xs text-gray-500">اپلیکیشنی ثبت نشده</div>}
+                {localDownloads.length === 0 && <div className="text-center text-xs text-gray-500">اپلیکیشنی ثبت نشده</div>}
               </div>
-              <div className="pt-2 text-[10px] text-gray-500">(درگ و دراپ برای ترتیب‌دهی در گام بعدی افزوده می‌شود)</div>
+              <div className="pt-2 text-[10px] text-gray-500 flex items-center justify-between">
+                <span>برای تغییر ترتیب آیتم‌ها را بکشید. سپس ذخیره ترتیب را بزنید.</span>
+                <button
+                  disabled={localDownloads.length===0}
+                  onClick={async ()=>{
+                    try {
+                      // prepare payload as array of {id, displayOrder}
+                      const payload = localDownloads.map(d=>({ id: d.id, displayOrder: d.displayOrder }));
+                      const res = await fetch('/api/admin/app-downloads/reorder', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ items: payload }) });
+                      const json = await res.json();
+                      if(json.success){
+                        toast({ title: 'ترتیب ذخیره شد' });
+                        refetchDownloads();
+                      } else {
+                        toast({ title: 'خطا', description: json.error || 'ذخیره ترتیب ناموفق بود', variant:'destructive' });
+                      }
+                    } catch(err:any){
+                      toast({ title: 'خطا', description: err.message, variant:'destructive' });
+                    }
+                  }}
+                  className="text-[10px] px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
+                >ذخیره ترتیب</button>
+              </div>
             </div>
           )}
 
