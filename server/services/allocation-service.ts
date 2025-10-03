@@ -3,7 +3,7 @@
  * Wrapper روی منطق legacy تخصیص برای افزودن نوشتن shadow در ledger هنگام فعال بودن flag.
  * اصل: بدون تغییر رفتار بیرونی، فقط افزودن observability و زیرساخت آینده.
  */
-import { db } from '../database-manager';
+import { db } from '../database-manager.js';
 import { payments, invoices, paymentAllocations } from '@shared/schema';
 import { validateAllocations } from './allocation-invariants.js';
 import { GuardMetricsService } from './guard-metrics-service.js';
@@ -11,7 +11,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { featureFlagManager } from './feature-flag-manager.js';
 import { isCanaryRepresentative } from './allocation-canary-helper.js';
 import { InvoiceBalanceCacheService } from './invoice-balance-cache-service.js';
-import { stableIdempotencyKey } from '../utils/crypto-hash';
+import { stableIdempotencyKey } from '../utils/crypto-hash.js';
 
 export interface AllocationResultShadow {
   legacyUpdated: boolean;

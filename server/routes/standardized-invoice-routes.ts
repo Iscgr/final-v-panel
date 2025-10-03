@@ -5,12 +5,12 @@
 
 import { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { 
+import {
   parseStandardJsonData, 
   validateStandardUsageData, 
   processStandardUsageData,
   StandardProcessedInvoice
-} from '../services/standardized-invoice-engine';
+} from '../services/standardized-invoice-engine.js';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -124,7 +124,7 @@ export function registerStandardizedInvoiceRoutes(app: any, requireAuth: any, st
             console.log(`➕ Creating new representative: ${processedInvoice.representativeCode}`);
 
             // ایجاد نماینده جدید با defaultSalesPartner
-            const { db } = await import("../db");
+            const { db } = await import("../db.js");
             const defaultSalesPartnerId = await getOrCreateDefaultSalesPartner(db);
 
             const newRepData = {
@@ -222,7 +222,7 @@ export function registerStandardizedInvoiceRoutes(app: any, requireAuth: any, st
  * Helper functions
  */
 async function getOrCreateDefaultSalesPartner(db: any): Promise<number> {
-  const { salesPartners } = await import("../../shared/schema");
+  const { salesPartners } = await import("../../shared/schema.js");
   const { eq } = await import("drizzle-orm");
 
   try {

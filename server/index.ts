@@ -107,6 +107,22 @@ app.use(performanceMonitoringMiddleware);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
+// Serve uploaded files statically
+import path from 'path';
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
+app.use('/uploads', express.static(UPLOAD_DIR, {
+  maxAge: '1d', // Cache for 1 day
+  setHeaders: (res, filePath) => {
+    // Set appropriate content type based on file extension
+    if (filePath.endsWith('.mp4') || filePath.endsWith('.webm')) {
+      res.set('Content-Type', 'video/mp4');
+    } else if (filePath.endsWith('.png') || filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+      res.set('Content-Type', 'image/jpeg');
+    }
+  }
+}));
+console.log('✅ Static file serving enabled for /uploads directory');
+
 // Special middleware for Android browser compatibility
 app.use((req, res, next) => {
   const userAgent = req.headers['user-agent'] || '';
@@ -323,11 +339,9 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || '5000', 10);
+  // پورت استاندارد سراسری: 3000 (سازگار با Nginx کانفیگ موجود و مستندات)
+  // اگر در متغیر محیطی PORT تنظیم شده باشد همان استفاده می‌شود.
+  const port = parseInt(process.env.PORT || '3000', 10);
 
   // Simplified port handling - removed process killing logic
   async function logPortInfo(port: number) {

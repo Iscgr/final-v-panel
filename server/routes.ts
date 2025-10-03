@@ -4,7 +4,9 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { db } from "./db.js";
 import { sql, eq, and, or, like, gte, lte, asc, count, desc } from "drizzle-orm";
-import { invoices, representatives, payments, activityLogs } from "@shared/schema";
+import { invoices, representatives, payments, activityLogs, insertRepresentativeSchema, insertSalesPartnerSchema, insertInvoiceSchema, insertInvoiceBatchSchema, type InsertInvoice } from "@shared/schema";
+import { z } from "zod";
+import bcrypt from "bcryptjs";
 
 // SHERLOCK LOG CONTROL v1.0
 const SHERLOCK_ENABLED = process.env.NODE_ENV !== 'production';
@@ -21,72 +23,48 @@ import multer from "multer";
 // SHERLOCK v34.1: Import payment management router and its dependencies
 import { paymentManagementRouter, requireAuth } from "./routes/payment-management-router.js";
 
+// Import all route registration functions
+import { registerHealthRoutes } from "./routes/health-routes.js";
+import { registerStandardizedInvoiceRoutes } from "./routes/standardized-invoice-routes.js";
+import { registerIntegrationHealthRoutes } from "./routes/integration-health-routes.js";
+import { registerUnifiedFinancialRoutes } from "./routes/unified-financial-routes.js";
+import { registerShadowAllocationRoutes } from "./routes/shadow-allocation-routes.js";
+import { registerUsageLineRoutes } from "./routes/usage-line-routes.js";
+import { registerUnifiedStatisticsRoutes } from "./routes/unified-statistics-routes.js";
+import { registerBatchRollbackRoutes } from "./routes/batch-rollback-routes.js";
+
+// Import route modules
+import featureFlagRoutes from "./routes/feature-flag-routes.js";
+import representativesRoutes from "./routes/representatives-routes.js";
+import adminResourcesRoutes from "./routes/admin-resources-routes.js";
+import portalResourcesRoutes from "./routes/portal-resources-routes.js";
+import fileUploadRoutes from "./routes/file-upload-routes.js";
+import databaseOptimizationRoutes from "./routes/database-optimization-routes.js";
+import debtVerificationRoutes from "./routes/debt-verification-routes.js";
+import activeReconciliationRoutes from "./routes/active-reconciliation-routes.js";
+import guardMetricsRoutes from "./routes/guard-metrics-routes.js";
+
+// Import services
+import { unifiedFinancialEngine } from "./services/unified-financial-engine.js";
+import { featureFlagManager } from "./services/feature-flag-manager.js";
+import { isCanaryRepresentative } from "./services/allocation-canary-helper.js";
+import { sendInvoiceToTelegram, formatInvoiceStatus, getDefaultTelegramTemplate } from "./services/telegram.js";
+import { PersianDate } from "./utils/type-helpers.js";
+
 // Extend Request interface to include multer file
 interface MulterRequest extends Request {
   file?: Express.Multer.File;
 }
-import { z } from "zod";
-import {
-  insertRepresentativeSchema,
-  insertSalesPartnerSchema,
-  insertInvoiceSchema,
-  insertPaymentSchema,
-  // فاز ۱: Schema برای مدیریت دوره‌ای فاکتورها
-  insertInvoiceBatchSchema
-} from "@shared/schema";
-// ✅ NEW STANDARDIZED IMPORTS:
-import { registerStandardizedInvoiceRoutes } from "./routes/standardized-invoice-routes.js";
-import {
-  sendInvoiceToTelegram,
-  sendBulkInvoicesToTelegram,
-  getDefaultTelegramTemplate,
-  formatInvoiceStatus
-} from "./services/telegram.js";
-import bcrypt from "bcryptjs";
-// Commented out temporarily - import { generateFinancialReport } from "./services/report-generator";
 
-// New import for unified financial engine
-import { unifiedFinancialEngine } from './services/unified-financial-engine.js';
-
-// Import integration health routes for Phase 9
-import { registerIntegrationHealthRoutes } from "./routes/integration-health-routes.js";
-import featureFlagRoutes from './routes/feature-flag-routes.js';
-import { registerHealthRoutes } from './routes/health-routes.js';
-
-// Import unified statistics routes registration
-import { registerUnifiedStatisticsRoutes } from "./routes/unified-statistics-routes.js";
-// Register unified financial routes
-import { registerUnifiedFinancialRoutes } from "./routes/unified-financial-routes.js";
-import { registerShadowAllocationRoutes } from './routes/shadow-allocation-routes.js';
-import { registerUsageLineRoutes } from './routes/usage-line-routes.js';
-import { isCanaryRepresentative } from './services/allocation-canary-helper.js';
-
-// Import database optimization routes registration
-import databaseOptimizationRoutes from './routes/database-optimization-routes.js';
-// Import Batch Rollback Routes
-import { registerBatchRollbackRoutes } from './routes/batch-rollback-routes.js';
-
-// Import Debt Verification Routes
-import debtVerificationRoutes from './routes/debt-verification-routes.js';
-// Import Active Reconciliation Routes - Phase B: E-B4
-import activeReconciliationRoutes from './routes/active-reconciliation-routes.js';
-import guardMetricsRoutes from './routes/guard-metrics-routes.js';
-import { featureFlagManager } from './services/feature-flag-manager.js';
-
-// Import Representatives Routes - Modular & Refactored
-import representativesRoutes from './routes/representatives-routes.js';
-
-// --- Interfaces for Authentication Middleware ---
-interface AuthSession {
-  id: string; // Required by Session interface
-  cookie: any; // Required by Session interface
-  authenticated?: boolean;
-  userId?: number;
-  username?: string;
-  role?: string;
-  permissions?: string[];
-  user?: any;
-  // ...existing code...
+// Helper function to convert Persian date string (e.g., "1403/05/15") to a Gregorian Date object
+function convertPersianToGregorian(persianDateStr: string): Date | null {
+  if (!persianDateStr || typeof persianDateStr !== 'string' || !/^\d{4}\/\d{2}\/\d{2}$/.test(persianDateStr)) {
+    return null;
+  }
+  const parts = persianDateStr.split('/').map(Number);
+  // Note: persian-date uses 0-indexed months (0-11)
+  const persianDate = new PersianDate([parts[0], parts[1], parts[2]]);
+  return persianDate.toDate();
 }
 
 // Remove AuthRequest interface - use Request directly with type assertions
@@ -259,6 +237,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 🔷 Representatives Routes - Refactored & Modular (5 columns: name, ownerName, totalSales, totalDebt, actions)
   app.use('/api/representatives', authMiddleware, representativesRoutes);
   console.log('✅ Representatives routes registered with authentication');
+
+  // 🔷 Admin Resources Routes - App Downloads & Announcements Management (Admin Panel Only)
+  app.use('/api/admin', authMiddleware, adminResourcesRoutes);
+  console.log('✅ Admin resources routes registered (app-downloads, announcements)');
+
+  // 🔷 Portal Resources Routes - Public Resources for Representatives Portal
+  app.use('/api/portal', portalResourcesRoutes);
+  console.log('✅ Portal resources routes registered (public access)');
+
+  // 🔷 File Upload & View Tracking Routes
+  app.use('/api/admin', authMiddleware, fileUploadRoutes);
+  app.use('/api/portal', fileUploadRoutes); // Public view tracking endpoint
+  console.log('✅ File upload and view tracking routes registered');
 
   // SHERLOCK v18.4: سیستم مالی یکپارچه واحد - تنها سیستم مالی فعال
   // Previously imported and used directly:
@@ -455,13 +446,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/reconciliation', activeReconciliationRoutes);
 
   // Phase C: E-C1 - Outbox Pattern Routes
-  const outboxRoutes = await import('./routes/outbox-routes');
+  const outboxRoutes = await import('./routes/outbox-routes.js');
   app.use('/api/outbox', outboxRoutes.default);
 
   // Phase C: E-C5 - SLA Dashboard Routes
-  const slaDashboardRoutes = await import('./routes/sla-dashboard-routes');
+  const slaDashboardRoutes = await import('./routes/sla-dashboard-routes.js');
   app.use('/api/sla', slaDashboardRoutes.default);
   console.log('✅ E-C5: SLA Dashboard routes registered');
+
+  // Real-time Dashboard Events (SSE)
+  const dashboardEventsRoutes = await import('./routes/dashboard-events-routes.js');
+  app.use('/api/dashboard', dashboardEventsRoutes.default);
+  console.log('✅ Dashboard real-time events routes registered');
 
   // SHERLOCK v1.0: Session Recovery and Debug Endpoint
   app.get("/api/auth/session-debug", (req, res) => {
@@ -666,200 +662,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard endpoint - Updated to use unified financial data with enhanced error handling
   app.get("/api/dashboard", authMiddleware, async (req, res) => {
     try {
-      console.log("📊 SHERLOCK v32.0: Dashboard request received");
-      console.log("🔍 SHERLOCK v32.0: Starting dashboard data collection...");
-
-      // E-B7: Single Consolidated Query Implementation
-      // Replacing multiple separate queries with unified financial summary service
-      console.log("🚀 E-B7: Executing consolidated financial summary query...");
+      console.log("📊 Dashboard request - returning minimal data (5 widgets removed)");
       
-      let consolidatedData;
-      try {
-        // Import consolidated service dynamically to avoid circular dependencies
-        const { ConsolidatedFinancialSummaryService } = await import('./services/consolidated-financial-summary.js');
-        
-        // Execute single consolidated query instead of multiple separate queries
-        consolidatedData = await ConsolidatedFinancialSummaryService.calculateConsolidatedSummary();
-        
-        console.log(`✅ E-B7: Consolidated query completed in ${consolidatedData.queryTimeMs}ms`);
-        
-        // Performance validation for E-B7 KPI
-        if (consolidatedData.queryTimeMs > 120) {
-          console.warn(`⚠️ E-B7: Query time ${consolidatedData.queryTimeMs}ms exceeds P95 target of 120ms`);
-        }
-        
-      } catch (consolidatedError) {
-        console.error("❌ E-B7: Consolidated query failed:", consolidatedError);
-        
-        // Fallback to legacy unifiedFinancialEngine for graceful degradation
-        console.log("🔄 E-B7: Falling back to legacy financial engine...");
-        try {
-          const legacySummary = await unifiedFinancialEngine.calculateGlobalSummary();
-          
-          // D-01 Fix: Query for missing fields in legacy fallback
-          let unsentTelegram = 0, totalSalesPartners = 0, activeSalesPartners = 0;
-          try {
-            const telegramResult = await db.execute(sql`SELECT COUNT(*) as count FROM invoices WHERE sent_to_telegram = false`);
-            unsentTelegram = Number((telegramResult as any).rows?.[0]?.count) || 0;
-            
-            const partnersResult = await db.execute(sql`
-              SELECT 
-                COUNT(*) as total,
-                COUNT(*) FILTER (WHERE is_active = true) as active 
-              FROM sales_partners
-            `);
-            const partnerRow = (partnersResult as any).rows?.[0];
-            totalSalesPartners = Number(partnerRow?.total) || 0;
-            activeSalesPartners = Number(partnerRow?.active) || 0;
-          } catch (err) {
-            console.warn("⚠️ E-B7: Could not fetch Telegram/Sales Partners in fallback:", err);
-          }
-
-          // Convert legacy format to consolidated format for consistency
-          consolidatedData = {
-            totalRevenue: legacySummary.totalSystemPaid || 0,
-            totalDebt: legacySummary.totalSystemDebt || 0,
-            totalCredit: 0, // Legacy doesn't have direct credit field
-            totalOutstanding: legacySummary.totalUnpaidAmount || 0,
-            totalRepresentatives: legacySummary.totalRepresentatives || 0,
-            activeRepresentatives: legacySummary.activeRepresentatives || 0,
-            inactiveRepresentatives: Math.max(0, (legacySummary.totalRepresentatives || 0) - (legacySummary.activeRepresentatives || 0)),
-            totalInvoices: (legacySummary.unpaidInvoicesCount || 0) + (legacySummary.overdueInvoicesCount || 0), // Approximate
-            paidInvoices: 0, // Legacy doesn't track this separately
-            unpaidInvoices: legacySummary.unpaidInvoicesCount || 0,
-            overdueInvoices: legacySummary.overdueInvoicesCount || 0,
-            totalPayments: 0, // Legacy doesn't track payment count
-            totalPaymentAmount: legacySummary.totalSystemPaid || 0,
-            unallocatedPaymentAmount: 0, // Legacy doesn't track unallocated
-            // D-01 Fix: Add new fields to legacy fallback
-            unsentTelegramInvoices: unsentTelegram,
-            totalSalesPartners: totalSalesPartners,
-            activeSalesPartners: activeSalesPartners,
-            systemIntegrityScore: Math.round(legacySummary.systemAccuracy || 0),
-            lastUpdated: legacySummary.lastCalculationTime || new Date().toISOString(),
-            queryTimeMs: 999, // Indicate fallback mode
-            cacheStatus: 'UNAVAILABLE' as const
-          };
-        } catch (legacyError) {
-          console.error("❌ E-B7: Legacy fallback also failed:", legacyError);
-          throw new Error("Both consolidated and legacy financial calculations failed");
-        }
-      }
-
-      // Construct optimized response using consolidated data
-      const dashboardData = {
+      // ✅ Minimal response - 5 statistical widgets removed
+      // This endpoint kept for cache invalidation compatibility
+      res.json({
         success: true,
         data: {
-          // Primary financial summary (from consolidated query)
           summary: {
-            totalRevenue: consolidatedData.totalRevenue,
-            totalDebt: consolidatedData.totalDebt,
-            totalCredit: consolidatedData.totalCredit,
-            totalOutstanding: consolidatedData.totalOutstanding,
-            riskRepresentatives: consolidatedData.inactiveRepresentatives,
-            // D-01 FIX: Use correct fields from consolidated data
-            unsentTelegramInvoices: consolidatedData.unsentTelegramInvoices, // Corrected: was overdueInvoices
-            totalSalesPartners: consolidatedData.totalSalesPartners, // Corrected: was totalRepresentatives
-            activeSalesPartners: consolidatedData.activeSalesPartners, // Corrected: was activeRepresentatives
-            systemIntegrityScore: consolidatedData.systemIntegrityScore,
-            lastReconciliationDate: consolidatedData.lastUpdated,
-            problematicRepresentativesCount: consolidatedData.inactiveRepresentatives,
-            responseTime: consolidatedData.queryTimeMs,
-            cacheStatus: consolidatedData.cacheStatus,
-            lastUpdated: consolidatedData.lastUpdated
-          },
-          
-          // Representative metrics (from consolidated query)
-          representatives: {
-            total: consolidatedData.totalRepresentatives,
-            active: consolidatedData.activeRepresentatives,
-            inactive: consolidatedData.inactiveRepresentatives
-          },
-          
-          // Invoice metrics (from consolidated query)
-          invoices: {
-            total: consolidatedData.totalInvoices,
-            paid: consolidatedData.paidInvoices,
-            unpaid: consolidatedData.unpaidInvoices,
-            overdue: consolidatedData.overdueInvoices
-          },
-          
-          // Payment metrics (from consolidated query)
-          payments: {
-            totalAmount: consolidatedData.totalPaymentAmount,
-            unallocatedAmount: consolidatedData.unallocatedPaymentAmount,
-            totalCount: consolidatedData.totalPayments
-          },
-          
-          // Sales partners (alias for representatives for backward compatibility)
-          salesPartners: {
-            total: consolidatedData.totalRepresentatives,
-            active: consolidatedData.activeRepresentatives
-          },
-          
-          // System status
-          systemStatus: {
-            integrityScore: consolidatedData.systemIntegrityScore,
-            lastUpdate: consolidatedData.lastUpdated,
-            cacheStatus: consolidatedData.cacheStatus
+            // Minimal data for backwards compatibility
+            totalRevenue: 0,
+            totalDebt: 0,
+            totalRepresentatives: 0,
+            activeRepresentatives: 0,
+            overdueInvoices: 0,
+            systemIntegrityScore: 0,
+            lastUpdated: new Date().toISOString(),
+            cacheStatus: 'MINIMAL'
           }
         },
-        
-        // Enhanced metadata for E-B7 monitoring
-        meta: {
-          timestamp: new Date().toISOString(),
-          cacheStatus: consolidatedData.cacheStatus,
-          queryTimeMs: consolidatedData.queryTimeMs,
-          version: "E-B7-Consolidated",
-          queryOptimization: {
-            enabled: true,
-            queryCount: 1, // Single consolidated query
-            performanceTarget: "P95 < 120ms",
-            achieved: consolidatedData.queryTimeMs <= 120
-          }
-        }
-      };
-
-      res.json(dashboardData);
-
-    } catch (error) {
-      console.error('❌ SHERLOCK v32.0: Dashboard error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : 'No stack trace',
-        timestamp: new Date().toISOString()
+        message: '5 statistical widgets have been removed - this endpoint returns minimal data for compatibility'
       });
-
-      // Return safe fallback data
+    } catch (error) {
+      console.error('Dashboard error:', error);
       res.status(500).json({
         success: false,
         error: "Failed to load dashboard",
-        details: error instanceof Error ? error.message : "Unknown error occurred",
         fallbackData: {
           totalRevenue: 0,
           totalDebt: 0,
-          totalCredit: 0,
-          totalOutstanding: 0,
-          totalRepresentatives: 0,
-          activeRepresentatives: 0,
-          inactiveRepresentatives: 0,
-          riskRepresentatives: 0,
-          totalInvoices: 0,
-          paidInvoices: 0,
-          unpaidInvoices: 0,
-          overdueInvoices: 0,
-          unsentTelegramInvoices: 0,
-          totalSalesPartners: 0,
-          activeSalesPartners: 0,
           systemIntegrityScore: 0,
-          lastReconciliationDate: new Date().toISOString(),
-          problematicRepresentativesCount: 0,
-          responseTime: 0,
-          cacheStatus: "ERROR",
           lastUpdated: new Date().toISOString()
         }
       });
     }
   });
+
 
   // SHERLOCK v18.4: Debtor Representatives moved to unified financial routes
   // Available at: /api/unified-financial/debtors
@@ -1205,7 +1043,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         showEventTimestamp,
         showEventType,
         showDescription,
-        showAdminUsername
+        showAdminUsername,
+        // ✅ NEW: تنظیمات جدید کاستومایزیشن پورتال
+        headerMessage,
+        downloadsIntro,
+        guidanceText,
+        contactPhone,
+        contactEmail,
+        supportHours,
+        announcementsTitle
       ] = await Promise.all([
         storage.getSetting('portal_title'),
         storage.getSetting('portal_description'),
@@ -1216,22 +1062,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getSetting('invoice_show_event_timestamp'),
         storage.getSetting('invoice_show_event_type'),
         storage.getSetting('invoice_show_description'),
-        storage.getSetting('invoice_show_admin_username')
+        storage.getSetting('invoice_show_admin_username'),
+        // ✅ NEW: دریافت تنظیمات جدید
+        storage.getSetting('portal_header_message'),
+        storage.getSetting('portal_downloads_intro'),
+        storage.getSetting('portal_guidance_text'),
+        storage.getSetting('portal_contact_phone'),
+        storage.getSetting('portal_contact_email'),
+        storage.getSetting('portal_support_hours'),
+        storage.getSetting('portal_announcements_title')
       ]);
 
       const portalConfig = {
         title: portalTitle?.value || 'پرتال عمومی نماینده',
         description: portalDescription?.value || 'مشاهده وضعیت مالی و فاکتورهای شما',
-        showOwnerName: showOwnerName?.value === 'true',
-        showDetailedUsage: showDetailedUsage?.value === 'true',
+        showOwnerName: showOwnerName?.value !== 'false',
+        showDetailedUsage: showDetailedUsage?.value !== 'false',
         customCss: customCss?.value || '',
 
         // Invoice display settings
-        showUsageDetails: showUsageDetails?.value === 'true',
-        showEventTimestamp: showEventTimestamp?.value === 'true',
-        showEventType: showEventType?.value === 'true',
-        showDescription: showDescription?.value === 'true',
-        showAdminUsername: showAdminUsername?.value === 'true'
+        showUsageDetails: showUsageDetails?.value !== 'false',
+        showEventTimestamp: showEventTimestamp?.value !== 'false',
+        showEventType: showEventType?.value !== 'false',
+        showDescription: showDescription?.value !== 'false',
+        showAdminUsername: showAdminUsername?.value !== 'false',
+
+        // ✅ NEW: تنظیمات جدید کاستومایزیشن کامل پورتال
+        headerMessage: headerMessage?.value || 'برای دریافت جدیدترین نسخه نرم‌افزارهای توصیه شده، لطفاً به انتهای پورتال مراجعه فرمایید 📥',
+        downloadsIntro: downloadsIntro?.value || '📱 دانلود اپلیکیشن‌های توصیه شده\n\nبرای استفاده بهینه از سرویس‌ها، نصب نرم‌افزارهای زیر ضروری است:',
+        guidanceText: guidanceText?.value || '• برای مشاهده جزئیات هر فاکتور، روی دکمه "نمایش جزئیات" کلیک کنید.\n• اعلانات مهم سیستم در بخش "اعلانات و دانلودها" نمایش داده می‌شود.\n• برای دانلود اپلیکیشن‌های توصیه شده، از بخش دانلودها استفاده کنید.\n• در صورت وجود هرگونه سوال یا مشکل، با پشتیبانی تماس بگیرید.',
+        contactPhone: contactPhone?.value || '۰۲۱-۱۲۳۴۵۶۷۸',
+        contactEmail: contactEmail?.value || 'support@example.com',
+        supportHours: supportHours?.value || 'شنبه تا چهارشنبه، ۹ صبح تا ۶ عصر',
+        announcementsTitle: announcementsTitle?.value || '📢 اعلانات و اطلاعیه‌ها'
       };
 
       // SHERLOCK v11.5: Sort invoices by FIFO principle (oldest first)
@@ -1681,6 +1544,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           immediate: true
         });
   sherlockLog(`✅ SHERLOCK v33.2: Financial cache invalidated for representative ${representativeId}`);
+
+        // 🔄 REAL-TIME DASHBOARD UPDATE: Notify payment change (simplified - widgets removed)
+        const { dashboardEventsService } = await import('./services/dashboard-events-service.js');
+        
+        dashboardEventsService.notifyPaymentChange(
+          newPayment.id, 
+          parseFloat(amount) || 0  // Use payment amount directly
+        );
+        console.log(`📡 Dashboard SSE: Payment created event broadcasted (minimal data)`);
       } catch (cacheError) {
         console.warn(`⚠️ SHERLOCK v33.2: Cache invalidation warning:`, cacheError);
       }
@@ -1743,7 +1615,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const invoices = await storage.getInvoicesForTelegram();
       res.json(invoices);
     } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت فاکتورهای در انتظار ارسال" });
+      res.status(500).json({ error: "خطا در دریافت فاکتورهاى در انتظار ارسال" });
     }
   });
 
@@ -1763,18 +1635,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/invoices/create-manual", authMiddleware, async (req, res) => {
     try {
       console.log('🔧 فاز ۲: ایجاد فاکتور دستی');
-      const validatedData = insertInvoiceSchema.parse(req.body) as ValidatedInvoiceData;
+      const validatedData = insertInvoiceSchema.parse(req.body) as any;
 
       // Check if representative exists
       // تبدیل شناسه نماینده به عدد برای تطبیق با امضای تابع
       const representative = await storage.getRepresentative(Number(validatedData.representativeId));
       if (!representative) {
         return res.status(404).json({ error: "نماینده یافت نشد" });
-      }
+           }
+
+      // Convert dueDate to Gregorian for active calculation (if provided as Persian string)
+      const dueDateGregorian = validatedData.dueDate && typeof validatedData.dueDate === 'string' 
+        ? convertPersianToGregorian(validatedData.dueDate) 
+        : null;
 
       // Create manual invoice
       const invoice = await storage.createInvoice({
         ...validatedData,
+        dueDateGregorian,
+        isManual: true,
         status: validatedData.status || "unpaid",
         usageData: validatedData.usageData || {
           type: "manual",
@@ -1818,7 +1697,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // فاز ۲: Invoice editing API - ویرایش فاکتور
-  app.put("/api/invoices/:id", enhancedUnifiedAuthMiddleware, async (req, res) => {
+  app.put("/api/invoices/:id", authMiddleware, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
 
@@ -1839,6 +1718,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updateData = req.body;
+
+      // If dueDate is being updated, also update the Gregorian version
+      if (updateData.dueDate) {
+        updateData.dueDateGregorian = convertPersianToGregorian(updateData.dueDate);
+      }
+
       const editedAmount = parseFloat(updateData.amount);
       const originalAmount = parseFloat(originalInvoice.amount);
 
@@ -2017,6 +1902,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ✅ Validate Telegram message template
+  app.post("/api/settings/telegram/validate-template", authMiddleware, async (req, res) => {
+    try {
+      const { template } = req.body;
+      
+      if (!template || typeof template !== 'string') {
+        return res.status(400).json({ error: "قالب پیام الزامی است" });
+      }
+
+      const { validateTelegramTemplate } = await import('./services/telegram.js');
+      const validation = validateTelegramTemplate(template);
+
+      console.log('🔍 Template validation result:', validation);
+
+      res.json({
+        success: true,
+        validation: {
+          isValid: validation.isValid,
+          usedVariables: validation.usedVariables,
+          missingVariables: validation.missingVariables,
+          invalidVariables: validation.invalidVariables
+        }
+      });
+    } catch (error: any) {
+      console.error('❌ خطا در اعتبارسنجی قالب پیام:', error);
+      res.status(500).json({
+        error: "خطا در اعتبارسنجی قالب پیام",
+        details: error.message
+      });
+    }
+  });
+
   // ✅ ODIN v5.0: Send ACTUAL invoices to Telegram (NOT test message)
   // این endpoint فاکتورهای واقعی را با قالب کامل ارسال می‌کند
   app.post("/api/invoices/send-telegram", authMiddleware, async (req, res) => {
@@ -2073,22 +1990,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
 
-          // Prepare Telegram message
-          // SHERLOCK v16.3 TELEGRAM URL FIX: Use proper portal link generation
+          /**
+           * Prepare Telegram message with standardized data mapping
+           * 
+           * Data Sources:
+           * - Invoice: invoice.invoiceNumber, invoice.amount, invoice.issueDate, invoice.status
+           * - Representative: representative.name, representative.ownerName, representative.publicId
+           * - Representative Code: representative.panelUsername || representative.code
+           * - Portal Link: generated via getPortalLink(representative.publicId)
+           * - Send Status: invoice.sentToTelegram, invoice.telegramSendCount
+           */
+          
+          // Import portal link generator
           const { getPortalLink } = await import('./config');
+          
+          // Generate portal link from representative's publicId
           const portalLink = getPortalLink(representative.publicId);
+          console.log(`🔗 Generated portal link for representative ${representative.name}: ${portalLink}`);
+          
+          // Format amount with thousand separators (e.g., 1,000,000)
+          const formattedAmount = parseFloat(invoice.amount).toLocaleString('fa-IR', {
+            maximumFractionDigits: 0
+          });
+          
+          // Build telegram message object with all required variables
           const telegramMessage = {
+            invoiceNumber: invoice.invoiceNumber,
             representativeName: representative.name,
             shopOwner: representative.ownerName || representative.name,
             panelId: representative.panelUsername || representative.code,
-            amount: invoice.amount,
+            amount: formattedAmount,
             issueDate: invoice.issueDate,
             status: formatInvoiceStatus(invoice.status),
             portalLink,
-            invoiceNumber: invoice.invoiceNumber,
             isResend: invoice.sentToTelegram || false,
             sendCount: (invoice.telegramSendCount || 0) + 1
           };
+          
+          console.log('📋 Telegram message data prepared:', {
+            invoice: telegramMessage.invoiceNumber,
+            representative: telegramMessage.representativeName,
+            amount: telegramMessage.amount,
+            sendCount: telegramMessage.sendCount
+          });
 
           // Send to Telegram
           const success = await sendInvoiceToTelegram(botToken, chatId, telegramMessage, template);
@@ -2402,7 +2346,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updatedPayment = await storage.allocatePaymentToInvoice(paymentId, invoiceId);
-
       // CRITICAL: Recalculate invoice status based on actual payment allocations
       const calculatedStatus = await storage.calculateInvoicePaymentStatus(invoiceId);
       await storage.updateInvoice(invoiceId, { status: calculatedStatus });
@@ -2437,7 +2380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (representativeId) {
         // Recalculate for specific representative
-        const repInvoices = await storage.getInvoicesByRepresentative(representativeId);
+        const repInvoices = await storage.getInvoicesByRepresentative(parseInt(representativeId as string));
         invoicesToProcess = repInvoices.map(inv => inv.id);
         console.log(`📊 Processing ${invoicesToProcess.length} invoices for representative ${representativeId}`);
       } else if (invoiceIds && Array.isArray(invoiceIds)) {
@@ -2483,7 +2426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           results.processed++;
         } catch (invoiceError) {
-          console.warn(`Error processing invoice ${invoiceId}:`, invoiceError);
+          console.warn(`Error reconciling invoice ${invoiceId}:`, invoiceError);
         }
       }
 
@@ -2555,20 +2498,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const batchId = parseInt(req.params.id);
       const batch = await storage.getInvoiceBatch(batchId);
-
-      if (!batch) {
-        return res.status(404).json({ error: "دسته فاکتور یافت نشد" });
-      }
-
-      // Get invoices for this batch
-      const invoices = await storage.getBatchInvoices(batchId);
-
+      const batchInvoices = await storage.getInvoicesByBatch(batchId);
+      
       res.json({
         batch,
-        invoices,
+        invoices: batchInvoices,
         summary: {
-          totalInvoices: invoices.length,
-          totalAmount: invoices.reduce((sum, inv) => sum + parseFloat(inv.amount), 0).toString()
+          totalInvoices: batchInvoices.length,
+          totalAmount: batchInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount), 0).toString()
         }
       });
     } catch (error) {
@@ -2657,6 +2594,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })(),
         actor: 'سیستم',
         at: (l.createdAt instanceof Date ? l.createdAt.toISOString() : new Date(l.createdAt as any).toISOString()),
+        description: l.description || 'فعالیت سیستمی'
+      }));
+      
+      res.json(normalized);
+    } catch (error) {
+      console.error('Error fetching recent activity:', error);
+      res.status(500).json({ error: "خطا در دریافت فعالیت‌های اخیر" });
+    }
+  });
+
+  app.post("/api/invoice-batches/:id/complete", authMiddleware, async (req, res) => {
+    try {
+      const batchId = parseInt(req.params.id);
+      await storage.completeBatch(batchId);
+
+      const updatedBatch = await storage.getInvoiceBatch(batchId);
+      res.json({
+        success: true,
+        batch: updatedBatch,
+        message: "دسته فاکتور با موفقیت تکمیل شد"
+      });
+    } catch (error) {
+      console.error('Error completing batch:', error);
+      res.status(500).json({ error: "خطا در تکمیل دسته فاکتور" });
+    }
+  });
+
+
+
+  // Activity Logs API
+  app.get("/api/activity-logs", authMiddleware, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const logs = await storage.getActivityLogs(limit);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "خطا در دریافت فعالیت‌ها" });
+    }
+  });
+
+  // NEW: Recent Activity endpoint با فرمت مناسب کامپوننت ActivityFeed (Dashboard)
+  app.get('/api/activity/recent', authMiddleware, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 30;
+      const logs = await storage.getActivityLogs(limit);
+      // نرمال‌سازی برای ActivityFeed
+      const normalized = logs.map(l => ({
+        id: String(l.id ?? l.createdAt ?? Math.random()),
+        type: ((): any => {
+          if (l.type === 'invoice_created') return 'invoice_created';
+          if (l.type === 'invoice_updated') return 'invoice_updated';
+          if (l.type === 'invoice_deleted') return 'invoice_deleted';
+          return 'system_error';
+        })(),
+        actor: 'سیستم',
+        at: (l.createdAt instanceof Date ? l.createdAt.toISOString() : new Date(l.createdAt as any).toISOString()),
         meta: { rawType: l.type, relatedId: (l as any).relatedId, description: (l as any).description }
       }));
       res.json({ success: true, items: normalized });
@@ -2679,10 +2672,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/settings/:key", authMiddleware, async (req, res) => {
     try {
       const { value } = req.body;
+      console.log(`📝 Updating setting: ${req.params.key} = ${value?.substring(0, 50)}...`);
       const setting = await storage.updateSetting(req.params.key, value);
+      console.log(`✅ Setting ${req.params.key} updated successfully`);
       res.json(setting);
     } catch (error) {
-      res.status(500).json({ error: "خطا در بروزرسانی تنظیمات" });
+      console.error('❌ Error updating setting:', error);
+      res.status(500).json({ error: "خطا در بروزرسانی تنظیمات", details: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 

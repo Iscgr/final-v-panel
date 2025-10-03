@@ -3,7 +3,7 @@
  * اجرای backfill dry-run
  * نیاز: ledger_backfill_mode=read_only
  */
-import { BackfillService } from '../server/services/backfill-service';
+import { BackfillService } from '../server/services/backfill-service.js';
 
 (async () => {
   try {

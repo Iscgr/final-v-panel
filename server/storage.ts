@@ -2242,6 +2242,13 @@ export class DatabaseStorage implements IStorage {
 
           console.log(`✅ SHERLOCK v35.0: Manual allocation successful! Created payment_allocations record.`);
 
+          // ✅ FIX: Update payments.is_allocated = true
+          await db.update(payments)
+            .set({ isAllocated: true })
+            .where(eq(payments.id, paymentId));
+          
+          console.log(`✅ FIX: Updated payments.is_allocated = true for payment ${paymentId}`);
+
           // Create activity log
           await this.createActivityLog({
             type: 'payment_manual_allocation',

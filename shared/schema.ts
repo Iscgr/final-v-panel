@@ -97,6 +97,7 @@ export const invoices = pgTable("invoices", {
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   issueDate: text("issue_date").notNull(), // Persian date: 1404/4/30
   dueDate: text("due_date"), // Persian date
+  dueDateGregorian: timestamp("due_date_gregorian"), // تاریخ میلادی برای مقایسه
   status: text("status").notNull().default("unpaid"), // unpaid, paid, overdue
   usageData: json("usage_data"), // Raw JSON data from uploaded file
   sentToTelegram: boolean("sent_to_telegram").default(false),
@@ -1012,6 +1013,67 @@ export const dailyReportsRelations = relations(dailyReports, ({ one }) => ({
   })
 }));
 
+// ==================== APP DOWNLOADS & ANNOUNCEMENTS ====================
+// برای مدیریت لینک‌های دانلود اپلیکیشن و اطلاعیه‌های پرتال عمومی
+
+// App Downloads (لینک‌های دانلود اپلیکیشن)
+export const appDownloads = pgTable("app_downloads", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(), // نام اپلیکیشن
+  description: text("description"), // توضیحات کوتاه
+  downloadLink: text("download_link").notNull(), // لینک دانلود مستقیم
+  qrCodeUrl: text("qr_code_url"), // URL تصویر QR Code (اگر آپلود شود، مسیر فایل محلی)
+  qrCodeFilePath: text("qr_code_file_path"), // مسیر فایل QR Code آپلود شده در سرور
+  videoUrl: text("video_url"), // URL ویدئوی آموزشی (لینک یا مسیر فایل)
+  videoFilePath: text("video_file_path"), // مسیر فایل ویدئو آپلود شده در سرور
+  viewCount: integer("view_count").default(0), // تعداد بازدید/کلیک
+  displayOrder: integer("display_order").default(0), // ترتیب نمایش
+  isActive: boolean("is_active").default(true), // فعال/غیرفعال
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+
+// Announcements (اطلاعیه‌های مهم)
+export const announcements = pgTable("announcements", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(), // عنوان اطلاعیه
+  content: text("content").notNull(), // محتوای اطلاعیه
+  priority: integer("priority").default(0), // اولویت نمایش (بالاتر = مهم‌تر)
+  type: text("type").default("info"), // info, warning, success, error
+  isActive: boolean("is_active").default(true), // فعال/غیرفعال
+  expiresAt: timestamp("expires_at"), // تاریخ انقضا (اختیاری)
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+
+// App Download Views (آمار بازدید اپلیکیشن‌ها)
+// برای ثبت تاریخچه بازدید و تحلیل رفتار کاربران
+export const appDownloadViews = pgTable("app_download_views", {
+  id: serial("id").primaryKey(),
+  appDownloadId: integer("app_download_id").notNull().references(() => appDownloads.id, { onDelete: "cascade" }),
+  representativeId: integer("representative_id"), // نماینده‌ای که روی لینک کلیک کرده (optional)
+  publicId: text("public_id"), // شناسه عمومی نماینده از URL پرتال
+  ipAddress: text("ip_address"), // IP آدرس برای آمارگیری
+  userAgent: text("user_agent"), // User agent مرورگر
+  actionType: text("action_type").notNull().default("view"), // view, download, qr_scan
+  createdAt: timestamp("created_at").defaultNow()
+});
+
+// Uploaded Files Metadata (متادیتای فایل‌های آپلود شده)
+// برای مدیریت فایل‌های QR Code و Video
+export const uploadedFiles = pgTable("uploaded_files", {
+  id: serial("id").primaryKey(),
+  fileName: text("file_name").notNull(), // نام فایل اصلی
+  storedFileName: text("stored_file_name").notNull().unique(), // نام منحصربفرد فایل در سرور (UUID)
+  filePath: text("file_path").notNull(), // مسیر کامل فایل
+  fileType: text("file_type").notNull(), // image/png, video/mp4, etc.
+  fileSize: integer("file_size").notNull(), // اندازه فایل به بایت
+  entityType: text("entity_type").notNull(), // app_download_qr, app_download_video
+  entityId: integer("entity_id").notNull(), // ID موجودیت مرتبط
+  uploadedBy: text("uploaded_by").notNull(), // نام کاربر آپلودکننده
+  createdAt: timestamp("created_at").defaultNow()
+});
+
 // ==================== ZOD SCHEMAS ====================
 
 export const insertEmployeeSchema = omitInsert(createInsertSchema(employees), "id", "createdAt", "updatedAt");
@@ -1043,6 +1105,14 @@ export const insertOutboxSchema = omitInsert(createInsertSchema(outbox), "id", "
 
 export const insertThresholdConfigSchema = omitInsert(createInsertSchema(thresholdConfig), "id", "createdAt", "updatedAt");
 
+export const insertAppDownloadSchema = omitInsert(createInsertSchema(appDownloads), "id", "viewCount", "createdAt", "updatedAt");
+
+export const insertAnnouncementSchema = omitInsert(createInsertSchema(announcements), "id", "createdAt", "updatedAt");
+
+export const insertAppDownloadViewSchema = omitInsert(createInsertSchema(appDownloadViews), "id", "createdAt");
+
+export const insertUploadedFileSchema = omitInsert(createInsertSchema(uploadedFiles), "id", "createdAt");
+
 // ==================== TYPES ====================
 
 export type Employee = typeof employees.$inferSelect;
@@ -1071,3 +1141,15 @@ export type InsertOutbox = z.infer<typeof insertOutboxSchema>;
 
 export type ThresholdConfig = typeof thresholdConfig.$inferSelect;
 export type InsertThresholdConfig = z.infer<typeof insertThresholdConfigSchema>;
+
+export type AppDownload = typeof appDownloads.$inferSelect;
+export type InsertAppDownload = z.infer<typeof insertAppDownloadSchema>;
+
+export type Announcement = typeof announcements.$inferSelect;
+export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
+
+export type AppDownloadView = typeof appDownloadViews.$inferSelect;
+export type InsertAppDownloadView = z.infer<typeof insertAppDownloadViewSchema>;
+
+export type UploadedFile = typeof uploadedFiles.$inferSelect;
+export type InsertUploadedFile = z.infer<typeof insertUploadedFileSchema>;

@@ -2,16 +2,19 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
-    "outDir": "dist",
-    "module": "ESNext",
-    "target": "ES2022",
-    "moduleResolution": "Bundler",
+  "outDir": "dist",
+  "module": "ESNext",
+  "target": "ES2022",
+  "moduleResolution": "Bundler",
     "sourceMap": false,
     "declaration": false,
     "declarationMap": false,
     "isolatedModules": false,
     "allowJs": false,
-    "rootDir": "."
+    "rootDir": ".",
+    "paths": {
+      "@shared/*": ["./shared/*"]
+    }
   },
   "include": [
     "server/**/*.ts",

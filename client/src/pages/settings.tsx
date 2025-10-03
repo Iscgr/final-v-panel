@@ -575,10 +575,21 @@ export default function Settings() {
                               {...field}
                             />
                           </FormControl>
-                          <FormDescription className="space-y-1">
-                            <div>متغیرهای قابل استفاده:</div>
-                            <div className="text-xs font-mono bg-gray-100 dark:bg-gray-800 p-2 rounded">
-                              {`{invoice_number}, {representative_name}, {shop_owner}, {panel_id}, {amount}, {issue_date}, {status}, {portal_link}`}
+                          <FormDescription className="space-y-2">
+                            <div className="font-semibold">متغیرهای قابل استفاده و منبع داده آن‌ها:</div>
+                            <div className="text-xs space-y-1 bg-gray-50 dark:bg-gray-800 p-3 rounded-lg">
+                              <div><code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{`{invoice_number}`}</code> - شماره فاکتور (از جدول فاکتورها)</div>
+                              <div><code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{`{representative_name}`}</code> - نام نماینده (از جدول نمایندگان)</div>
+                              <div><code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{`{shop_owner}`}</code> - نام صاحب فروشگاه (از جدول نمایندگان)</div>
+                              <div><code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{`{panel_id}`}</code> - شناسه پنل نماینده (username یا کد)</div>
+                              <div><code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{`{amount}`}</code> - مبلغ فاکتور با جداکننده هزار (تومان)</div>
+                              <div><code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{`{issue_date}`}</code> - تاریخ صدور فاکتور</div>
+                              <div><code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{`{status}`}</code> - وضعیت فاکتور (پرداخت شده/نشده)</div>
+                              <div><code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{`{portal_link}`}</code> - لینک پورتال نماینده</div>
+                              <div><code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">{`{resend_indicator}`}</code> - نشانگر ارسال مجدد (خودکار)</div>
+                            </div>
+                            <div className="text-xs text-amber-600 dark:text-amber-400">
+                              ⚠️ متغیرهای <code>{`{invoice_number}`}</code>، <code>{`{representative_name}`}</code> و <code>{`{amount}`}</code> اجباری هستند.
                             </div>
                           </FormDescription>
                           <FormMessage />

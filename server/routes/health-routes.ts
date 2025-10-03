@@ -4,8 +4,8 @@
  */
 
 import type { Express } from "express";
-import healthChecker from '../health-checker';
-import errorManager from '../unified-error-manager';
+import healthChecker from '../health-checker.js';
+import errorManager from '../unified-error-manager.js';
 
 export function registerHealthRoutes(app: Express): void {
   console.log('💗 Registering health check routes...');

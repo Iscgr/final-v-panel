@@ -3,7 +3,7 @@
  * حالت dry-run برای تولید خطوط synthetic در آینده.
  * اکنون: فقط محاسبه اختلاف برای پرداخت‌های allocated که ledger row ندارند.
  */
-import { db } from '../database-manager';
+import { db } from '../database-manager.js';
 import { payments, paymentAllocations } from '@shared/schema';
 import { sql } from 'drizzle-orm';
 import { featureFlagManager } from './feature-flag-manager.js';

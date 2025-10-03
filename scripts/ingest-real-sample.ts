@@ -30,7 +30,7 @@ try {
   // dynamic import جهت جلوگیری از خطای Early Throw در database-manager
   if (process.env.DATABASE_URL) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const mod = require('../server/database-manager');
+  const mod = require('../server/database-manager.js');
     db = mod.db;
     dbAvailable = true;
   }

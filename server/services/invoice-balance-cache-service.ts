@@ -2,7 +2,7 @@
  * InvoiceBalanceCacheService (Phase A - Iteration 4 Skeleton)
  * مسئول محاسبه/به‌روزرسانی ورودی cache برای یک فاکتور (بدون trigger فعلاً).
  */
-import { db } from '../database-manager';
+import { db } from '../database-manager.js';
 import { invoices, paymentAllocations, invoiceBalanceCache } from '@shared/schema';
 import { sql, eq } from 'drizzle-orm';
 

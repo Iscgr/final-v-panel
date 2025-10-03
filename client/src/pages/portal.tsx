@@ -1,16 +1,52 @@
+/**
+ * 🎯 PUBLIC PORTAL - COMPLETE REDESIGN
+ * 
+ * آیتم‌های اصلی:
+ * 1. اطلاعات هویتی نماینده (نام، شناسه، اطلاعات تماس)
+ * 2. خلاصه مالی (موجودی، بدهی، پرداخت‌ها)
+ * 3. فاکتورها FIFO با جزئیات کامل
+ * 4. بخش دانلود اپلیکیشن‌ها (Telegram, V2Ray) با QR Code
+ * 5. سیستم پیام‌رسانی و اعلانات ادمین
+ * 6. راهنمایی و توصیه‌ها
+ * 7. نوتیفیکیشن‌های سیستمی
+ */
+
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import React, { useState } from "react";
-import { getQueryFn } from "@/lib/queryClient";
+import React, { useEffect, useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
+import PortalResources from "@/components/PortalResources";
 
-// Type definitions for portal data
+// Lucide Icons
+import { 
+  AlertCircle, 
+  CheckCircle, 
+  XCircle, 
+  Info,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  FileText,
+  CreditCard,
+  Bell,
+  HelpCircle,
+  User,
+  Phone,
+  Mail,
+  Calendar,
+  ChevronDown,
+  ChevronUp
+} from 'lucide-react';
+
+// ==================== INTERFACES ====================
+
 interface Invoice {
   id: number;
   invoiceNumber: string;
   amount: string;
   remainingAmount?: string;
   issueDate: string;
-  dueDate?: string;
+  dueDate?: string | null;
   status: string;
   usageData?: {
     records?: Array<{
@@ -18,6 +54,7 @@ interface Invoice {
       event_type: string;
       description: string;
       admin_username: string;
+      amount?: string;
     }>;
     type?: string;
     description?: string;
@@ -27,7 +64,6 @@ interface Invoice {
 }
 
 interface Payment {
-  id: number;
   amount: string;
   paymentDate: string;
   description?: string;
@@ -35,7 +71,9 @@ interface Payment {
 
 interface PortalData {
   name: string;
-  panelUsername: string;
+  code: string;
+  panelUsername?: string;
+  ownerName?: string;
   totalSales: string;
   totalDebt: string;
   credit: string;
@@ -46,226 +84,283 @@ interface PortalData {
     debtLevel: string;
     lastCalculation: string;
     accuracyGuaranteed: boolean;
+    totalSales?: number;
+    actualDebt?: number;
+    totalDebt?: number;
+  };
+  portalConfig?: {
+    title?: string;
+    description?: string;
+    showOwnerName?: boolean;
+    showDetailedUsage?: boolean;
+    showUsageDetails?: boolean;
+    showEventTimestamp?: boolean;
+    showEventType?: boolean;
+    showDescription?: boolean;
+    showAdminUsername?: boolean;
+    customCss?: string;
+    // ✅ NEW: تنظیمات جدید کاستومایزیشن
+    headerMessage?: string;
+    downloadsIntro?: string;
+    guidanceText?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+    supportHours?: string;
+    announcementsTitle?: string;
   };
 }
 
-// Invoice Card Component with enhanced usage breakdown
-function InvoiceCard({ invoice }: { invoice: Invoice }) {
-  const [showUsageDetails, setShowUsageDetails] = useState(false);
+// ==================== INVOICE CARD COMPONENT ====================
 
-  const toggleUsageDetails = () => {
-    try {
-      setShowUsageDetails(!showUsageDetails);
-    } catch (error) {
-      console.error('Toggle usage details error:', error);
-    }
+function InvoiceCard({ invoice, config }: { invoice: Invoice; config?: PortalData['portalConfig']; }) {
+  const [showDetails, setShowDetails] = useState(false);
+  const usageSectionEnabled = config?.showDetailedUsage !== false && config?.showUsageDetails !== false;
+  const showEventTimestamp = config?.showEventTimestamp !== false;
+  const showEventType = config?.showEventType !== false;
+  const showDescription = config?.showDescription !== false;
+  const showAdminUsername = config?.showAdminUsername !== false;
+
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { label: string; bg: string; icon: React.ReactNode }> = {
+      paid: { 
+        label: 'پرداخت شده', 
+        bg: 'linear-gradient(135deg, #059669, #047857)',
+        icon: <CheckCircle size={16} />
+      },
+      partial: { 
+        label: 'تسویه جزئی', 
+        bg: 'linear-gradient(135deg, #ea580c, #c2410c)',
+        icon: <AlertCircle size={16} />
+      },
+      unpaid: { 
+        label: 'پرداخت نشده', 
+        bg: 'linear-gradient(135deg, #dc2626, #b91c1c)',
+        icon: <XCircle size={16} />
+      }
+    };
+
+    const statusInfo = statusMap[status] || statusMap.unpaid;
+
+    return (
+      <div style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        background: statusInfo.bg,
+        color: 'white',
+        padding: '6px 12px',
+        borderRadius: '6px',
+        fontSize: '13px',
+        fontWeight: 'bold'
+      }}>
+        {statusInfo.icon}
+        {statusInfo.label}
+      </div>
+    );
   };
 
   return (
     <div style={{ 
-      background: '#475569', 
-      padding: '15px', 
-      borderRadius: '8px',
-      border: '1px solid #64748b'
+      background: 'linear-gradient(135deg, #475569, #64748b)', 
+      padding: '20px', 
+      borderRadius: '12px',
+      border: '2px solid #94a3b8',
+      boxShadow: '0 4px 6px rgba(0,0,0,0.2)'
     }}>
-      {/* Invoice Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+      {/* Header */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'flex-start',
+        marginBottom: '15px',
+        flexWrap: 'wrap',
+        gap: '15px'
+      }}>
         <div>
-          <p style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '5px' }}>
-            {invoice.invoiceNumber}
-          </p>
-          <p style={{ fontSize: '14px', opacity: 0.8 }}>
-            تاریخ: {invoice.issueDate}
-          </p>
-        </div>
-        <div style={{ textAlign: 'left' }}>
-          <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#10b981' }}>
-            {parseFloat(String(invoice.amount || '0')).toLocaleString('fa-IR')} تومان
-          </p>
-          {invoice.remainingAmount && parseFloat(invoice.remainingAmount) > 0 && (
-            <p style={{ fontSize: '14px', color: '#fb923c', marginTop: '4px' }}>
-              مانده: {parseFloat(invoice.remainingAmount).toLocaleString('fa-IR')} تومان
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+            <FileText size={20} color="#3b82f6" />
+            <p style={{ fontSize: '20px', fontWeight: 'bold', color: 'white' }}>
+              {invoice.invoiceNumber}
             </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.9 }}>
+            <Calendar size={14} />
+            <span>تاریخ: {invoice.issueDate}</span>
+          </div>
+          {invoice.dueDate && (
+            <div style={{ fontSize: '13px', opacity: 0.8, marginTop: '4px' }}>
+              سررسید: {invoice.dueDate}
+            </div>
           )}
-          <p style={{ 
-            fontSize: '12px', 
-            padding: '4px 8px', 
-            borderRadius: '4px',
-            background: invoice.status === 'paid' ? '#059669' : 
-                       invoice.status === 'partial' ? '#ea580c' : '#dc2626',
-            color: 'white',
-            display: 'inline-block',
-            marginTop: '4px'
-          }}>
-            {invoice.status === 'paid' ? '✓ تسویه شده' : 
-             invoice.status === 'partial' ? '◐ تسویه جزئی' : '✗ تسویه نشده'}
+        </div>
+        
+        <div style={{ textAlign: 'left' }}>
+          <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981', marginBottom: '8px' }}>
+            {parseFloat(String(invoice.amount || '0')).toLocaleString('fa-IR')} <span style={{ fontSize: '16px' }}>تومان</span>
           </p>
+          {getStatusBadge(invoice.status)}
+          {invoice.remainingAmount && parseFloat(invoice.remainingAmount) > 0 && (
+            <div style={{ 
+              fontSize: '12px', 
+              marginTop: '8px', 
+              padding: '4px 8px', 
+              background: 'rgba(239, 68, 68, 0.2)',
+              borderRadius: '4px',
+              color: '#fca5a5'
+            }}>
+              مانده: {parseFloat(invoice.remainingAmount).toLocaleString('fa-IR')} تومان
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Toggle Button for Usage Details - Enhanced for Manual Invoices */}
-      {(invoice.usageData && (invoice.usageData.records || invoice.usageData.type === 'manual')) && (
+  {/* Toggle Details Button */}
+  {usageSectionEnabled && invoice.usageData && (invoice.usageData.records || invoice.usageData.type === 'manual') && (
         <button 
-          onClick={toggleUsageDetails}
+          onClick={() => setShowDetails(!showDetails)}
           style={{
-            background: 'linear-gradient(135deg, #1e40af, #3730a3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            width: '100%',
+            background: showDetails ? 'linear-gradient(135deg, #7c3aed, #6d28d9)' : 'linear-gradient(135deg, #1e40af, #3730a3)',
             color: 'white',
             border: 'none',
-            padding: '8px 16px',
-            borderRadius: '6px',
-            fontSize: '12px',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: 'bold',
             cursor: 'pointer',
-            marginBottom: showUsageDetails ? '15px' : '0'
+            transition: 'all 0.2s'
           }}
         >
-          {showUsageDetails ? 'پنهان کردن جزئیات' : 
-           (invoice.usageData.type === 'manual' ? 'نمایش جزئیات فاکتور دستی' : 'نمایش ریز جزئیات مصرف')}
+          {showDetails ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          {showDetails ? 'پنهان کردن جزئیات' : 
+           (invoice.usageData.type === 'manual' ? 'نمایش جزئیات فاکتور' : 'نمایش ریز مصرف')}
         </button>
       )}
 
-      {/* Usage Details Panel - Enhanced for Both Automatic and Manual Invoices */}
-      {showUsageDetails && invoice.usageData && (
-        <div>
-          {/* Automatic Invoice Details (JSON-based with records) */}
+      {/* Usage Details */}
+  {showDetails && usageSectionEnabled && invoice.usageData && (
+        <div style={{
+          marginTop: '15px',
+          padding: '15px',
+          background: 'rgba(15, 23, 42, 0.5)',
+          borderRadius: '8px',
+          border: '1px solid rgba(148, 163, 184, 0.3)'
+        }}>
           {invoice.usageData.records && (
-            <div style={{
-              background: '#1f2937',
-              padding: '15px',
-              borderRadius: '8px',
-              border: '1px solid #374151',
-              marginTop: '10px'
-            }}>
+            <>
               <h5 style={{ 
-                fontSize: '14px', 
+                fontSize: '15px', 
                 fontWeight: 'bold', 
                 marginBottom: '12px',
-                color: '#93c5fd'
+                color: '#93c5fd',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}>
-                ریز جزئیات مصرف دوره (فاکتور خودکار)
+                <Info size={16} />
+                ریز جزئیات مصرف ({invoice.usageData.records.length} رکورد)
               </h5>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {invoice.usageData.records.map((record: any, idx: number) => (
                   <div key={idx} style={{
-                    background: '#374151',
-                    padding: '10px',
+                    background: 'rgba(51, 65, 85, 0.6)',
+                    padding: '12px',
                     borderRadius: '6px',
-                    border: '1px solid #4b5563'
+                    border: '1px solid rgba(100, 116, 139, 0.4)'
                   }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '12px' }}>
+                    <div style={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: '1fr 1fr', 
+                      gap: '12px', 
+                      fontSize: '13px' 
+                    }}>
                       <div>
-                        <p style={{ color: '#d1d5db', marginBottom: '4px' }}>
-                          <strong>نوع رویداد:</strong> {record.event_type || 'نامشخص'}
-                        </p>
-                        <p style={{ color: '#d1d5db', marginBottom: '4px' }}>
-                          <strong>زمان:</strong> {record.event_timestamp || 'نامشخص'}
-                        </p>
+                        {showEventType && (
+                          <p style={{ color: '#e2e8f0', marginBottom: '6px' }}>
+                            <strong>نوع:</strong> {record.event_type || 'نامشخص'}
+                          </p>
+                        )}
+                        {showEventTimestamp && (
+                          <p style={{ color: '#cbd5e1', fontSize: '12px' }}>
+                            <strong>زمان:</strong> {record.event_timestamp || '-'}
+                          </p>
+                        )}
                       </div>
-                      <div>
-                        <p style={{ color: '#d1d5db', marginBottom: '4px' }}>
-                          <strong>مبلغ:</strong> {record.amount ? parseFloat(record.amount).toLocaleString('fa-IR') : '0'} تومان
-                        </p>
-                        <p style={{ color: '#d1d5db', marginBottom: '4px' }}>
-                          <strong>کاربر ادمین:</strong> {record.admin_username || 'نامشخص'}
-                        </p>
+                      <div style={{ textAlign: 'left' }}>
+                        {record.amount && (
+                          <p style={{ color: '#10b981', marginBottom: '6px', fontWeight: 'bold' }}>
+                            {parseFloat(record.amount).toLocaleString('fa-IR')} تومان
+                          </p>
+                        )}
+                        {showAdminUsername && (
+                          <p style={{ color: '#cbd5e1', fontSize: '12px' }}>
+                            <strong>کاربر:</strong> {record.admin_username || '-'}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    {record.description && (
-                      <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #4b5563' }}>
-                        <p style={{ color: '#9ca3af', fontSize: '11px' }}>
-                          <strong>توضیحات:</strong> {record.description}
-                        </p>
-                      </div>
+                    {showDescription && record.description && (
+                      <p style={{ 
+                        marginTop: '8px', 
+                        paddingTop: '8px', 
+                        borderTop: '1px solid rgba(148, 163, 184, 0.2)',
+                        color: '#94a3b8', 
+                        fontSize: '12px',
+                        lineHeight: '1.4'
+                      }}>
+                        {record.description}
+                      </p>
                     )}
                   </div>
                 ))}
               </div>
-              
-              {/* Summary */}
-              <div style={{
-                marginTop: '12px',
-                padding: '10px',
-                background: '#065f46',
-                borderRadius: '6px',
-                border: '1px solid #047857'
-              }}>
-                <p style={{ fontSize: '12px', color: '#d1fae5' }}>
-                  <strong>خلاصه:</strong> تعداد رکوردها: {invoice.usageData.records.length} | 
-                  مجموع مبلغ: {parseFloat(invoice.amount).toLocaleString('fa-IR')} تومان
-                </p>
-              </div>
-            </div>
+            </>
           )}
-          
-          {/* Manual Invoice Details (Hand-created invoices) */}
+
           {invoice.usageData.type === 'manual' && (
-            <div style={{
-              background: '#1f2937',
-              padding: '15px',
-              borderRadius: '8px',
-              border: '1px solid #374151',
-              marginTop: '10px'
-            }}>
+            <>
               <h5 style={{ 
-                fontSize: '14px', 
+                fontSize: '15px', 
                 fontWeight: 'bold', 
                 marginBottom: '12px',
-                color: '#f59e0b'
+                color: '#fbbf24',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}>
-                جزئیات فاکتور دستی
+                <FileText size={16} />
+                فاکتور دستی
               </h5>
               
               <div style={{
-                background: '#374151',
+                background: 'rgba(217, 119, 6, 0.1)',
                 padding: '12px',
                 borderRadius: '6px',
-                border: '1px solid #4b5563'
+                border: '1px solid rgba(251, 191, 36, 0.3)'
               }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
-                  <div>
-                    <p style={{ color: '#d1d5db', marginBottom: '6px' }}>
-                      <strong>نوع فاکتور:</strong> <span style={{ color: '#fbbf24' }}>دستی</span>
-                    </p>
-                    <p style={{ color: '#d1d5db', marginBottom: '6px' }}>
-                      <strong>ایجاد شده توسط:</strong> {invoice.usageData.createdBy || 'مدیر سیستم'}
-                    </p>
-                  </div>
-                  <div>
-                    <p style={{ color: '#d1d5db', marginBottom: '6px' }}>
-                      <strong>مبلغ کل:</strong> {parseFloat(invoice.amount).toLocaleString('fa-IR')} تومان
-                    </p>
-                    <p style={{ color: '#d1d5db', marginBottom: '6px' }}>
-                      <strong>تاریخ ایجاد:</strong> {invoice.usageData.createdAt ? 
-                        new Date(invoice.usageData.createdAt).toLocaleDateString('fa-IR') : 
-                        invoice.issueDate}
-                    </p>
-                  </div>
-                </div>
-                
-                {invoice.usageData.description && (
-                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #4b5563' }}>
-                    <p style={{ color: '#9ca3af', fontSize: '12px', lineHeight: '1.5' }}>
+                <div style={{ fontSize: '13px' }}>
+                  <p style={{ color: '#e2e8f0', marginBottom: '8px' }}>
+                    <strong>ایجاد شده توسط:</strong> {invoice.usageData.createdBy || 'مدیر سیستم'}
+                  </p>
+                  {showDescription && invoice.usageData.description && (
+                    <p style={{ 
+                      color: '#cbd5e1', 
+                      marginTop: '10px',
+                      paddingTop: '10px',
+                      borderTop: '1px solid rgba(251, 191, 36, 0.2)',
+                      lineHeight: '1.5'
+                    }}>
                       <strong>توضیحات:</strong> {invoice.usageData.description}
                     </p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-              
-              {/* Summary for Manual Invoice */}
-              <div style={{
-                marginTop: '12px',
-                padding: '10px',
-                background: '#d97706',
-                borderRadius: '6px',
-                border: '1px solid #f59e0b'
-              }}>
-                <p style={{ fontSize: '12px', color: '#fef3c7' }}>
-                  <strong>خلاصه:</strong> فاکتور دستی | 
-                  مبلغ: {parseFloat(invoice.amount).toLocaleString('fa-IR')} تومان | 
-                  وضعیت: {invoice.status === 'paid' ? 'پرداخت شده' : 'پرداخت نشده'}
-                </p>
-              </div>
-            </div>
+            </>
           )}
         </div>
       )}
@@ -273,40 +368,46 @@ function InvoiceCard({ invoice }: { invoice: Invoice }) {
   );
 }
 
-export default function Portal() {
+// ==================== MAIN PORTAL COMPONENT ====================
+
+export default function PublicPortal() {
   const { publicId } = useParams<{ publicId: string }>();
 
   const { data, isLoading, error } = useQuery<PortalData>({
     queryKey: [`/api/public/portal/${publicId}`],
-    queryFn: getQueryFn(`/api/public/portal/${publicId}`),
+    queryFn: async () => {
+      const response = await apiRequest(`/api/public/portal/${publicId}`);
+      return response;
+    },
     enabled: !!publicId,
   });
 
-  console.log('=== SHERLOCK v32.1 PORTAL DEBUG ===');
-  console.log('publicId:', publicId);
-  console.log('Current location:', window.location.pathname);
-  console.log('data:', data);
-  console.log('isLoading:', isLoading);
-  console.log('error:', error);
-  
-  // ✅ SHERLOCK v32.1: اضافه کردن validation برای publicId
-  if (!publicId || publicId.trim() === '') {
-    console.error('❌ SHERLOCK v32.1: publicId خالی یا نامعتبر است');
-    return (
-      <div style={{ 
-        minHeight: '100vh', 
-        background: 'linear-gradient(135deg, #7f1d1d, #991b1b)', 
-        color: 'white', 
-        padding: '40px',
-        fontFamily: 'sans-serif',
-        direction: 'rtl'
-      }}>
-        <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>شناسه پورتال نامعتبر!</h1>
-        <p>شناسه پورتال ارائه نشده است. لطفاً لینک صحیح پورتال را استفاده کنید.</p>
-      </div>
-    );
-  }
+  const customCss = data?.portalConfig?.customCss?.trim();
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const styleId = 'portal-custom-css';
+    let styleEl = document.getElementById(styleId) as HTMLStyleElement | null;
+
+    if (customCss) {
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        document.head.appendChild(styleEl);
+      }
+      styleEl.textContent = customCss;
+
+      return () => {
+        styleEl?.remove();
+      };
+    }
+
+    if (styleEl) {
+      styleEl.remove();
+    }
+  }, [customCss]);
+
+  // ===== LOADING STATE =====
   if (isLoading) {
     return (
       <div style={{ 
@@ -314,82 +415,31 @@ export default function Portal() {
         background: 'linear-gradient(135deg, #1e293b, #334155, #475569)', 
         color: 'white', 
         padding: '40px',
-        fontFamily: 'sans-serif',
-        direction: 'rtl'
+        fontFamily: 'Tahoma, sans-serif',
+        direction: 'rtl',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}>
-        <h1 style={{ fontSize: '24px', marginBottom: '20px' }}>در حال بارگذاری...</h1>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ 
+            width: '60px', 
+            height: '60px', 
+            border: '4px solid rgba(59, 130, 246, 0.3)', 
+            borderTop: '4px solid #3b82f6',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 20px'
+          }} />
+          <h2 style={{ fontSize: '24px', fontWeight: 'bold' }}>در حال بارگذاری پورتال...</h2>
+        </div>
+        <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
+  // ===== ERROR STATE =====
   if (error || !data) {
-    console.error('=== SHERLOCK v32.1 PORTAL ERROR DETAILS ===');
-    console.error('Error object:', error);
-    console.error('Data object:', data);
-    console.error('PublicId:', publicId);
-    console.error('Current URL:', window.location.href);
-
-    // تشخیص نوع خطا - Enhanced for TanStack Query error format  
-    const responseError = (error as any)?.response || (error as any)?.cause?.response;
-    const isQueryFnError = error?.message?.includes('Missing queryFn');
-    const isNotFound = responseError?.status === 404 || 
-                      error?.message?.includes('404') ||
-                      (!data && !error && !isQueryFnError);
-    
-    const isServerError = responseError?.status >= 500;
-    const isNetworkError = error?.message?.includes('Network') || 
-                          error?.message?.includes('fetch') ||
-                          error?.message?.includes('NetworkError');
-    
-    // خطای خاص queryFn
-    if (isQueryFnError) {
-      return (
-        <div style={{ 
-          minHeight: '100vh', 
-          background: 'linear-gradient(135deg, #7f1d1d, #991b1b)', 
-          color: 'white', 
-          padding: '40px',
-          fontFamily: 'Tahoma, sans-serif',
-          direction: 'rtl',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <div style={{ 
-            background: 'rgba(255, 255, 255, 0.1)', 
-            padding: '40px', 
-            borderRadius: '15px',
-            maxWidth: '600px',
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: '64px', marginBottom: '20px' }}>🔧</div>
-            <h1 style={{ fontSize: '28px', marginBottom: '20px', fontWeight: 'bold' }}>
-              خطای تنظیمات Query!
-            </h1>
-            <p style={{ fontSize: '16px', marginBottom: '15px', lineHeight: '1.6' }}>
-              مشکل در تنظیمات درخواست API. لطفاً صفحه را مجدداً بارگذاری کنید.
-            </p>
-            <button 
-              onClick={() => window.location.reload()} 
-              style={{
-                background: 'linear-gradient(135deg, #1e40af, #3730a3)',
-                color: 'white',
-                border: 'none',
-                padding: '12px 24px',
-                borderRadius: '8px',
-                fontSize: '16px',
-                cursor: 'pointer',
-                marginTop: '10px'
-              }}
-            >
-              🔄 بارگذاری مجدد
-            </button>
-          </div>
-        </div>
-      );
-    }
-
     return (
       <div style={{ 
         minHeight: '100vh', 
@@ -399,7 +449,6 @@ export default function Portal() {
         fontFamily: 'Tahoma, sans-serif',
         direction: 'rtl',
         display: 'flex',
-        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center'
       }}>
@@ -411,63 +460,12 @@ export default function Portal() {
           textAlign: 'center'
         }}>
           <div style={{ fontSize: '64px', marginBottom: '20px' }}>⚠️</div>
-          
-          {isNotFound && (
-            <>
-              <h1 style={{ fontSize: '28px', marginBottom: '20px', fontWeight: 'bold' }}>
-                پرتال نماینده یافت نشد!
-              </h1>
-              <p style={{ fontSize: '16px', marginBottom: '15px', lineHeight: '1.6' }}>
-                شناسه پرتال "{publicId}" در سیستم موجود نیست.
-              </p>
-              <p style={{ fontSize: '14px', opacity: 0.8, marginBottom: '20px' }}>
-                لطفاً لینک صحیح پرتال را از مدیر سیستم دریافت کنید.
-              </p>
-            </>
-          )}
-
-          {isServerError && (
-            <>
-              <h1 style={{ fontSize: '28px', marginBottom: '20px', fontWeight: 'bold' }}>
-                خطای سرور!
-              </h1>
-              <p style={{ fontSize: '16px', marginBottom: '15px', lineHeight: '1.6' }}>
-                مشکلی در سرور به وجود آمده است.
-              </p>
-              <p style={{ fontSize: '14px', opacity: 0.8, marginBottom: '20px' }}>
-                لطفاً چند دقیقه دیگر مجدداً تلاش کنید.
-              </p>
-            </>
-          )}
-
-          {isNetworkError && (
-            <>
-              <h1 style={{ fontSize: '28px', marginBottom: '20px', fontWeight: 'bold' }}>
-                مشکل اتصال اینترنت!
-              </h1>
-              <p style={{ fontSize: '16px', marginBottom: '15px', lineHeight: '1.6' }}>
-                اتصال اینترنت شما قطع شده است.
-              </p>
-              <p style={{ fontSize: '14px', opacity: 0.8, marginBottom: '20px' }}>
-                لطفاً اتصال اینترنت خود را بررسی کنید.
-              </p>
-            </>
-          )}
-
-          {!isNotFound && !isServerError && !isNetworkError && (
-            <>
-              <h1 style={{ fontSize: '28px', marginBottom: '20px', fontWeight: 'bold' }}>
-                خطا در بارگذاری اطلاعات!
-              </h1>
-              <p style={{ fontSize: '16px', marginBottom: '15px', lineHeight: '1.6' }}>
-                امکان دریافت اطلاعات پرتال وجود ندارد.
-              </p>
-              <p style={{ fontSize: '14px', opacity: 0.8, marginBottom: '20px' }}>
-                لطفاً صفحه را مجدداً بارگذاری کنید.
-              </p>
-            </>
-          )}
-
+          <h1 style={{ fontSize: '28px', marginBottom: '20px', fontWeight: 'bold' }}>
+            خطا در بارگذاری پورتال!
+          </h1>
+          <p style={{ fontSize: '16px', marginBottom: '15px', lineHeight: '1.6' }}>
+            شناسه پورتال "{publicId}" یافت نشد یا خطایی رخ داده است.
+          </p>
           <button 
             onClick={() => window.location.reload()} 
             style={{
@@ -477,243 +475,376 @@ export default function Portal() {
               padding: '12px 24px',
               borderRadius: '8px',
               fontSize: '16px',
+              fontWeight: 'bold',
               cursor: 'pointer',
               marginTop: '10px'
             }}
           >
-            🔄 بارگذاری مجدد
+            🔄 تلاش مجدد
           </button>
-
-          {process.env.NODE_ENV === 'development' && (
-            <details style={{ marginTop: '30px', textAlign: 'left', fontSize: '12px' }}>
-              <summary style={{ cursor: 'pointer', marginBottom: '10px' }}>جزئیات فنی (فقط در حالت توسعه)</summary>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '15px', borderRadius: '5px' }}>
-                <p><strong>Public ID:</strong> {publicId}</p>
-                <p><strong>URL:</strong> {window.location.href}</p>
-                <p><strong>Error Message:</strong> {error?.message || 'No error message'}</p>
-                <p><strong>Response Status:</strong> {responseError?.status || 'No status'}</p>
-                <p><strong>Response Data:</strong> {JSON.stringify(responseError?.data || 'No response data', null, 2)}</p>
-                <p><strong>Full Error Object:</strong> {JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}</p>
-                <p><strong>Data Object:</strong> {JSON.stringify(data, null, 2)}</p>
-              </div>
-            </details>
-          )}
         </div>
       </div>
     );
   }
 
-  // ✅ SHERLOCK v32.1: اتصال به سیستم مالی استاندارد - محاسبات Real-time
-  let totalSales: number, totalDebt: number, credit: number, invoices: Invoice[], payments: Payment[];
-  
-  try {
-    console.log('🔍 Portal data received:', data);
-    console.log('🔍 Financial meta from standardized engine:', data.financialMeta);
-    
-    // ✅ اولویت با سیستم مالی استاندارد (Unified Financial Engine)
-    if (data.financialMeta && data.financialMeta.accuracyGuaranteed) {
-      console.log('🎯 Using STANDARDIZED financial data from Unified Engine');
-      totalSales = parseFloat(String(data.totalSales || '0'));
-      totalDebt = parseFloat(String(data.totalDebt || '0'));
-    } else {
-      console.log('⚠️ Fallback to basic data extraction');
-      totalSales = parseFloat(String(data.totalSales || '0'));
-      totalDebt = parseFloat(String(data.totalDebt || '0'));
-    }
-    
-    credit = parseFloat(String(data.credit || '0'));
-    invoices = Array.isArray(data.invoices) ? data.invoices : [];
-    payments = Array.isArray(data.payments) ? data.payments : [];
-    
-    // Validate numeric values
-    if (isNaN(totalSales)) totalSales = 0;
-    if (isNaN(totalDebt)) totalDebt = 0;
-    if (isNaN(credit)) credit = 0;
-    
-    console.log('✅ Portal final values:', {
-      totalSales: totalSales.toLocaleString(),
-      totalDebt: totalDebt.toLocaleString(),
-      credit: credit.toLocaleString(),
-      invoicesCount: invoices.length,
-      paymentsCount: payments.length
-    });
-    
-  } catch (error) {
-    console.error('❌ Portal data extraction error:', error);
-    totalSales = 0;
-    totalDebt = 0;
-    credit = 0;
-    invoices = [];
-    payments = [];
-  }
-  
-  // ✅ SHERLOCK v32.1: استفاده از مقادیر محاسبه شده از سرور
-  const actualTotalDebt = totalDebt;
+  // ===== CALCULATE FINANCIAL DATA =====
+  let totalSales: number, totalDebt: number, credit: number;
 
+  if (data.financialMeta && data.financialMeta.accuracyGuaranteed) {
+    totalSales = data.financialMeta.totalSales || parseFloat(String(data.totalSales || '0'));
+    totalDebt = data.financialMeta.actualDebt || data.financialMeta.totalDebt || parseFloat(String(data.totalDebt || '0'));
+  } else {
+    const invoiceSum = data.invoices.reduce((sum, inv) => sum + parseFloat(inv.amount || '0'), 0);
+    const paymentSum = data.payments.reduce((sum, pay) => sum + parseFloat(pay.amount || '0'), 0);
+    totalSales = invoiceSum || parseFloat(String(data.totalSales || '0'));
+    totalDebt = Math.max(0, invoiceSum - paymentSum) || parseFloat(String(data.totalDebt || '0'));
+  }
+
+  credit = parseFloat(String(data.credit || '0'));
+
+  const showOwnerCard = data.portalConfig?.showOwnerName !== false && !!data.ownerName;
+
+  // ===== MAIN PORTAL UI =====
   return (
     <div style={{ 
       minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #1e293b, #334155, #475569)', 
+      background: 'linear-gradient(135deg, #0f172a, #1e293b, #334155)', 
       color: 'white', 
       padding: '20px',
       fontFamily: 'Tahoma, sans-serif',
       direction: 'rtl'
     }}>
-      {/* Header */}
-      <div style={{ 
-        background: 'linear-gradient(135deg, #1e40af, #3730a3)', 
-        padding: '30px', 
-        borderRadius: '15px',
-        marginBottom: '30px',
-        border: '2px solid #3b82f6'
-      }}>
-        <h1 style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '10px' }}>
-          پرتال عمومی نماینده
-        </h1>
-        <h2 style={{ fontSize: '24px', color: '#93c5fd', marginBottom: '10px' }}>
-          {data.name}
-        </h2>
-        <p style={{ fontSize: '16px', color: '#dbeafe' }}>
-          شناسه پنل: {data.panelUsername}
-        </p>
-        {data.financialMeta?.accuracyGuaranteed && (
-          <p style={{ fontSize: '12px', color: '#a7f3d0', marginTop: '8px' }}>
-            ✅ داده‌های مالی با دقت Real-time محاسبه شده
-            {data.financialMeta.lastCalculation && (
-              <span style={{ marginLeft: '8px' }}>
-                ({new Date(data.financialMeta.lastCalculation).toLocaleString('fa-IR')})
-              </span>
-            )}
-          </p>
-        )}
-      </div>
-
-      {/* Financial Overview - Simple Cards */}
-      <div style={{ marginBottom: '40px' }}>
-        <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px' }}>
-          ۱. موجودی مالی و وضعیت حساب
-        </h3>
+      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+        
+        {/* ===== 1. HEADER - اطلاعات هویتی ===== */}
         <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', 
-          gap: '20px' 
+          background: 'linear-gradient(135deg, #1e40af, #1d4ed8, #2563eb)', 
+          padding: '30px', 
+          borderRadius: '16px',
+          marginBottom: '30px',
+          border: '2px solid #3b82f6',
+          boxShadow: '0 8px 16px rgba(0,0,0,0.3)'
         }}>
-          {/* Total Debt - Calculated from unpaid invoices minus payments */}
-          <div style={{ 
-            background: 'linear-gradient(135deg, #dc2626, #b91c1c)', 
-            padding: '20px', 
-            borderRadius: '10px',
-            border: '2px solid #ef4444'
-          }}>
-            <p style={{ fontSize: '14px', marginBottom: '10px', opacity: 0.9 }}>بدهی کل</p>
-            <p style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '5px' }}>
-              {actualTotalDebt.toLocaleString('fa-IR')} تومان
-            </p>
-            <p style={{ fontSize: '12px', opacity: 0.8 }}>
-              فاکتورهای پرداخت نشده منهای پرداخت‌ها
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
+            <User size={32} color="#dbeafe" />
+            <h1 style={{ fontSize: '32px', fontWeight: 'bold', margin: 0 }}>
+              پورتال عمومی نماینده
+            </h1>
           </div>
-
-          {/* Total Sales */}
+          
           <div style={{ 
-            background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', 
-            padding: '20px', 
-            borderRadius: '10px',
-            border: '2px solid #3b82f6'
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+            gap: '15px',
+            marginTop: '20px'
           }}>
-            <p style={{ fontSize: '14px', marginBottom: '10px', opacity: 0.9 }}>فروش کل</p>
-            <p style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '5px' }}>
-              {totalSales.toLocaleString('fa-IR')} تومان
-            </p>
-            <p style={{ fontSize: '12px', opacity: 0.8 }}>
-              مجموع فروش ثبت شده
-            </p>
-          </div>
-
-          {/* Credit Balance (if exists) */}
-          {credit > 0 && (
             <div style={{ 
-              background: 'linear-gradient(135deg, #059669, #047857)', 
-              padding: '20px', 
+              background: 'rgba(255, 255, 255, 0.1)', 
+              padding: '15px', 
               borderRadius: '10px',
-              border: '2px solid #10b981'
+              border: '1px solid rgba(219, 234, 254, 0.3)'
             }}>
-              <p style={{ fontSize: '14px', marginBottom: '10px', opacity: 0.9 }}>پرداختی</p>
-              <p style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '5px' }}>
-                {credit.toLocaleString('fa-IR')} تومان
+              <p style={{ fontSize: '13px', color: '#bfdbfe', marginBottom: '6px' }}>نام فروشگاه</p>
+              <p style={{ fontSize: '20px', fontWeight: 'bold', color: 'white' }}>{data.name}</p>
+            </div>
+
+            {showOwnerCard && (
+              <div style={{ 
+                background: 'rgba(255, 255, 255, 0.1)', 
+                padding: '15px', 
+                borderRadius: '10px',
+                border: '1px solid rgba(219, 234, 254, 0.3)'
+              }}>
+                <p style={{ fontSize: '13px', color: '#bfdbfe', marginBottom: '6px' }}>نام مالک</p>
+                <p style={{ fontSize: '20px', fontWeight: 'bold', color: 'white' }}>{data.ownerName}</p>
+              </div>
+            )}
+
+            {/* ✅ NEW: پیام راهنمای دانلود (جایگزین code و panelUsername) */}
+            <div style={{ 
+              background: 'rgba(16, 185, 129, 0.15)', 
+              padding: '15px', 
+              borderRadius: '10px',
+              border: '1px solid rgba(52, 211, 153, 0.4)',
+              gridColumn: showOwnerCard ? 'auto' : 'span 2'
+            }}>
+              <p style={{ fontSize: '14px', color: '#6ee7b7', lineHeight: '1.6', margin: 0 }}>
+                {data.portalConfig?.headerMessage || 'برای دریافت جدیدترین نسخه نرم‌افزارهای توصیه شده، لطفاً به انتهای پورتال مراجعه فرمایید 📥'}
               </p>
-              <p style={{ fontSize: '12px', opacity: 0.8 }}>
-                اضافه پرداخت شما
+            </div>
+          </div>
+
+          {data.financialMeta?.accuracyGuaranteed && (
+            <div style={{ 
+              marginTop: '20px', 
+              padding: '12px 16px', 
+              background: 'rgba(16, 185, 129, 0.15)',
+              borderRadius: '8px',
+              border: '1px solid rgba(52, 211, 153, 0.3)',
+              display: 'inline-block'
+            }}>
+              <p style={{ fontSize: '13px', color: '#6ee7b7', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle size={16} />
+                داده‌های مالی با دقت Real-time محاسبه شده
+                {data.financialMeta.lastCalculation && (
+                  <span style={{ opacity: 0.8 }}>
+                    ({new Date(data.financialMeta.lastCalculation).toLocaleString('fa-IR')})
+                  </span>
+                )}
               </p>
             </div>
           )}
         </div>
-      </div>
 
-      {/* Invoices Section */}
-      <div style={{ marginBottom: '40px' }}>
-        <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px' }}>
-          ۲. فاکتورها (قدیمی‌ترین ابتدا - FIFO)
-        </h3>
-        <div style={{ 
-          background: '#334155', 
-          padding: '20px', 
-          borderRadius: '10px',
-          border: '2px solid #475569'
-        }}>
-          {invoices.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              {invoices.map((invoice: Invoice, index: number) => (
-                <InvoiceCard key={index} invoice={invoice} />
-              ))}
+        {/* ===== 2. FINANCIAL SUMMARY - خلاصه مالی ===== */}
+        <div style={{ marginBottom: '40px' }}>
+          <h3 style={{ 
+            fontSize: '24px', 
+            fontWeight: 'bold', 
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <DollarSign size={28} color="#10b981" />
+            موجودی مالی و وضعیت حساب
+          </h3>
+          
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
+            gap: '20px' 
+          }}>
+            {/* Total Debt */}
+            <div style={{ 
+              background: 'linear-gradient(135deg, #dc2626, #b91c1c)', 
+              padding: '24px', 
+              borderRadius: '12px',
+              border: '2px solid #ef4444',
+              boxShadow: '0 4px 6px rgba(220, 38, 38, 0.3)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <div style={{ position: 'absolute', top: '10px', right: '10px', opacity: 0.2 }}>
+                <TrendingDown size={60} />
+              </div>
+              <p style={{ fontSize: '15px', marginBottom: '12px', opacity: 0.9 }}>بدهی کل</p>
+              <p style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '8px', zIndex: 1, position: 'relative' }}>
+                {totalDebt.toLocaleString('fa-IR')}
+              </p>
+              <p style={{ fontSize: '14px', opacity: 0.8 }}>تومان</p>
             </div>
-          ) : (
-            <p style={{ textAlign: 'center', fontSize: '18px', opacity: 0.7 }}>
-              فاکتوری یافت نشد
-            </p>
-          )}
-        </div>
-      </div>
 
-      {/* Payments Section */}
-      <div style={{ marginBottom: '40px' }}>
-        <h3 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px' }}>
-          ۳. تاریخچه پرداخت‌ها ({payments.length} پرداخت)
-        </h3>
-        <div style={{ 
-          background: '#334155', 
-          padding: '20px', 
-          borderRadius: '10px',
-          border: '2px solid #475569'
-        }}>
-          {payments.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              {payments.map((payment: Payment, index: number) => (
-                <div key={index} style={{ 
-                  background: 'linear-gradient(135deg, #059669, #047857)', 
-                  padding: '15px', 
-                  borderRadius: '8px',
-                  border: '1px solid #10b981'
-                }}>
-                  <p style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                    {parseFloat(payment.amount).toLocaleString('fa-IR')} تومان
-                  </p>
-                  <p style={{ fontSize: '14px', opacity: 0.9 }}>
-                    تاریخ: {payment.paymentDate}
-                  </p>
-                  {payment.description && (
-                    <p style={{ fontSize: '12px', opacity: 0.8 }}>
-                      {payment.description}
-                    </p>
-                  )}
+            {/* Total Sales */}
+            <div style={{ 
+              background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', 
+              padding: '24px', 
+              borderRadius: '12px',
+              border: '2px solid #3b82f6',
+              boxShadow: '0 4px 6px rgba(37, 99, 235, 0.3)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <div style={{ position: 'absolute', top: '10px', right: '10px', opacity: 0.2 }}>
+                <TrendingUp size={60} />
+              </div>
+              <p style={{ fontSize: '15px', marginBottom: '12px', opacity: 0.9 }}>فروش کل</p>
+              <p style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '8px', zIndex: 1, position: 'relative' }}>
+                {totalSales.toLocaleString('fa-IR')}
+              </p>
+              <p style={{ fontSize: '14px', opacity: 0.8 }}>تومان</p>
+            </div>
+
+            {/* Credit */}
+            {credit > 0 && (
+              <div style={{ 
+                background: 'linear-gradient(135deg, #059669, #047857)', 
+                padding: '24px', 
+                borderRadius: '12px',
+                border: '2px solid #10b981',
+                boxShadow: '0 4px 6px rgba(5, 150, 105, 0.3)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                <div style={{ position: 'absolute', top: '10px', right: '10px', opacity: 0.2 }}>
+                  <CreditCard size={60} />
                 </div>
-              ))}
+                <p style={{ fontSize: '15px', marginBottom: '12px', opacity: 0.9 }}>اعتبار</p>
+                <p style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '8px', zIndex: 1, position: 'relative' }}>
+                  {credit.toLocaleString('fa-IR')}
+                </p>
+                <p style={{ fontSize: '14px', opacity: 0.8 }}>تومان</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ===== 3. INVOICES - فاکتورها FIFO ===== */}
+        <div style={{ marginBottom: '40px' }}>
+          <h3 style={{ 
+            fontSize: '24px', 
+            fontWeight: 'bold', 
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <FileText size={28} color="#3b82f6" />
+            فاکتورها (قدیمی‌ترین ابتدا - FIFO)
+          </h3>
+          
+          <div style={{ 
+            background: 'rgba(51, 65, 85, 0.4)', 
+            padding: '24px', 
+            borderRadius: '12px',
+            border: '2px solid #475569'
+          }}>
+            {data.invoices && data.invoices.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {data.invoices.map((invoice: Invoice) => (
+                  <InvoiceCard key={invoice.id} invoice={invoice} config={data.portalConfig} />
+                ))}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Info size={48} color="#64748b" style={{ marginBottom: '16px' }} />
+                <p style={{ fontSize: '18px', opacity: 0.7 }}>فاکتوری یافت نشد</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ===== 4. PAYMENTS - تاریخچه پرداخت‌ها ===== */}
+        <div style={{ marginBottom: '40px' }}>
+          <h3 style={{ 
+            fontSize: '24px', 
+            fontWeight: 'bold', 
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <CreditCard size={28} color="#10b981" />
+            تاریخچه پرداخت‌ها ({data.payments.length} پرداخت)
+          </h3>
+          
+          <div style={{ 
+            background: 'rgba(51, 65, 85, 0.4)', 
+            padding: '24px', 
+            borderRadius: '12px',
+            border: '2px solid #475569'
+          }}>
+            {data.payments && data.payments.length > 0 ? (
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+                gap: '15px' 
+              }}>
+                {data.payments.map((payment: Payment, index: number) => (
+                  <div key={index} style={{ 
+                    background: 'linear-gradient(135deg, #059669, #047857)', 
+                    padding: '18px', 
+                    borderRadius: '10px',
+                    border: '2px solid #10b981',
+                    boxShadow: '0 4px 6px rgba(5, 150, 105, 0.2)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                      <CheckCircle size={20} />
+                      <p style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                        {parseFloat(payment.amount).toLocaleString('fa-IR')} تومان
+                      </p>
+                    </div>
+                    <div style={{ fontSize: '14px', opacity: 0.9, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Calendar size={14} />
+                      <span>تاریخ: {payment.paymentDate}</span>
+                    </div>
+                    {payment.description && (
+                      <p style={{ fontSize: '13px', opacity: 0.8, marginTop: '8px', lineHeight: '1.4' }}>
+                        {payment.description}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Info size={48} color="#64748b" style={{ marginBottom: '16px' }} />
+                <p style={{ fontSize: '18px', opacity: 0.7 }}>پرداختی یافت نشد</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ===== 5. DOWNLOADS & ANNOUNCEMENTS - دانلود اپ‌ها و اعلانات ===== */}
+        {publicId && (
+          <div style={{ marginBottom: '40px' }}>
+            <h3 style={{ 
+              fontSize: '24px', 
+              fontWeight: 'bold', 
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <Bell size={28} color="#f59e0b" />
+              {data.portalConfig?.announcementsTitle || '📢 اعلانات و دانلودها'}
+            </h3>
+            <PortalResources publicId={publicId} downloadsIntro={data.portalConfig?.downloadsIntro} />
+          </div>
+        )}
+
+        {/* ===== 6. HELP & GUIDANCE - راهنمایی ===== */}
+        <div style={{ 
+          background: 'linear-gradient(135deg, #0f766e, #0d9488)', 
+          padding: '24px', 
+          borderRadius: '12px',
+          border: '2px solid #14b8a6',
+          marginBottom: '40px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+            <HelpCircle size={28} />
+            <h3 style={{ fontSize: '22px', fontWeight: 'bold', margin: 0 }}>راهنمایی و توصیه‌ها</h3>
+          </div>
+          
+          <div style={{ fontSize: '15px', lineHeight: '1.8', opacity: 0.95, whiteSpace: 'pre-line' }}>
+            {data.portalConfig?.guidanceText || `• برای مشاهده جزئیات هر فاکتور، روی دکمه "نمایش جزئیات" کلیک کنید.
+• اعلانات مهم سیستم در بخش "اعلانات و دانلودها" نمایش داده می‌شود.
+• برای دانلود اپلیکیشن‌های توصیه شده، از بخش دانلودها استفاده کنید.
+• در صورت وجود هرگونه سوال یا مشکل، با پشتیبانی تماس بگیرید.`}
+          </div>
+        </div>
+
+        {/* ===== 7. FOOTER - اطلاعات تماس ===== */}
+        <div style={{ 
+          background: 'rgba(15, 23, 42, 0.6)', 
+          padding: '24px', 
+          borderRadius: '12px',
+          border: '1px solid rgba(71, 85, 105, 0.5)',
+          textAlign: 'center'
+        }}>
+          <h4 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: 'bold' }}>اطلاعات تماس و پشتیبانی</h4>
+          
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            flexWrap: 'wrap',
+            gap: '24px',
+            fontSize: '14px',
+            opacity: 0.9
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Phone size={16} />
+              <span>{data.portalConfig?.contactPhone || '۰۲۱-۱۲۳۴۵۶۷۸'}</span>
             </div>
-          ) : (
-            <p style={{ textAlign: 'center', fontSize: '18px', opacity: 0.7 }}>
-              پرداختی یافت نشد
-            </p>
-          )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Mail size={16} />
+              <span>{data.portalConfig?.contactEmail || 'support@example.com'}</span>
+            </div>
+          </div>
+          
+          <p style={{ fontSize: '12px', opacity: 0.7, marginTop: '16px' }}>
+            ساعات پاسخگویی: {data.portalConfig?.supportHours || 'شنبه تا چهارشنبه، ۹ صبح تا ۶ عصر'}
+          </p>
         </div>
       </div>
     </div>

@@ -4,7 +4,7 @@
  */
 
 // Import original persian-date with any type
-const PersianDateLib = require('persian-date');
+import PersianDateLib from 'persian-date';
 
 /**
  * Helper function for dealing with task.aiContext in AI services

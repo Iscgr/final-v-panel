@@ -1,56 +1,8 @@
-# 🌱 MarFaNet - پنل مدیریت نمایندگان و گزارش‌های مالی# 🌱 راهنمای شروع سریع MarFaNet
+﻿# MarFaNet – استقرار و راه‌اندازی یکپارچه (سند جامع واحد)
 
 
 
-MarFaNet یک پنل تحت‌وب برای مدیریت نمایندگان، فاکتورها، گزارش‌های مالی و تحلیل عملکرد است که به صورت کامل با Docker عملیاتی می‌شود.این سند مخصوص کسانی است که اولین بار می‌خواهند MarFaNet را روی یک سرور تازه راه‌اندازی کنند. اگر تاکنون با Docker یا لینوکس کار نکرده‌اید، نگران نباشید؛ مراحل را قدم‌به‌قدم دنبال کنید.
-
-
-
-------
-
-
-
-## 🏗️ معماری سیستم## 🧭 MarFaNet چیست؟
-
-MarFaNet یک پنل تحت‌وب برای مدیریت نمایندگان، فاکتورها و گزارش‌های مالی است که همه اجزای لازم (اپلیکیشن، پایگاه‌داده، کش، وب‌سرور و SSL) را خودش نصب می‌کند. تنها کاری که باید انجام دهید اجرای یک اسکریپت است؛ بقیه کارها خودکار انجام می‌شود.
-
-### تکنولوژی‌های اصلی
-
-- **دیتابیس:** PostgreSQL 14 (دیتابیس اصلی پروژه)### تکنولوژی‌های اصلی
-
-- **کش:** Redis 7- **دیتابیس:** PostgreSQL 14+ (با Drizzle ORM)
-
-- **Backend:** Node.js 18+ + Express + TypeScript- **کش:** Redis 7
-
-- **Frontend:** React 18 + Vite + Tailwind CSS- **Backend:** Node.js + Express + TypeScript
-
-- **ORM:** Drizzle ORM (PostgreSQL driver)- **Frontend:** React 18 + Vite + Tailwind CSS
-
-- **کانتینریزاسیون:** Docker + Docker Compose
-
----
-
-### ساختار Monorepo
-
-```## ✅ قبل از شروع
-
-/workspaces/final-v-panel/| مورد | توضیح |
-
-├── client/              # React frontend application|------|-------|
-
-├── server/              # Express backend API| سیستم‌عامل | Ubuntu 20.04 یا 22.04 یا 24.04 (کاربر روت یا sudo) |
-
-├── shared/              # Shared types and schemas (Drizzle)| دسترسی | اتصال SSH به سرور و دسترسی اینترنت |
-
-├── python-service/      # Python microservice| دامنه | رکورد `A` باید به IP سرور اشاره کند (برای گواهی SSL) |
-
-├── migrations/          # Drizzle PostgreSQL migrations| پورت‌ها | پورت‌های 80 و 443 باید باز باشند |
-
-├── scripts/             # Utility scripts| منابع | حداقل 2 هسته CPU، 4 گیگ RAM و 15 گیگ فضای خالی |
-
-└── docker-compose.yml   # Container orchestration
-
-```> اگر هنوز دامنه ندارید می‌توانید نصب را انجام دهید، اما SSL صادر نمی‌شود و باید بعداً آن را تکرار کنید.
+> این تنها سند رسمی پروژه است. هرآنچه برای نصب، اجرا، پشتیبان‌گیری، به‌روزرسانی، عیب‌یابی و بهره‌برداری نیاز دارید اینجاست. مناسب کاربری که حتی تجربه‌ی قبلی با Linux یا Docker ندارد.
 
 
 
@@ -58,361 +10,203 @@ MarFaNet یک پنل تحت‌وب برای مدیریت نمایندگان، ف
 
 
 
-## ✅ پیش‌نیازها## ۱. نصب خودکار (۳ گام ساده)
+## 1. معرفی سریع
+MarFaNet یک سامانه مدیریت مالی و نمایندگان (Invoices, Payments, KPI, Portal) است که بر پایه:
+- Node.js 20 + Express (Backend + API)
+- React 18 + Vite (Frontend)
+- PostgreSQL 14+ (تنها پایگاه داده رسمی)
+- Redis (برای Session و کش آینده)
+- Docker / Docker Compose (محیط Production)
 
-1. از طریق SSH وارد سرور شوید.
-
-| مورد | توضیح |2. فایل نصب را دانلود کنید:
-
-|------|-------|   ```bash
-
-| سیستم‌عامل | Ubuntu 20.04+ / Debian 11+ / macOS / Windows (WSL2) |   curl -sSL https://raw.githubusercontent.com/Iscgr/final-v-panel/prof/scripts/auto-install.sh -o auto-install.sh
-
-| Docker | Docker Engine 20.10+ |   chmod +x auto-install.sh
-
-| Docker Compose | v2.0+ |   ```
-
-| Node.js | v18 یا بالاتر (برای توسعه محلی) |3. اسکریپت را با دسترسی روت اجرا کنید:
-
-| منابع | حداقل 2 CPU، 4GB RAM، 15GB فضای دیسک |   ```bash
-
-| پورت‌ها | 3000 (Frontend), 5000 (Backend), 5432 (PostgreSQL), 6379 (Redis) |   sudo ./auto-install.sh
-
-   ```
+خروجی نهایی: یک سرویس واحد روی پورت 3000 که API و UI را یکجا سرو می‌کند.
 
 ---
 
-### اگر دامنه اختصاصی خودتان را دارید
-
-## 🚀 نصب و راه‌اندازی (محیط توسعه)قبل از اجرای اسکریپت، نام دامنه را به شکل زیر تعیین کنید:
-
+## 4. نصب ابزارهای پایه (Ubuntu)
 ```bash
-
-### 1️⃣ کلون کردن پروژهsudo DOMAIN=your-domain.com ./auto-install.sh
-
-```bash```
-
-git clone https://github.com/Iscgr/final-v-panel.git- اسکریپت Docker، PostgreSQL، Redis و Nginx را نصب و پیکربندی می‌کند.
-
-cd final-v-panel- گواهی SSL (Let’s Encrypt) به‌صورت خودکار درخواست می‌شود.
-
-```- تمام رمزهای مهم تولید و در فایل `.env` ذخیره می‌شوند.
-
-
-
-### 2️⃣ تنظیم متغیرهای محیطی> نصب کامل معمولاً 5 تا 10 دقیقه طول می‌کشد. هنگام اجرا صفحه را نبندید.
-
-```bash
-
-cp .env.example .env---
-
-```
-
-## ۲. بررسی نتیجه نصب
-
-فایل `.env` را ویرایش کنید و مقادیر زیر را تنظیم نمایید:پس از پایان اسکریپت، خروجی شبیه نمونه زیر است:
-
-```env```
-
-# Database (PostgreSQL)============================================================
-
-POSTGRES_USER=marfanet_user نصب MarFaNet تکمیل شد
-
-POSTGRES_PASSWORD=your_secure_password============================================================
-
-POSTGRES_DB=marfanet_dbدامنه: https://example.com
-
-DATABASE_URL=postgresql://marfanet_user:your_secure_password@postgres:5432/marfanet_dbپنل:  https://example.com/admin
-
-پورتال: https://example.com/portal/[ID]
-
-# RedisAdmin User: admin
-
-REDIS_URL=redis://redis:6379Admin Pass: <RAND_PASS>
-
-...
-
-# Server============================================================
-
-NODE_ENV=development```
-
-PORT=5000
-
-SESSION_SECRET=your_session_secret_here### اطلاعات مهم بعد از نصب
-
-| مورد | مسیر / دستور |
-
-# Client|------|---------------|
-
-VITE_API_URL=http://localhost:5000| آدرس پنل مدیریت | `https://YOUR-DOMAIN/admin` |
-
-```| رمز و نام کاربری ادمین | فایل `/opt/marfanet/.env` (متغیرهای `ADMIN_USERNAME`, `ADMIN_PASSWORD`) |
-
-| فایل تنظیمات محیطی | `/opt/marfanet/.env` |
-
-### 3️⃣ راه‌اندازی سرویس‌های Docker| فایل‌های Compose و Nginx | `/opt/marfanet/docker-compose-stack.yml` و `/opt/marfanet/nginx.conf` |
-
-```bash| ابزار مدیریت | دستور `agent` |
-
-docker-compose up -d postgres redis
-
-```> پیشنهاد می‌شود در اولین ورود، رمز کاربر `admin` را تغییر دهید.
-
-
-
-بررسی سلامت سرویس‌ها:---
-
-```bash
-
-docker-compose ps## ۳. آشنایی با ابزار `agent`
-
-```اسکریپت نصب یک دستور ساده به نام `agent` می‌سازد. کافی است بنویسید:
-
-```bash
-
-### 4️⃣ نصب وابستگی‌هاagent
-
-```bash```
-
-npm installو یکی از گزینه‌ها را انتخاب کنید:
-
-``````
-
-1) بکاپ + ارسال تلگرام
-
-### 5️⃣ اجرای Migrations (ایجاد جداول PostgreSQL)2) آپدیت پنل
-
-```bash3) ریستارت پنل
-
-npm run db:push4) نمایش لاگ
-
-```5) وضعیت سلامت
-
-q) خروج
-
-یا برای استفاده از migration files:```
-
-```bash
-
-npm run db:migrate### دستورهای پرکاربرد
-
-```| فرمان | کارکرد |
-
-|--------|--------|
-
-### 6️⃣ اجرای اپلیکیشن در محیط توسعه| `agent backup` | تهیه نسخه پشتیبان از دیتابیس (فایل در `/opt/marfanet/backups`) |
-
-```bash| `agent update` | دریافت آخرین کدها و بازسازی کانتینر اپلیکیشن |
-
-npm run dev| `agent restart` | راه‌اندازی مجدد تمام سرویس‌ها |
-
-```| `agent logs` | نمایش 200 خط آخر لاگ اپلیکیشن |
-
-| `agent health` | بررسی آدرس `/health` بدون نیاز به مرورگر |
-
-اپلیکیشن در آدرس‌های زیر در دسترس خواهد بود:
-
-- **Frontend:** http://localhost:3000اگر می‌خواهید بکاپ به تلگرام ارسال شود، شناسه ربات و چت را در فایل `.env` مقداردهی کنید:
-
-- **Backend API:** http://localhost:5000```env
-
-TELEGRAM_BOT_TOKEN=xxx
-
----TELEGRAM_CHAT_ID=123456
-
-```
-
-## 🏭 استقرار در محیط Production
-
----
-
-### استفاده از Docker Compose (توصیه شده)
-
-## ۴. به‌روزرسانی یا نصب دوباره
-
-```bashاگر از قبل MarFaNet را نصب کرده‌اید و می‌خواهید نسخه جدید را بگیرید، کافی است اسکریپت تازه را دانلود و اجرا کنید؛ ابزار به‌طور خودکار مخزن را روی نسخه جدید تنظیم می‌کند.
-
-# Build کردن تمام سرویس‌ها```bash
-
-docker-compose buildcurl -sSL https://raw.githubusercontent.com/Iscgr/final-v-panel/prof/scripts/auto-install.sh -o auto-install.sh
-
-chmod +x auto-install.sh
-
-# اجرای تمام سرویس‌هاsudo ./auto-install.sh
-
-docker-compose up -d```
-
-# بررسی وضعیت
-docker-compose ps
-
-# مشاهده لاگ‌ها
-docker-compose logs -f
-```
-
-### دستورات مفید
-
-```bash
-# توقف سرویس‌ها
-docker-compose down
-
-# پاک کردن volumes (حذف داده‌های دیتابیس)
-docker-compose down -v
-
-# Restart کردن یک سرویس خاص
-docker-compose restart server
-
-# اجرای دستورات داخل کانتینر
-docker-compose exec server npm run db:push
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg lsb-release ufw git unzip bash coreutils
+curl -fsSL https://get.docker.com | sudo bash
+sudo usermod -aG docker $USER
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw enable
 ```
 
 ---
-
-## 🗄️ مدیریت دیتابیس PostgreSQL
-
-### اتصال مستقیم به PostgreSQL
+## 5. کلون مخزن و آماده‌سازی
 ```bash
-docker-compose exec postgres psql -U marfanet_user -d marfanet_db
+cd /opt
+sudo git clone https://github.com/Iscgr/final-v-panel.git marfanet
+cd marfanet
+sudo chown -R $USER:$USER .
+cp .env.example .env 2>/dev/null || true
 ```
-
-### بکاپ از دیتابیس
-```bash
-docker-compose exec postgres pg_dump -U marfanet_user marfanet_db > backup_$(date +%Y%m%d).sql
-```
-
-### بازیابی از بکاپ
-```bash
-cat backup_20250102.sql | docker-compose exec -T postgres psql -U marfanet_user -d marfanet_db
-```
-
-### مشاهده جداول
-```sql
-\dt
-```
-
-### مشاهده ساختار یک جدول
-```sql
-\d table_name
+مقادیر ضروری در `.env`:
+```env
+DATABASE_URL=postgresql://postgres:postgres@db:5432/marfanet
+SESSION_SECRET=$(openssl rand -hex 32)
+PORT=3000
+LOG_DIRECTORY=./logs
 ```
 
 ---
-
-## 📊 Drizzle ORM
-
-### مدیریت Schema
-تمام schema های دیتابیس در فایل `shared/schema.ts` تعریف شده‌اند:
-
-```typescript
-import { pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
-
-export const users = pgTable('users', {
-  id: serial('id').primaryKey(),
-  username: text('username').notNull(),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-```
-
-### دستورات Drizzle
-
+## 6. توسعه محلی (بدون Docker)
 ```bash
-# Push schema به دیتابیس (بدون migration)
-npm run db:push
-
-# ایجاد migration جدید
-npm run db:generate
-
-# اعمال migrations
-npm run db:migrate
-
-# باز کردن Drizzle Studio (UI مدیریت دیتابیس)
-npm run db:studio
-```
-
----
-
-## 🧪 تست‌ها
-
-```bash
-# اجرای تمام تست‌ها
-npm test
-
-# اجرای تست‌های یک فایل خاص
-npm test -- scripts/alloc-validation.ts
-```
-
----
-
-## 📦 Build برای Production
-
-```bash
-# Build کردن Client و Server
-npm run build
-
-# اجرای Build شده
-npm start
-```
-
----
-
-## 🔧 عیب‌یابی
-
-### مشکلات رایج
-
-#### دیتابیس به راه نمی‌افتد
-```bash
-# بررسی لاگ PostgreSQL
-docker-compose logs postgres
-
-# Restart کردن سرویس
-docker-compose restart postgres
-```
-
-#### Port در حال استفاده است
-```bash
-# پیدا کردن پروسه‌ای که از port استفاده می‌کند
-sudo lsof -i :3000
-sudo lsof -i :5000
-
-# Kill کردن پروسه
-kill -9 <PID>
-```
-
-#### مشکل در Migration
-```bash
-# Drop کردن تمام جداول و اجرای مجدد
-npm run db:push -- --force
-```
-
-#### پاک کردن کامل و شروع مجدد
-```bash
-docker-compose down -v
-docker-compose up -d postgres redis
+npm install
 npm run db:push
 npm run dev
 ```
+آدرس: http://localhost:3000
 
 ---
-
-## 📚 مستندات بیشتر
-
-برای اطلاعات تکمیلی به فایل‌های زیر مراجعه کنید:
-- [DATABASE_GUIDE.md](./DATABASE_GUIDE.md) - راهنمای کامل PostgreSQL و Drizzle
-- [DEPLOYMENT_SPEC.md](./DEPLOYMENT_SPEC.md) - مشخصات استقرار در Production
-- [TECHNICAL_DOCUMENTATION.md](./TECHNICAL_DOCUMENTATION.md) - مستندات فنی سیستم
-- [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - راهنمای عیب‌یابی پیشرفته
-- [CHANGELOG.md](./CHANGELOG.md) - تاریخچه تغییرات
-
----
-
-## 🤝 مشارکت
-
-برای مشارکت در پروژه:
-1. Fork کردن repository
-2. ایجاد branch جدید (`git checkout -b feature/amazing-feature`)
-3. Commit کردن تغییرات (`git commit -m 'Add amazing feature'`)
-4. Push کردن به branch (`git push origin feature/amazing-feature`)
-5. ایجاد Pull Request
+## 7. اجرای سریع با Docker محلی
+```bash
+docker build -t marfanet:local .
+docker run --rm -p 3000:3000 --name marfanet \
+	-e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/marfanet \
+	-e SESSION_SECRET=$(openssl rand -hex 32) \
+	-v $(pwd)/logs:/app/logs \
+	marfanet:local
+```
+Linux:
+```bash
+--add-host=host.docker.internal:host-gateway
+```
 
 ---
+## 8. استقرار Production (Compose)
+```bash
+docker compose build
+docker compose up -d
+```
+بررسی:
+```bash
+docker compose ps
+curl -fsSL http://localhost/health
+```
+بروزرسانی:
+```bash
+git pull
+docker compose build --no-cache app && docker compose up -d app
+```
+Rollback:
+```bash
+git reflog
+git checkout <PREV_COMMIT>
+docker compose build app && docker compose up -d app
+```
+
+---
+## 9. متغیرهای محیطی کلیدی
+| نام | توضیح | نمونه |
+|-----|-------|-------|
+| DATABASE_URL | اتصال PostgreSQL | postgresql://postgres:postgres@db:5432/marfanet |
+| SESSION_SECRET | رمز سشن | خروجی openssl |
+| PORT | پورت سرویس | 3000 |
+| LOG_DIRECTORY | مسیر لاگ | ./logs |
+| TELEGRAM_BOT_TOKEN | اختیاری | - |
+| TELEGRAM_CHAT_ID | اختیاری | - |
+
+---
+## 10. سلامت
+| مسیر | هدف |
+|------|-----|
+| /health | زنده بودن |
+| /ready | اتصال پایگاه داده |
+
+---
+## 11. لاگ‌ها
+```bash
+tail -f logs/server.log
+```
+
+---
+## 12. مهاجرت دیتابیس
+```bash
+npm run db:push
+npm run db:generate
+npm run db:migrate
+```
+
+---
+## 13. پشتیبان‌گیری
+```bash
+mkdir -p backups
+docker compose exec -T db pg_dump -U postgres marfanet > backups/$(date +%F-%H%M).sql
+```
+بازیابی:
+```bash
+cat backups/FILE.sql | docker compose exec -T db psql -U postgres -d marfanet
+```
+
+---
+## 14. بروزرسانی نسخه
+```bash
+git pull
+docker compose build --no-cache app && docker compose up -d app
+```
+
+---
+## 15. امنیت پایه
+1. UFW فعال (22,80,443)
+2. SESSION_SECRET قوی
+3. Backup روزانه
+4. عدم اشتراک گذاری `.env`
+5. محدود کردن اجرا در `uploads`
+
+---
+## 16. Feature Flags
+فعال/غیرفعال کردن زیرسیستم‌ها (مثل Outbox Worker). افزودن فلگ جدید: ویرایش ماژول featureFlagManager.
+
+---
+## 17. ساختار پروژه
+```
+client/  server/  shared/  scripts/  uploads/  docker-compose.yml  Dockerfile
+```
+
+---
+## 18. اسکریپت‌های مهم
+| فایل | کار |
+|------|-----|
+| seed-portal-settings.ts | Seed اولیه |
+| alloc-validation.ts | اعتبارسنجی تخصیص |
+| drift-shadow.ts | تحلیل drift |
+
+---
+## 19. بازیابی بحران
+| رویداد | اقدام |
+|--------|-------|
+| حذف DB | Restore آخرین بکاپ |
+| نشت SESSION_SECRET | Rotate + Restart |
+| پر شدن دیسک | حذف لاگ قدیمی |
+
+---
+## 20. FAQ
+| سوال | پاسخ |
+|------|-------|
+| چرا یک پورت؟ | سادگی و ادغام UI+API |
+| چرا فقط PostgreSQL؟ | یکپارچگی و ثبات |
+
+---
+## 21. API های نمونه
+| متد | مسیر | توضیح |
+|-----|------|-------|
+| GET | /health | وضعیت |
+| GET | /ready | آمادگی |
+| GET | /api/invoices | لیست فاکتورها |
+
+---
+## 22. Cheat Sheet
+```bash
+npm run dev
+npm run build && npm start
+docker compose up -d
+curl -s localhost/health
+```
+
+---
+پایان سند.
 
 ## 📄 لایسنس
 
@@ -421,9 +215,11 @@ npm run dev
 ---
 
 ## 🆘 پشتیبانی
-
 در صورت مواجهه با مشکل:
-1. ابتدا [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) را مطالعه کنید
+1. مسیرهای سلامت را بررسی کنید (`/health`, `/ready`)
+2. لاگ‌ها را ببینید: `tail -n 200 logs/server.log`
+3. صحت متغیرهای `.env` (خصوصا DATABASE_URL و SESSION_SECRET) را تأیید کنید
+4. در صورت نیاز Issue در مخزن GitHub ثبت کنید
 2. لاگ‌های سیستم را بررسی کنید: `docker-compose logs -f`
 3. Issue جدیدی در GitHub ایجاد کنید
 

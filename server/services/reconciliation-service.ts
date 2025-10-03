@@ -3,7 +3,7 @@
  * محاسبه drift بین مدل legacy تخصیص (is_allocated / مبلغ فاکتورهای paid) و ledger نو (payment_allocations)
  * حالت فعلی: فقط shadow محاسبه، درج رکورد در reconciliation_runs در صورت فعال بودن state مناسب.
  */
-import { db } from '../database-manager';
+import { db } from '../database-manager.js';
 import { payments, invoices, paymentAllocations, reconciliationRuns } from '@shared/schema';
 import { sql } from 'drizzle-orm';
 import { featureFlagManager } from './feature-flag-manager.js';

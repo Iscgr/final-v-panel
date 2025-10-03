@@ -16,10 +16,10 @@
  *  npx tsx scripts/compare-python-node-debt.ts --limit=100 --json
  */
 
-import { db } from '../server/database-manager';
+import { db } from '../server/database-manager.js';
 import { representatives } from '@shared/schema';
-import { pythonFinancialClient } from '../server/services/python-financial-client';
-import { UnifiedFinancialEngine } from '../server/services/unified-financial-engine';
+import { pythonFinancialClient } from '../server/services/python-financial-client.js';
+import { UnifiedFinancialEngine } from '../server/services/unified-financial-engine.js';
 import { sql } from 'drizzle-orm';
 
 interface DriftRow {

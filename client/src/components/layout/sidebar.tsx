@@ -11,7 +11,9 @@ import {
   X,
   Edit,
   ChevronRight,
-  ChevronLeft
+  ChevronLeft,
+  Download,
+  Bell
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -31,6 +33,8 @@ const navigation = [
   { name: "فاکتورها", href: "/invoices", icon: FileText },
   { name: "مدیریت فاکتورها", href: "/invoice-management", icon: Edit },
   { name: "همکاران فروش", href: "/sales-partners", icon: Handshake },
+  { name: "اپلیکیشن‌ها", href: "/admin/app-downloads", icon: Download },
+  { name: "اطلاعیه‌ها", href: "/admin/announcements", icon: Bell },
   { name: "تنظیمات", href: "/settings", icon: Settings },
 ];
 

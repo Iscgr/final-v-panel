@@ -21,12 +21,18 @@ const Representatives = lazy(() => import("@/pages/representatives"));
 const RepresentativeProfile = lazy(() => import("@/pages/representative-profile"));
 const SalesPartners = lazy(() => import("@/pages/sales-partners"));
 const Settings = lazy(() => import("@/pages/settings"));
-const Portal = lazy(() => import("@/pages/portal"));
+const PublicPortal = lazy(() => import("@/pages/portal"));
 const AdminLogin = lazy(() => import("@/pages/admin-login"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 const UnifiedAuth = lazy(() => import("@/pages/unified-auth"));
 // ❌ [ODIN v5.0] AllocationManagement removed - auto-allocation feature removed
 const KpiDashboard = lazy(() => import("@/pages/kpi-dashboard"));
+
+// Admin Resources Management Pages
+const AppDownloadsManager = lazy(() => import("@/pages/admin/AppDownloadsManager"));
+const AnnouncementsManager = lazy(() => import("@/pages/admin/AnnouncementsManager"));
+
+// Error boundary component
 
 // System
 import ErrorBoundary from "@/components/system/ErrorBoundary";
@@ -42,8 +48,8 @@ function AuthenticatedRouter() {
       <div className="dark public-portal-isolated">
         <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-white">در حال بارگذاری پورتال...</div>}>
           <Switch>
-            <Route path="/portal/:publicId" component={Portal} />
-            <Route path="/representative/:publicId" component={Portal} />
+            <Route path="/portal/:publicId" component={PublicPortal} />
+            <Route path="/representative/:publicId" component={PublicPortal} />
             <Route path="/portal/*">
               {() => (
                 <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
@@ -111,6 +117,8 @@ function AuthenticatedRouter() {
             <Route path="/invoices" component={Invoices} />
             <Route path="/invoice-management" component={InvoiceManagement} />
             <Route path="/sales-partners" component={SalesPartners} />
+            <Route path="/admin/app-downloads" component={AppDownloadsManager} />
+            <Route path="/admin/announcements" component={AnnouncementsManager} />
             <Route path="/settings" component={Settings} />
             <Route path="/admin-login">
               <AdminLogin onLoginSuccess={() => { console.log('Admin login successful'); }} />

@@ -5,7 +5,7 @@
  * Real-time calculations with 100% accuracy guarantee
  */
 
-import { db } from '../database-manager';
+import { db } from '../database-manager.js';
 import { representatives, invoices, payments, paymentAllocations } from '@shared/schema';
 import { eq, sql, desc, and } from 'drizzle-orm';
 import { performance } from 'perf_hooks';
