@@ -10,6 +10,7 @@ import { fetchKPI, kpiQueryKey } from '@/services/kpi-service';
 import { useUploadFlow } from '@/hooks/use-upload-flow';
 import FileValidationList from '@/components/dashboard/FileValidationList';
 import ProcessingProgressBar from '@/components/dashboard/ProcessingProgressBar';
+import { LiveProcessingMonitor } from '@/components/dashboard/LiveProcessingMonitor';
 import AlertBanner from '@/components/dashboard/AlertBanner';
 import QuickActionsPanel from '@/components/dashboard/QuickActionsPanel';
 
@@ -23,7 +24,7 @@ import UploadErrorPanel from '@/components/dashboard/UploadErrorPanel';
 export default function DashboardPage() {
   const { data: kpi, isLoading, isFetching } = useQuery({ queryKey: kpiQueryKey, queryFn: fetchKPI, staleTime: 60_000 });
   const { data: recentActivity, isLoading: activityLoading } = useRecentActivity({ refetchInterval: 30000 });
-  const { selectFile, reset: resetUpload, phase, percent, issues, error } = useUploadFlow();
+  const { selectFile, reset: resetUpload, phase, percent, issues, error, jobCode } = useUploadFlow();
 
   const cards = useMemo(() => ([
     { title: 'مجموع فاکتورها', value: kpi?.totalInvoices?.toLocaleString('fa-IR') ?? '–', desc: 'کل ثبت شده', trend: undefined },
@@ -68,26 +69,44 @@ export default function DashboardPage() {
           <div className="rounded-lg border p-4 bg-card">
             <h2 className="text-sm font-semibold mb-3">بارگذاری JSON</h2>
             <UploadZone onFileAccepted={(f) => selectFile(f)} disabled={phase !== 'idle' && phase !== 'success' && phase !== 'error'} />
-            <div className="mt-4">
-              <div className="p-4 rounded-lg border bg-card text-card-foreground">
-                <UploadZone onFileAccepted={(f) => selectFile(f)} disabled={phase !== 'idle' && phase !== 'success' && phase !== 'error'} />
-                <div className="mt-4 space-y-3">
-                  {issues.length > 0 && <FileValidationList issues={issues} />}
-                  {(phase === 'uploading' || phase === 'processing' || phase === 'success' || phase === 'partial') && (
-                    <ProcessingProgressBar percent={percent} phase={phase} />
-                  )}
-                  <UploadErrorPanel error={error} onReset={resetUpload} />
-                  {phase === 'success' && (
-                    <div className="text-sm text-green-500">فایل با موفقیت پردازش شد.</div>
-                  )}
-                  {phase === 'partial' && (
-                    <div className="text-sm text-yellow-500">فایل با موفقیت پردازش شد اما برخی موارد نادیده گرفته شدند.</div>
-                  )}
+            <div className="mt-4 space-y-3">
+              {issues.length > 0 && <FileValidationList issues={issues} />}
+              
+              {/* نمایش Live Monitor اگر jobCode موجود باشد */}
+              {jobCode && (phase === 'uploading' || phase === 'processing') && (
+                <LiveProcessingMonitor 
+                  jobCode={jobCode}
+                  onComplete={() => {
+                    console.log('✅ پردازش با موفقیت تکمیل شد');
+                    resetUpload(); // Reset بعد از تکمیل موفق
+                  }}
+                  onError={(err) => {
+                    console.error('❌ خطای پردازش:', err);
+                  }}
+                />
+              )}
+
+              {/* Fallback Progress Bar برای حالات قدیمی */}
+              {!jobCode && (phase === 'uploading' || phase === 'processing' || phase === 'success' || phase === 'partial') && (
+                <ProcessingProgressBar percent={percent} phase={phase} />
+              )}
+              
+              <UploadErrorPanel error={error} onReset={resetUpload} />
+              {phase === 'success' && (
+                <div className="text-sm text-green-600 bg-green-50 border border-green-200 rounded px-3 py-2">
+                  ✓ فایل با موفقیت پردازش شد
                 </div>
-                {(phase === 'success' || phase === 'error' || phase === 'partial') && (
-                  <button onClick={resetUpload} className="mt-4 text-xs px-3 py-1.5 rounded bg-secondary text-secondary-foreground">شروع مجدد</button>
-                )}
-              </div>
+              )}
+              {phase === 'partial' && (
+                <div className="text-sm text-yellow-600 bg-yellow-50 border border-yellow-200 rounded px-3 py-2">
+                  ⚠ فایل با موفقیت پردازش شد اما برخی موارد نادیده گرفته شدند
+                </div>
+              )}
+              {(phase === 'success' || phase === 'error' || phase === 'partial') && (
+                <button onClick={resetUpload} className="w-full mt-2 text-xs px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
+                  شروع مجدد
+                </button>
+              )}
             </div>
           </div>
           <QuickActionsPanel role={'ADMIN'} />

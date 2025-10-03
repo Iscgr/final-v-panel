@@ -28,9 +28,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { formatCurrency, toPersianDigits, getCurrentPersianDate } from "@/lib/persian-date";
-import { createImportJob, useImportJobPolling, calculateProgress, updateImportJob } from "@/services/import-jobs";
+import { createImportJob, useImportJobPolling, calculateProgress } from "@/services/import-jobs";
 import { JobProgress } from "@/components/JobProgress";
 import { nanoid } from 'nanoid';
+import { JsonProcessingDialog } from './json-progress/JsonProcessingDialog';
 
 interface ProcessedInvoice {
   id: number;
@@ -71,8 +72,8 @@ export default function InvoiceUpload() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Hook polling برای job فعلی
-  const { data: jobData } = useImportJobPolling(currentJobCode, showProcessingModal && !!currentJobCode);
+  // Hook polling برای job فعلی (باید مستقل از باز بودن مودال فعال باشد تا Progress در کارت اصلی حرکت کند)
+  const { data: jobData } = useImportJobPolling(currentJobCode, !!currentJobCode);
   
   const uploadProgress = jobData ? calculateProgress(jobData) : 0;
 
@@ -88,7 +89,7 @@ export default function InvoiceUpload() {
       }
       
       // Add standardized parameters with default values
-      formData.append('batchName', `Upload-${file.name}-${Date.now()}`);
+      formData.append('jobCode', jobCode);
       formData.append('description', `فایل آپلود شده: ${file.name}`);
       
       // Add optional period parameters (can be empty for basic functionality)
@@ -98,13 +99,14 @@ export default function InvoiceUpload() {
       console.log('Uploading file:', file.name, 'Size:', file.size);
       console.log('Invoice date mode:', invoiceDateMode, 'Custom date:', customInvoiceDate);
       
-  // ایجاد job tracking
       const jobCode = `upload-${nanoid(10)}`;
+      
+      // ایجاد job tracking
       setCurrentJobCode(jobCode);
       setShowProcessingModal(true);
       setCurrentFile(file);
-  setJobEvents([]);
-  addJobEvent('pending', 'ثبت اولیه Job');
+      setJobEvents([]);
+      addJobEvent('pending', 'ثبت اولیه Job');
       
       // ثبت job در سرور
       await createImportJob({
@@ -113,10 +115,9 @@ export default function InvoiceUpload() {
         totalRecords: 0 // به‌روزرسانی خواهد شد
       });
       addJobEvent('pending', 'ارسال فایل برای پردازش');
-      // شبیه‌سازی مراحل اولیه اگر backend هنوز مراحل را patch نمی‌کند
-      setTimeout(() => { if (jobCode === currentJobCode) { updateImportJob(jobCode, { status: 'validating' }); addJobEvent('validating','اعتبارسنجی ساختار JSON'); } }, 800);
-      setTimeout(() => { if (jobCode === currentJobCode) { updateImportJob(jobCode, { status: 'ingesting' }); addJobEvent('ingesting','ورود رکوردها'); } }, 1800);
-      setTimeout(() => { if (jobCode === currentJobCode) { updateImportJob(jobCode, { status: 'enriching' }); addJobEvent('enriching','غنی‌سازی و ایجاد فاکتورها'); } }, 3200);
+
+      // شبیه‌سازی و فراخوانی /start حذف شد. بک‌اند مسئول آپدیت Job است.
+      addJobEvent('starting','ارسال فایل به سرور برای پردازش یکپارچه');
       
       // Use fetch directly for file upload with proper headers and extended timeout
       const controller = new AbortController();
@@ -155,10 +156,8 @@ export default function InvoiceUpload() {
     },
     onSuccess: (data: UploadResult) => {
       setUploadResult(data);
-      if (currentJobCode) {
-        updateImportJob(currentJobCode, { status: 'completed' });
-        addJobEvent('completed','پردازش کامل شد');
-      }
+      // بک‌اند خودش وضعیت را completed می‌کند، نیازی به آپدیت از کلاینت نیست.
+      addJobEvent('completed','پردازش کامل شد');
       
       console.log('فایل با موفقیت پردازش شد:', data);
       toast({
@@ -174,11 +173,8 @@ export default function InvoiceUpload() {
         description: error.message,
         variant: "destructive",
       });
-      setCurrentJobCode(null);
-      if (currentJobCode) {
-        updateImportJob(currentJobCode, { status: 'failed', lastError: error.message });
-        addJobEvent('failed','بروز خطا در پردازش');
-      }
+      // بک‌اند خودش وضعیت را failed می‌کند، نیازی به آپدیت از کلاینت نیست.
+      addJobEvent('failed','بروز خطا در پردازش');
     }
   });
 
@@ -535,142 +531,20 @@ export default function InvoiceUpload() {
           </div>
         )}
         
-        {/* Processing Details Modal */}
-        <Dialog open={showProcessingModal} onOpenChange={setShowProcessingModal}>
-          <DialogContent className="max-w-2xl max-h-[80vh]">
-            <DialogHeader>
-              <DialogTitle className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Activity className="w-5 h-5 ml-2 text-primary" />
-                  جزئیات پردازش فایل JSON
-                </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowProcessingModal(false)}
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              {/* File Info */}
-              {currentFile && (
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-                  <h4 className="font-medium mb-2">اطلاعات فایل</h4>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">نام فایل:</span>
-                      <span className="mr-2 font-mono">{currentFile.name}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">حجم:</span>
-                      <span className="mr-2">{toPersianDigits(Math.round(currentFile.size / 1024).toString())} KB</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {/* Progress Overview (Enhanced UI without logic change) */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <span className="relative inline-flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/60 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                    </span>
-                    پیشرفت کلی
-                  </h4>
-                  <span className="text-lg font-bold bg-gradient-to-l from-primary to-purple-500 bg-clip-text text-transparent select-none">
-                    {toPersianDigits(uploadProgress.toString())}%
-                  </span>
-                </div>
-                <div className="relative group">
-                  <div className="absolute inset-0 rounded-md bg-gradient-to-r from-primary/20 via-purple-500/10 to-primary/20 blur opacity-60 group-hover:opacity-80 transition" />
-                  <div className="relative overflow-hidden rounded-md h-3 bg-gray-200 dark:bg-gray-800 border border-gray-300/40 dark:border-gray-700/60">
-                    <div
-                      className="h-full bg-gradient-to-r from-primary via-purple-500 to-primary shadow-inner transition-all duration-500 ease-out"
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                </div>
-                {jobData && (
-                  <div className="text-xs flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                    <span className="font-medium text-gray-700 dark:text-gray-300">{toPersianDigits(jobData.processedRecords.toString())}</span>
-                    <span className="text-gray-400">از</span>
-                    <span className="font-medium text-gray-700 dark:text-gray-300">{toPersianDigits(jobData.totalRecords.toString())}</span>
-                    <span className="text-gray-400">رکورد پردازش شده</span>
-                  </div>
-                )}
-              </div>
-              
-              <Separator />
-              
-              {/* Job Progress Timeline (Enhanced visuals) */}
-              {jobData ? (
-                <div className="space-y-4">
-                  <h4 className="font-medium mb-1 flex items-center gap-2">
-                    <span className="relative inline-flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/60 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-                    </span>
-                    مراحل پردازش
-                  </h4>
-                  <JobProgress job={jobData} showDetails={false} className="mb-2" />
-                  <div className="grid grid-cols-2 gap-3 text-xs bg-gray-50 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
-                    <div>
-                      <span className="text-gray-500">وضعیت:</span>
-                      <span className="mr-2 font-medium tracking-tight">{jobData.status}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">خطاها:</span>
-                      <span className="mr-2">{toPersianDigits(jobData.errorCount.toString())}</span>
-                    </div>
-                    <div className="col-span-2">
-                      <span className="text-gray-500">فایل:</span>
-                      <span className="mr-2 font-mono text-[10px]">{jobData.sourceFileName || '—'}</span>
-                    </div>
-                  </div>
-                  {jobData.lastError && (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
-                        <div className="text-xs text-red-700 dark:text-red-400 leading-relaxed">
-                          <div className="font-medium mb-1">خطای رخ داده:</div>
-                          <div className="font-mono break-all">{jobData.lastError}</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  {/* Event Log */}
-                  <div className="mt-2">
-                    <h5 className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">لاگ مرحله‌ای<span className="w-1 h-1 rounded-full bg-primary animate-pulse"/></h5>
-                    <ScrollArea className="h-28 rounded border border-dashed border-gray-300 dark:border-gray-700 bg-white/40 dark:bg-white/5 p-2">
-                      <ul className="space-y-1 text-[11px] leading-relaxed">
-                        {jobEvents.map((ev,i)=> (
-                          <li key={i} className="flex items-start justify-between gap-2">
-                            <div className="flex-1">
-                              <span className="font-medium text-gray-800 dark:text-gray-200">{ev.status}</span>
-                              {ev.note && <span className="text-gray-500 mr-1">— {ev.note}</span>}
-                            </div>
-                            <code className="text-[10px] text-gray-500 font-mono">{ev.ts}</code>
-                          </li>
-                        ))}
-                        {jobEvents.length === 0 && <li className="text-gray-400">رویدادی ثبت نشده</li>}
-                      </ul>
-                    </ScrollArea>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <Activity className="w-8 h-8 mx-auto mb-2 animate-spin" />
-                  <p>در انتظار شروع پردازش...</p>
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Processing Details Modal (New JSON Progress UI) */}
+        {showProcessingModal && currentJobCode && (window as any).LOCAL_JSON_PROGRESS_UI !== false && (
+          <JsonProcessingDialog
+            jobCode={currentJobCode}
+            open={showProcessingModal}
+            onOpenChange={setShowProcessingModal}
+            fileName={currentFile?.name}
+            fileSize={currentFile?.size}
+          />
+        )}
+        {/* Legacy fallback kept (in case feature flag disabled) */}
+        {showProcessingModal && (window as any).LOCAL_JSON_PROGRESS_UI === false && (
+          <div className="p-4 text-xs text-gray-400">نسخه قدیمی نمایش پردازش فعال است (Feature Flag خاموش)</div>
+        )}
       </CardContent>
     </Card>
   );

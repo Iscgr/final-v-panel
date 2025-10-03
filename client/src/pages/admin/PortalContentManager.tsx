@@ -248,13 +248,26 @@ export default function PortalContentManager() {
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">مدیریت محتوای پرتال</h1>
-        <p className="text-gray-600 text-sm">Phase 1: فقط ذخیره‌سازی بلوک‌های متنی – پرتال عمومی هنوز از settings قدیمی می‌خواند.</p>
+        <p className="text-gray-600 text-sm">
+          مدیریت یکپارچه بلوک‌های متنی، اطلاعیه‌ها، لینک‌های دانلود اپلیکیشن‌ها و پیش‌نمایش کامل محتوای پرتال عمومی
+        </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+      <div className="flex gap-2 mb-6 flex-wrap border-b pb-2">
         {tabs.map(t => (
-          <button key={t.key} onClick={() => setActiveTab(t.key)} className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 border transition ${activeTab === t.key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>{t.icon}{t.label}</button>
+          <button 
+            key={t.key} 
+            onClick={() => setActiveTab(t.key)} 
+            className={`px-4 py-2 rounded-t-lg text-sm flex items-center gap-2 transition-all ${
+              activeTab === t.key 
+                ? 'bg-blue-600 text-white shadow-md -mb-2 border-b-2 border-blue-600' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-sm'
+            }`}
+          >
+            {t.icon}
+            {t.label}
+          </button>
         ))}
       </div>
 
@@ -468,14 +481,11 @@ export default function PortalContentManager() {
                   onClick={async ()=>{
                     try {
                       // prepare payload as array of {id, displayOrder}
-                      const payload = localDownloads.map(d=>({ id: d.id, displayOrder: d.displayOrder }));
-                      const res = await fetch('/api/admin/app-downloads/reorder', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ items: payload }) });
-                      const json = await res.json();
-                      if(json.success){
-                        toast({ title: 'ترتیب ذخیره شد' });
+                      const order = localDownloads.map(d=>({ id: d.id, displayOrder: d.displayOrder }));
+                      const res = await PortalContentService.downloads.reorder(order);
+                      if(res.success){
+                        toast({ title: 'ترتیب ذخیره شد', description: res.updated ? `${res.updated} آیتم` : undefined });
                         refetchDownloads();
-                      } else {
-                        toast({ title: 'خطا', description: json.error || 'ذخیره ترتیب ناموفق بود', variant:'destructive' });
                       }
                     } catch(err:any){
                       toast({ title: 'خطا', description: err.message, variant:'destructive' });

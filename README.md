@@ -197,53 +197,95 @@ client/  server/  shared/  scripts/  uploads/  docker-compose.yml  Dockerfile
 | GET | /api/invoices | لیست فاکتورها |
 
 ---
-## 21.1 مدیریت محتوای پرتال (Phase 1 و 2 ادغام شده)
-فاز اولیه پیاده‌سازی بلوک‌های محتوایی، اکنون با ادغام «اطلاعیه‌ها» و «لینک‌های دانلود اپ‌ها» در یک صفحه واحد (`/admin/portal-content`) تکمیل شده است. تب‌های قدیمی مستقل حذف از ناوبری شده‌اند اما فایل‌های legacy تا نهایی‌سازی پاکسازی باقی هستند (مسیر rollback آسان).
+## 21.1 مدیریت محتوای پرتال (Phase 1 و 2 ادغام شده - بهبود یافته)
+این بخش امکان مدیریت کامل محتوای پرتال عمومی را فراهم می‌کند:
 
-مسیرهای Admin (احراز هویت لازم):
+### معماری کلی
+- **صفحه مدیریت**: `/admin/portal-content` (UI یکپارچه با 4 تب)
+- **Backend API**: ماژولار و جداسازی شده در `server/routes/`
+- **Frontend Service**: `client/src/services/portal-content.ts`
+
+### تب‌های موجود
+
+#### 1. بلوک‌های محتوایی (Blocks)
+مدیریت بلوک‌های متنی استاندارد پرتال:
+- `guidance`: راهنمایی و توصیه‌ها
+- `contact_info`: اطلاعات تماس
+- `downloads_intro`: مقدمه دانلود اپلیکیشن‌ها
+- `support_hours`: ساعات پشتیبانی
+- `announcements_title`: عنوان بخش اعلانات
+
+**ویژگی‌ها**:
+- ذخیره تک‌تک یا دسته‌جمعی (Save / Save All)
+- ردیابی تغییرات با dirty state
+- Optimistic UI updates
+- میانبر کیبورد: `Ctrl+S` / `Cmd+S`
+
+#### 2. اطلاعیه‌ها (Announcements)
+- CRUD کامل (ایجاد، خواندن، ویرایش، حذف)
+- فیلدها: عنوان، محتوا، اولویت، نوع (info/warning/success/error), فعال/غیرفعال، تاریخ انقضا
+- اعتبارسنجی فرم (طول عنوان، محتوا، اولویت)
+- مرتب‌سازی بر اساس اولویت
+
+#### 3. لینک‌های دانلود اپلیکیشن (Downloads)
+- CRUD کامل
+- **Drag & Drop Reorder**: تغییر ترتیب نمایش با کشیدن
+- دکمه "ذخیره ترتیب": POST به `/api/admin/app-downloads/reorder`
+- فیلدها: عنوان، لینک، توضیحات، QR Code, Video, displayOrder, isActive
+
+#### 4. پیش‌نمایش (Preview)
+- نمایش ترکیبی read-only از تمام محتوای پرتال
+- شامل: بلوک‌ها + اطلاعیه‌های فعال + اپلیکیشن‌ها
+- Endpoint: `GET /api/admin/portal-content-blocks/full`
+
+### API های Backend
+
+**بلوک‌های محتوایی** (`/api/admin/portal-content-blocks`):
 | متد | مسیر | توضیح |
 |-----|------|-------|
-| GET | /api/admin/portal-content-blocks | دریافت لیست بلوک‌های استاندارد (guaranteed keys) |
-| PUT | /api/admin/portal-content-blocks/:blockKey | ایجاد/بروزرسانی (upsert) بلوک مشخص |
+| GET | `/` | لیست همه بلوک‌ها (guaranteed keys با fallback) |
+| PUT | `/:blockKey` | بروزرسانی/ایجاد یک بلوک |
+| GET | `/full` | محتوای کامل (بلوک‌ها + اطلاعیه‌ها + دانلودها) |
+| PUT | `/settings` | بروزرسانی دسته‌جمعی بلوک‌ها |
 
-کلیدهای فعلی:
-guidance, contact_info, downloads_intro, support_hours, announcements_title
+**اطلاعیه‌ها** (`/api/admin/announcements`):
+| متد | مسیر | توضیح |
+|-----|------|-------|
+| GET | `/` | لیست همه اطلاعیه‌ها |
+| POST | `/` | ایجاد اطلاعیه جدید |
+| PUT | `/:id` | ویرایش اطلاعیه |
+| DELETE | `/:id` | حذف اطلاعیه |
 
-UI فعلی: صفحه `PortalContentManager` شامل تب‌های:
-- Blocks (ویرایش ساخت‌یافته بلوک‌های محتوایی با Save, Save All)
-- Announcements (CRUD + اعتبارسنجی طول، نوع، اولویت)
-- Downloads (CRUD + Drag & Drop reorder + ذخیره ترتیب)
-- Preview (نمای ترکیبی read-only از blocks + announcements + downloads)
+**لینک‌های دانلود** (`/api/admin/app-downloads`):
+| متد | مسیر | توضیح |
+|-----|------|-------|
+| GET | `/` | لیست همه اپلیکیشن‌ها |
+| POST | `/` | ایجاد اپلیکیشن جدید |
+| PUT | `/:id` | ویرایش اپلیکیشن |
+| DELETE | `/:id` | حذف اپلیکیشن |
+| PATCH | `/reorder` | ذخیره ترتیب جدید (payload: `{items: [{id, displayOrder}]}`) |
 
-ایمن‌سازی:
-1. هنوز پرتال عمومی از settings موجود می‌خواند ⇒ بدون ریسک رگرسیون.
-2. حذف تب‌های قدیمی «Portal» و «Invoice Template» از صفحه Settings انجام شد (Deprecated) برای جلوگیری از سردرگمی.
-3. امکان rollback سریع: کافی است commit مربوط به حذف UI قدیمی revert شود و روتر جدید حذف گردد.
+### تست API (نمونه)
+```bash
+# لیست بلوک‌ها
+curl -s http://localhost:3000/api/admin/portal-content-blocks -b cookie.txt
 
-گام‌های انجام‌شده (Phase 2):
-1. ادغام تب‌های Announcements و Downloads + Preview.
-2. Drag & Drop برای ترتیب نمایش دانلودها + دکمه «ذخیره ترتیب» (POST /app-downloads/reorder).
-3. Service ماژولار `portal-content.ts` برای جداسازی منطق API.
-4. اعتبارسنجی فرم‌ها (طول، فرمت لینک، محدودیت اولویت).
+# بروزرسانی یک بلوک
+curl -X PUT http://localhost:3000/api/admin/portal-content-blocks/guidance \
+  -H "Content-Type: application/json" \
+  -d '{"title":"راهنمایی","body":"متن جدید راهنما"}' \
+  -b cookie.txt
 
-گام‌های بعد (Phase 3):
-1. افزودن نسخه‌بندی بلوک‌ها (history snapshot).
-2. A11Y بهبود یافته (کیبوردی برای Drag & Drop، aria-label ها).
-3. حذف کامل فایل‌های legacy پس از یک دوره پایش.
-
-Rollback Quick Guide:
+# محتوای کامل
+curl -s http://localhost:3000/api/admin/portal-content-blocks/full -b cookie.txt
 ```
-git revert <commit_that_removed_old_settings_tabs>
-# یا حذف دستی مسیر /api/admin/portal-content-blocks و صفحه PortalContentManager
-```
 
-تست سریع صحت:
-```
-curl -s localhost:3000/api/admin/portal-content-blocks -b cookie.txt -c cookie.txt
-```
-خروجی باید شامل همه کلیدهای استاندارد حتی اگر مقدار body اولیه fallback باشد.
+### Migration & Rollback
+- **جداول**: `portal_content_blocks`, `announcements`, `app_downloads` (migrations موجود)
+- **Rollback**: ساختار legacy `settings` هنوز حفظ شده (برای بازگشت سریع)
 
 ---
+
 ## 21.2 مهاجرت خواندن محتوای پرتال (Feature Flag)
 فلگ چندمرحله‌ای جدید: portal_content_read_switch
 
@@ -279,28 +321,147 @@ curl -X POST -H 'Content-Type: application/json' \
 
 Deprecated Tabs: در صفحه Settings تب‌های Portal و Invoice Template حذف نشده‌اند بلکه با برچسب Deprecated و هشدار هدایت به صفحه جدید (/admin/portal-content) نشانه‌گذاری شده‌اند (اصل "حذف نه، ارتقا").
 
-Instrumentation پردازش Import (گسترش یافته):
-- جدول import_jobs (migration 011) + مسیر جدید `/api/admin/import-jobs/:jobCode/start` برای شبیه‌سازی pipeline سمت سرور.
-- مراحل واقعی سمت سرور: pending → validating → ingesting (به‌روزرسانی processedRecords) → enriching → completed (یا failed در صورت خطا).
-- کلاینت: محاسبه درصد پیشرفت ترکیبی (stage weight + رکوردهای پردازش‌شده).
-
-Regression Script به‌روزرسانی شده:
+Regression Script:
 ```
 BASE_URL=http://localhost:3000 ts-node scripts/portal-content-regression.ts
 ```
-خروجی شامل:
-1. تایید presence کلیدها
-2. تست upsert + revert guidance
-3. Snapshot SHA256 برای تشخیص drift
-4. (اختیاری) تست round-trip دوم با EXTRA_ROUND_TRIP=1
-
-وضعیت کنونی Import Jobs:
-1. UI پیشرفت مرحله‌ای و Event Log تکمیل.
-2. سرور اکنون قابلیت progression خودکار دارد (endpoint start).
-3. گام بعد: اتصال آپلود واقعی فایل به ایجاد و start خودکار job + احتمالا SSE/WebSocket برای کاهش Polling.
 
 ---
-## 21.3 مانیتور مرحله‌ای پردازش فایل‌ها (Import Jobs)
+
+## 21.3 پردازش فایل JSON و مانیتورینگ Real-Time (بهبود یافته)
+سیستم پردازش فایل‌های JSON ریز جزئیات با نمایش گرافیکی پیشرفته و پیگیری real-time.
+
+### معماری سیستم
+
+#### Frontend Components
+1. **`LiveProcessingMonitor`** (`client/src/components/dashboard/LiveProcessingMonitor.tsx`)
+   - نمایش زنده پیشرفت بر اساس Import Jobs API
+   - Polling هوشمند (متوقف می‌شود در صورت completed/failed)
+   - نمایش آمار: کل رکوردها، پردازش شده، خطاها
+   - Status badges برای وضعیت‌های مختلف
+
+2. **`ProcessingProgressBar`** (`client/src/components/dashboard/ProcessingProgressBar.tsx`)
+   - Progress bar با انیمیشن shimmer
+   - آیکون‌های متحرک بر اساس فاز (Upload, Validating, Processing)
+   - تم رنگی بر اساس وضعیت (blue, green, yellow, red)
+   - نمایش مراحل پردازش
+
+3. **`JobProgress`** (`client/src/components/JobProgress.tsx`)
+   - Timeline نمایش مراحل: pending → validating → ingesting → enriching → completed
+   - Progress bar چندمرحله‌ای
+   - نمایش خطاها
+
+#### Backend Infrastructure
+1. **Import Jobs Table** (migration `011_import_jobs.sql`)
+   ```sql
+   CREATE TABLE import_jobs (
+     id SERIAL PRIMARY KEY,
+     job_code VARCHAR(100) UNIQUE NOT NULL,
+     source_file_name VARCHAR(255),
+     status VARCHAR(50) DEFAULT 'pending',
+     total_records INTEGER DEFAULT 0,
+     processed_records INTEGER DEFAULT 0,
+     error_count INTEGER DEFAULT 0,
+     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+     finished_at TIMESTAMP,
+     last_error TEXT
+   );
+   ```
+
+2. **API Endpoints** (`/api/admin/import-jobs`)
+   | متد | مسیر | توضیح |
+   |-----|------|-------|
+   | GET | `/` | لیست آخرین 50 job |
+   | POST | `/` | ایجاد job جدید |
+   | PATCH | `/:jobCode` | بروزرسانی وضعیت/شمارنده‌ها |
+   | POST | `/:jobCode/start` | شروع خودکار progression |
+
+3. **Services** (`client/src/services/import-jobs.ts`)
+   - `createImportJob()`: ایجاد job در سرور
+   - `updateImportJob()`: بروزرسانی پیشرفت
+   - `useImportJobPolling()`: Hook polling برای یک job خاص
+   - `useImportJobs()`: Hook polling برای لیست jobs
+   - `calculateProgress()`: محاسبه درصد بر اساس stage + records
+
+### جریان کامل پردازش (Workflow)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Dashboard
+    participant UploadFlow
+    participant API
+    participant Worker
+
+    User->>Dashboard: انتخاب فایل JSON
+    Dashboard->>UploadFlow: selectFile(file)
+    UploadFlow->>UploadFlow: اعتبارسنجی محلی
+    UploadFlow->>API: createImportJob(jobCode, fileName, totalRecords)
+    API-->>UploadFlow: {success, jobCode}
+    UploadFlow->>API: POST /api/admin/upload-json
+    API->>Worker: شروع پردازش background
+    Worker->>API: PATCH /import-jobs/:jobCode {status: 'validating'}
+    API-->>Dashboard: polling data
+    Dashboard->>User: LiveProcessingMonitor نمایش پیشرفت
+    Worker->>API: PATCH {status: 'ingesting', processedRecords: X}
+    Worker->>API: PATCH {status: 'enriching'}
+    Worker->>API: PATCH {status: 'completed'}
+    Dashboard->>User: نمایش موفقیت
+```
+
+### مراحل Processing
+1. **pending**: Job ایجاد شده، منتظر شروع
+2. **validating**: اعتبارسنجی ساختار JSON
+3. **ingesting**: وارد کردن رکوردها به دیتابیس
+4. **enriching**: غنی‌سازی داده‌ها (محاسبه فاکتورها، نمایندگان)
+5. **completed** / **failed**: پایان موفق یا با خطا
+
+### محاسبه Progress
+```typescript
+const stageIndex = STATUS_ORDER.indexOf(job.status);
+const stageWeight = stageIndex / (STATUS_ORDER.length - 2);
+const recordProgress = job.processedRecords / job.totalRecords;
+const totalProgress = Math.min(stageWeight * 40 + recordProgress * 60, 99);
+```
+
+### صفحات مرتبط
+- **داشبورد**: `/` - نمایش آپلود و پیشرفت live
+- **مانیتور Jobs**: `/admin/import-jobs` - لیست تمام jobs و وضعیت آن‌ها
+- **Debug Actions**: `/admin/debug-actions` - نمایش jobs فعال + feature flags
+
+### تست و Debugging
+```bash
+# ایجاد یک job تستی
+curl -X POST http://localhost:3000/api/admin/import-jobs \
+  -H "Content-Type: application/json" \
+  -d '{"jobCode":"test-123","sourceFileName":"test.json","totalRecords":1000}' \
+  -b cookie.txt
+
+# بروزرسانی پیشرفت
+curl -X PATCH http://localhost:3000/api/admin/import-jobs/test-123 \
+  -H "Content-Type: application/json" \
+  -d '{"status":"ingesting","processedRecords":500}' \
+  -b cookie.txt
+
+# دریافت وضعیت
+curl http://localhost:3000/api/admin/import-jobs -b cookie.txt | jq
+```
+
+### اسکریپت Demo
+```bash
+BASE_URL=http://localhost:3000 ts-node scripts/demo-import-job.ts
+```
+
+### بهبودهای آتی (Roadmap)
+- [ ] اتصال خودکار Job به آپلود واقعی فایل
+- [ ] WebSocket / SSE برای کاهش polling
+- [ ] پشتیبانی از pause/resume
+- [ ] نمایش preview رکوردهای invalid
+- [ ] Export گزارش خطاها به CSV
+
+---
+
+## 21.4 مانیتور مرحله‌ای پردازش فایل‌ها (Import Jobs) [DEPRECATED - جایگزین شده]
 این فاز، قابلیت مشاهده پیشرفت Job های پردازش فایل JSON را با مراحل زیر فراهم می‌کند:
 pending → validating → ingesting → enriching → completed (یا failed)
 

@@ -41,6 +41,7 @@ export async function createImportJob(params: {
     const response = await fetch('/api/admin/import-jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({
         jobCode: params.jobCode,
         sourceFileName: params.sourceFileName || null,
@@ -48,6 +49,10 @@ export async function createImportJob(params: {
       })
     });
     const data = await response.json();
+    if(!response.ok || data.success === false){
+      console.error('createImportJob failed', data);
+      return { success:false, error: data.error || response.statusText };
+    }
     return data;
   } catch (error) {
     console.error('Failed to create import job:', error);
@@ -71,13 +76,33 @@ export async function updateImportJob(
     const response = await fetch(`/api/admin/import-jobs/${jobCode}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify(updates)
     });
     const data = await response.json();
+    if(!response.ok || data.success === false){
+      console.warn('updateImportJob failed', data);
+    }
     return data;
   } catch (error) {
     console.error('Failed to update import job:', error);
     return { success: false, error: (error as Error).message };
+  }
+}
+
+/**
+ * شروع کردن pipeline سمت سرور (اگر پشتیبانی شود)
+ */
+export async function startImportJob(jobCode: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch(`/api/admin/import-jobs/${jobCode}/start`, { method:'POST', credentials: 'include' });
+    const json = await res.json().catch(()=>({ success:false, error:'invalid_json' }));
+    if(!res.ok || json.success === false){
+      return { success:false, error: json.error || res.statusText };
+    }
+    return { success:true };
+  } catch(err){
+    return { success:false, error:(err as Error).message };
   }
 }
 
@@ -89,7 +114,7 @@ export function useImportJobPolling(jobCode: string | null, enabled: boolean = t
     queryKey: ['/api/admin/import-jobs', jobCode],
     queryFn: async () => {
       if (!jobCode) return null;
-      const response = await fetch('/api/admin/import-jobs');
+      const response = await fetch('/api/admin/import-jobs', { credentials: 'include' });
       const data = await response.json();
       if (!data.success) return null;
       const jobs: ImportJob[] = data.data || [];
@@ -97,12 +122,13 @@ export function useImportJobPolling(jobCode: string | null, enabled: boolean = t
     },
     enabled: enabled && !!jobCode,
     refetchInterval: (query) => {
-      const job = query.state.data;
-      // اگر تکمیل شد یا شکست خورد، polling متوقف شود
-      if (!job || job.status === 'completed' || job.status === 'failed') {
+      const job = query.state.data as ImportJob | null;
+      // فقط زمانی متوقف شود که صراحتاً به حالت پایان رسیده باشد
+      if (job && (job.status === 'completed' || job.status === 'failed')) {
         return false;
       }
-      return 3000; // هر 3 ثانیه polling
+      // اگر هنوز job=null (داده سرور نرسیده) => ادامه polling با دوره کوتاه‌تر برای اولین ثانیه‌ها
+      return job ? 3000 : 1500;
     },
     retry: 2
   });
@@ -146,6 +172,8 @@ export function calculateProgress(job: ImportJob | null): number {
     return Math.min(Math.floor((stageWeight * 40 + recordProgress * 60)), 99);
   }
   
-  // فقط بر اساس مرحله
-  return Math.floor(stageWeight * 100);
+  // فقط بر اساس مرحله (fallback)
+  const stageBased = Math.floor(stageWeight * 100);
+  // جلوگیری از گیر کردن روی 0 در مراحل بعد از pending
+  return stageBased === 0 && job.status !== 'pending' ? 5 : stageBased;
 }

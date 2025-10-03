@@ -274,40 +274,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // NEW: Trigger server-side simulated pipeline (optional) - converts from pending -> validating -> ingesting -> enriching -> completed
-  app.post('/api/admin/import-jobs/:jobCode/start', authMiddleware, async (req, res) => {
-    try {
-      const { jobCode } = req.params;
-      const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
-      // Set startedAt if not set; move to validating
-      await db.update(importJobs).set({ status: 'validating', startedAt: new Date() }).where(eq(importJobs.jobCode, jobCode));
-      res.json({ success:true, started:true });
-      // Fire and forget async progression
-      (async () => {
-        try {
-          await delay(1500);
-          await db.update(importJobs).set({ status: 'ingesting' }).where(eq(importJobs.jobCode, jobCode));
-          // simulate record ingestion
-          const recordTargetRes = await db.select({ total: importJobs.totalRecords }).from(importJobs).where(eq(importJobs.jobCode, jobCode));
-          const total = recordTargetRes[0]?.total || 0;
-          let processed = 0;
-          while (processed < total) {
-            processed += Math.max(1, Math.round(total / 10));
-            if (processed > total) processed = total;
-            await db.update(importJobs).set({ processedRecords: processed }).where(eq(importJobs.jobCode, jobCode));
-            await delay(500);
-          }
-          await db.update(importJobs).set({ status: 'enriching' }).where(eq(importJobs.jobCode, jobCode));
-          await delay(1200);
-          await db.update(importJobs).set({ status: 'completed', finishedAt: new Date() }).where(eq(importJobs.jobCode, jobCode));
-        } catch (err) {
-          await db.update(importJobs).set({ status: 'failed', lastError: (err as Error).message, finishedAt: new Date() }).where(eq(importJobs.jobCode, jobCode));
-        }
-      })();
-    } catch (e) {
-      res.status(500).json({ success:false, error:'failed_start_pipeline', message:(e as Error).message });
-    }
-  });
   app.patch('/api/admin/import-jobs/:jobCode', authMiddleware, async (req, res) => {
     try {
       const { jobCode } = req.params;
@@ -324,6 +290,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success:true });
     } catch (e) {
       res.status(500).json({ success:false, error:'failed_update_import_job', message:(e as Error).message });
+    }
+  });
+
+  // 📤 NEW: Upload JSON file and create Import Job with processing
+  app.post('/api/admin/upload-json', authMiddleware, upload.single('file'), async (req: MulterRequest, res) => {
+    try {
+      const file = req.file;
+      const jobCode = req.body.jobCode;
+
+      if (!file) {
+        return res.status(400).json({ success: false, error: 'no_file_uploaded' });
+      }
+
+      if (!jobCode) {
+        return res.status(400).json({ success: false, error: 'missing_job_code' });
+      }
+
+      console.log(`📤 Upload JSON: ${file.originalname} (${file.size} bytes) - JobCode: ${jobCode}`);
+
+      // Parse JSON content
+      let jsonData: any;
+      try {
+        const fileContent = file.buffer.toString('utf-8');
+        jsonData = JSON.parse(fileContent);
+      } catch (parseError) {
+        console.error('❌ JSON parse error:', parseError);
+        return res.status(400).json({ 
+          success: false, 
+          error: 'invalid_json', 
+          message: 'فایل JSON نامعتبر است' 
+        });
+      }
+
+      // Determine record count
+      const records = Array.isArray(jsonData) ? jsonData : [jsonData];
+      const totalRecords = records.length;
+
+      console.log(`📊 JSON parsed: ${totalRecords} records`);
+
+      // Create Import Job
+      await db.insert(importJobs).values({
+        jobCode,
+        sourceFileName: file.originalname,
+        totalRecords,
+        status: 'pending',
+        processedRecords: 0,
+        errorCount: 0
+      }).onConflictDoNothing();
+
+      console.log(`✅ Import Job created: ${jobCode}`);
+
+      // Immediately start processing (fire and forget)
+      fetch(`http://localhost:3000/api/admin/import-jobs/${jobCode}/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': req.headers.cookie || ''
+        }
+      }).catch(err => console.error('Failed to start job:', err));
+
+      res.json({ 
+        success: true, 
+        jobCode,
+        totalRecords,
+        message: 'فایل آپلود و پردازش آغاز شد'
+      });
+
+    } catch (error) {
+      console.error('❌ Upload error:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: 'upload_failed', 
+        message: (error as Error).message 
+      });
     }
   });
 
@@ -733,6 +773,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return {
           timestamp: ts,
           amount: Math.round(base + Math.sin(i / 3) * 2800 + Math.random() * 1500)
+        };
+      });
+      res.json({ success: true, window: windowParam, data, generatedAt: new Date().toISOString() });
+    } catch (e:any) {
+      res.status(500).json({ success: false, error: 'failed_revenue_trend', details: e.message });
+    }
+  });
+
+  // Aging Buckets distribution (mock)
+  app.get('/api/dashboard/aging-buckets', authMiddleware, async (req, res) => {
+    try {
+      const distribution = {
+        current: 56000,
+        bucket_1_30: 34000,
+        bucket_31_60: 21000,
+        bucket_61_90: 11000,
+        bucket_90_plus: 5000
+      };
+      res.json({ success: true, data: distribution, generatedAt: new Date().toISOString() });
+    } catch (e:any) {
+      res.status(500).json({ success: false, error: 'failed_aging_buckets', details: e.message });
+    }
+  });
+
+  // Dashboard endpoint - Updated to use unified financial data with enhanced error handling
+  app.get("/api/dashboard", authMiddleware, async (req, res) => {
+    try {
+      console.log("📊 Dashboard request - returning minimal data (5 widgets removed)");
+      
+      // ✅ Minimal response - 5 statistical widgets removed
+      // This endpoint kept for cache invalidation compatibility
+      res.json({
+        success: true,
+        data: {
         };
       });
       res.json({ success: true, window: windowParam, data, generatedAt: new Date().toISOString() });

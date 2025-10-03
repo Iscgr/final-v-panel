@@ -76,8 +76,8 @@ export const AppDownloadsAPI = {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
   }),
   delete: (id: number) => apiFetch<{ success: boolean }>(`/api/admin/app-downloads/${id}`, { method: 'DELETE' }),
-  reorder: (items: { id: number; displayOrder: number }[]) => apiFetch<{ success: boolean }>(`/api/admin/app-downloads/reorder`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items })
+  reorder: (order: { id: number; displayOrder: number }[]) => apiFetch<{ success: boolean; updated?: number }>(`/api/admin/app-downloads/reorder`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order })
   })
 };
 
