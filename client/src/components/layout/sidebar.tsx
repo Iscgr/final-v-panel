@@ -35,6 +35,7 @@ const navigation = [
   { name: "همکاران فروش", href: "/sales-partners", icon: Handshake },
   { name: "اپلیکیشن‌ها", href: "/admin/app-downloads", icon: Download },
   { name: "اطلاعیه‌ها", href: "/admin/announcements", icon: Bell },
+  { name: "محتوای پرتال", href: "/admin/portal-content", icon: Edit },
   { name: "تنظیمات", href: "/settings", icon: Settings },
 ];
 

@@ -1,67 +1,12 @@
 import React from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { RefreshCcw } from 'lucide-react';
-
-interface ImportJob {
-  id: number;
-  jobCode: string;
-  sourceFileName: string | null;
-  status: string;
-  totalRecords: number;
-  processedRecords: number;
-  errorCount: number;
-  startedAt: string;
-  finishedAt: string | null;
-  lastError: string | null;
-}
-
-const STATUS_ORDER = ['pending','validating','ingesting','enriching','completed','failed'];
-const STEP_LABELS: Record<string,string> = {
-  pending: 'در صف',
-  validating: 'اعتبارسنجی',
-  ingesting: 'ورود دیتا',
-  enriching: 'غنی‌سازی',
-  completed: 'تکمیل',
-  failed: 'شکست'
-};
-
-function JobProgress({ job }: { job: ImportJob }) {
-  const currentIndex = STATUS_ORDER.indexOf(job.status);
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-[11px] text-gray-600">
-        <span>{job.jobCode}</span>
-        <span className="font-mono">{job.processedRecords}/{job.totalRecords}</span>
-      </div>
-      <div className="flex items-center gap-1">
-        {STATUS_ORDER.map((s, idx) => {
-          const active = idx <= currentIndex;
-          const isCurrent = idx === currentIndex;
-          const failed = job.status === 'failed' && s === 'failed';
-          return (
-            <div key={s} className={`flex-1 h-2 rounded ${failed ? 'bg-red-500 animate-pulse' : active ? 'bg-blue-600' : 'bg-gray-200'} ${isCurrent && !failed ? 'shadow-inner' : ''}`}></div>
-          );
-        })}
-      </div>
-      <div className="flex justify-between text-[10px] mt-1 text-gray-500">
-        {STATUS_ORDER.map(s => (
-          <span key={s} className={job.status === s ? 'text-blue-600 font-medium' : ''}>{STEP_LABELS[s]}</span>
-        ))}
-      </div>
-      {job.lastError && <div className="text-[10px] text-red-600 line-clamp-2">Err: {job.lastError}</div>}
-    </div>
-  );
-}
+import { useImportJobs } from '@/services/import-jobs';
+import { JobProgress } from '@/components/JobProgress';
+import type { ImportJob } from '@/services/import-jobs';
+import { STEP_LABELS } from '@/services/import-jobs';
 
 export default function ImportJobsMonitor() {
-  const { data, refetch, isFetching } = useQuery<{ success: boolean; data: ImportJob[] }>({
-    queryKey: ['/api/admin/import-jobs'],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/import-jobs');
-      return res.json();
-    },
-    refetchInterval: 4000
-  });
+  const { data, refetch, isFetching } = useImportJobs();
 
   const jobs = data?.data || [];
 
@@ -84,9 +29,9 @@ export default function ImportJobsMonitor() {
       <div className="grid md:grid-cols-2 gap-6">
         {jobs.map(job => (
           <div key={job.id} className="bg-white border rounded-lg p-4 shadow-sm space-y-3">
-            <JobProgress job={job} />
+            <JobProgress job={job} showDetails={true} />
             <div className="grid grid-cols-2 gap-2 text-[11px] text-gray-600">
-              <div><span className="text-gray-400">وضعیت:</span> {STEP_LABELS[job.status]||job.status}</div>
+              <div><span className="text-gray-400">وضعیت:</span> {STEP_LABELS[job.status] || job.status}</div>
               <div><span className="text-gray-400">خطاها:</span> {job.errorCount}</div>
               <div className="col-span-2"><span className="text-gray-400">فایل:</span> {job.sourceFileName || '—'}</div>
             </div>
