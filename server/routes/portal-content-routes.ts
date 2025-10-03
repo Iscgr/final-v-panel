@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db.js';
-import { portalContentBlocks } from '../../shared/schema.js';
+import { portalContentBlocks, announcements, appDownloads } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -60,6 +60,62 @@ router.put('/:blockKey', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('❌ Error updating portal content block:', err);
     res.status(500).json({ success: false, error: 'خطا در ذخیره بلوک' });
+  }
+});
+
+// GET /full  → بلوک‌ها + اطلاعیه‌های فعال + اپ‌های فعال + legacy portal settings (حداقلی)
+router.get('/full', async (req: Request, res: Response) => {
+  try {
+    const [blocksRows, annRows, dlRows] = await Promise.all([
+      db.select().from(portalContentBlocks),
+      db.select().from(announcements).orderBy(announcements.priority, announcements.id),
+      db.select().from(appDownloads).orderBy(appDownloads.displayOrder, appDownloads.id)
+    ]);
+    const normalizedBlocks = Object.entries(ALLOWED_BLOCKS).map(([key, meta]) => {
+      const existing = blocksRows.find(r => r.blockKey === key);
+      return existing || { id: 0, blockKey: key, title: meta.title, body: meta.fallbackBody, updatedAt: null, updatedBy: null };
+    });
+    res.json({
+      success: true,
+      data: {
+        blocks: normalizedBlocks,
+        announcements: annRows,
+        downloads: dlRows
+      }
+    });
+  } catch (e) {
+    console.error('❌ Error fetching full portal content:', e);
+    res.status(500).json({ success:false, error:'خطا در دریافت محتوای کامل پرتال' });
+  }
+});
+
+// PUT /settings (batch update blocks only for now; extensible)
+router.put('/settings', async (req: Request, res: Response) => {
+  try {
+    const { blocks } = req.body || {};
+    if (!Array.isArray(blocks)) return res.status(400).json({ success:false, error:'blocks باید آرایه باشد' });
+    const username = (req as any).user?.username || 'system';
+    for (const b of blocks) {
+      if (!b || typeof b.blockKey !== 'string' || typeof b.body !== 'string') {
+        return res.status(400).json({ success:false, error:'ساختار بلوک نامعتبر' });
+      }
+      if (!ALLOWED_BLOCKS[b.blockKey]) {
+        return res.status(400).json({ success:false, error:`blockKey نامعتبر: ${b.blockKey}` });
+      }
+      const existing = await db.select().from(portalContentBlocks).where(eq(portalContentBlocks.blockKey, b.blockKey));
+      if (existing.length) {
+        await db.update(portalContentBlocks)
+          .set({ body: b.body, title: b.title ?? existing[0].title, updatedBy: username, updatedAt: new Date() })
+          .where(eq(portalContentBlocks.blockKey, b.blockKey));
+      } else {
+        await db.insert(portalContentBlocks)
+          .values({ blockKey: b.blockKey, body: b.body, title: b.title ?? ALLOWED_BLOCKS[b.blockKey].title, updatedBy: username });
+      }
+    }
+    res.json({ success:true, updated: blocks.length });
+  } catch (e) {
+    console.error('❌ Error batch updating portal content blocks:', e);
+    res.status(500).json({ success:false, error:'خطا در بروزرسانی گروهی بلوک‌ها' });
   }
 });
 

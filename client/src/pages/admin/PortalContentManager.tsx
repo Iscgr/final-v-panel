@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, RefreshCcw, FileText, Megaphone, Download, Eye } from 'lucide-react';
+import { Save, RefreshCcw, FileText, Megaphone, Download, Eye, Plus, Trash2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface PortalContentBlock {
   id: number;
@@ -9,6 +10,27 @@ interface PortalContentBlock {
   body: string;
   updatedAt: string | null;
   updatedBy: string | null;
+}
+
+interface Announcement {
+  id: number;
+  title: string;
+  content: string;
+  priority: number;
+  type: string;
+  isActive: boolean;
+  expiresAt: string | null;
+}
+
+interface AppDownload {
+  id: number;
+  title: string;
+  description: string | null;
+  downloadLink: string;
+  qrCodeUrl: string | null;
+  videoUrl: string | null;
+  displayOrder: number;
+  isActive: boolean;
 }
 
 // Initial simple tab enum
@@ -21,10 +43,20 @@ const tabs = [
 
 export default function PortalContentManager() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('blocks');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [editBody, setEditBody] = useState('');
   const [editTitle, setEditTitle] = useState('');
+  const [originalBody, setOriginalBody] = useState('');
+  const [originalTitle, setOriginalTitle] = useState('');
+
+  // Announcements state
+  const [newAnn, setNewAnn] = useState({ title: '', content: '', priority: 0, type: 'info' });
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  // Downloads state
+  const [newDownload, setNewDownload] = useState({ title: '', downloadLink: '', description: '' });
+  const [editingDownload, setEditingDownload] = useState<AppDownload | null>(null);
 
   // Fetch blocks
   const { data, isLoading, refetch, isFetching } = useQuery<{ success: boolean; data: PortalContentBlock[] }>({
@@ -47,7 +79,26 @@ export default function PortalContentManager() {
       });
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: async (payload) => {
+      // Optimistic update cache
+      await queryClient.cancelQueries({ queryKey: ['/api/admin/portal-content-blocks'] });
+      const prev = queryClient.getQueryData<any>(['/api/admin/portal-content-blocks']);
+      if (prev?.data) {
+        const newData = prev.data.map((b: PortalContentBlock) => b.blockKey === payload.blockKey ? { ...b, title: payload.title, body: payload.body, updatedAt: new Date().toISOString() } : b);
+        queryClient.setQueryData(['/api/admin/portal-content-blocks'], { ...prev, data: newData });
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) queryClient.setQueryData(['/api/admin/portal-content-blocks'], ctx.prev);
+      toast({ title: 'خطا در ذخیره', description: 'عملیات ذخیره بلوک انجام نشد', variant: 'destructive' });
+    },
+    onSuccess: (_data, vars) => {
+      toast({ title: 'ذخیره شد', description: `بلوک ${vars.blockKey} با موفقیت بروزرسانی شد` });
+      setOriginalBody(editBody);
+      setOriginalTitle(editTitle);
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/admin/portal-content-blocks'] });
     }
   });
@@ -56,12 +107,104 @@ export default function PortalContentManager() {
     setSelectedKey(b.blockKey);
     setEditBody(b.body || '');
     setEditTitle(b.title || '');
+    setOriginalBody(b.body || '');
+    setOriginalTitle(b.title || '');
   };
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (!selectedKey) return;
-    saveMutation.mutate({ blockKey: selectedKey, title: editTitle, body: editBody });
-  };
+    if (!isDirty) return;
+    saveMutation.mutate({ blockKey: selectedKey, title: editTitle.trim(), body: editBody });
+  }, [selectedKey, editTitle, editBody, saveMutation, editBody, editTitle]);
+
+  // Auto-select first block once loaded
+  useEffect(() => {
+    if (!selectedKey && blocks.length) {
+      startEdit(blocks[0]);
+    }
+  }, [blocks, selectedKey]);
+
+  // Keyboard shortcut Ctrl+S / Cmd+S
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [handleSave]);
+
+  const isDirty = selectedKey && (editBody !== originalBody || editTitle !== originalTitle);
+  const isSaving = saveMutation.isPending;
+
+  // Fetch announcements
+  const { data: announcementsData, refetch: refetchAnnouncements } = useQuery<{ success: boolean; data: Announcement[] }>({
+    queryKey: ['/api/admin/announcements'],
+    queryFn: async () => (await fetch('/api/admin/announcements')).json()
+  });
+  const announcements = announcementsData?.data || [];
+
+  // Fetch downloads
+  const { data: downloadsData, refetch: refetchDownloads } = useQuery<{ success: boolean; data: AppDownload[] }>({
+    queryKey: ['/api/admin/app-downloads'],
+    queryFn: async () => (await fetch('/api/admin/app-downloads')).json()
+  });
+  const downloads = downloadsData?.data || [];
+
+  // Full content for preview
+  const { data: fullContentData, refetch: refetchFull } = useQuery<{ success: boolean; data: any }>({
+    queryKey: ['/api/admin/portal-content-blocks/full'],
+    queryFn: async () => (await fetch('/api/admin/portal-content-blocks/full')).json(),
+    enabled: activeTab === 'preview'
+  });
+
+  // Announcement mutations
+  const createAnnMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/admin/announcements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newAnn, priority: Number(newAnn.priority) || 0 }) });
+      return res.json();
+    },
+    onSuccess: (r: any) => {
+      if (r.success) {
+        toast({ title: 'اطلاعیه ایجاد شد' });
+        setNewAnn({ title: '', content: '', priority: 0, type: 'info' });
+        refetchAnnouncements();
+      } else toast({ title: 'خطا', description: r.error, variant: 'destructive' });
+    }
+  });
+  const updateAnnMutation = useMutation({
+    mutationFn: async (ann: Announcement) => {
+      const res = await fetch(`/api/admin/announcements/${ann.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ann) });
+      return res.json();
+    },
+    onSuccess: (r: any) => { if (r.success) { toast({ title: 'ویرایش اطلاعیه' }); setEditingAnnouncement(null); refetchAnnouncements(); } }
+  });
+  const deleteAnnMutation = useMutation({
+    mutationFn: async (id: number) => { const res = await fetch(`/api/admin/announcements/${id}`, { method: 'DELETE' }); return res.json(); },
+    onSuccess: (r: any) => { if (r.success) { toast({ title: 'حذف شد' }); refetchAnnouncements(); } }
+  });
+
+  // Download mutations
+  const createDownloadMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/admin/app-downloads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newDownload }) });
+      return res.json();
+    },
+    onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ افزوده شد' }); setNewDownload({ title: '', downloadLink: '', description: '' }); refetchDownloads(); } }
+  });
+  const updateDownloadMutation = useMutation({
+    mutationFn: async (d: AppDownload) => {
+      const res = await fetch(`/api/admin/app-downloads/${d.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
+      return res.json();
+    },
+    onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ ویرایش شد' }); setEditingDownload(null); refetchDownloads(); } }
+  });
+  const deleteDownloadMutation = useMutation({
+    mutationFn: async (id: number) => { const res = await fetch(`/api/admin/app-downloads/${id}`, { method: 'DELETE' }); return res.json(); },
+    onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ حذف شد' }); refetchDownloads(); } }
+  });
 
   // Derived for editor
   const currentBlock = selectedKey ? blocks.find(b => b.blockKey === selectedKey) : null;
@@ -92,8 +235,8 @@ export default function PortalContentManager() {
               {isLoading && <li className="text-xs text-gray-500">در حال بارگذاری...</li>}
               {!isLoading && blocks.map(b => (
                 <li key={b.blockKey}>
-                  <button onClick={() => startEdit(b)} className={`w-full text-right px-3 py-2 rounded border text-xs flex flex-col items-start ${selectedKey === b.blockKey ? 'bg-blue-50 border-blue-400' : 'bg-gray-50 hover:bg-gray-100 border-gray-200'}`}>
-                    <span className="font-medium text-gray-800">{b.title}</span>
+                  <button onClick={() => startEdit(b)} className={`w-full text-right px-3 py-2 rounded border text-xs flex flex-col items-start transition ${selectedKey === b.blockKey ? 'bg-blue-50 border-blue-400 shadow-sm' : 'bg-gray-50 hover:bg-gray-100 border-gray-200'}`}>
+                    <span className="font-medium text-gray-800 flex items-center gap-2">{b.title}{selectedKey === b.blockKey && isDirty && <span className="text-[10px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300">ویرایش نشده</span>}</span>
                     <span className="text-[10px] text-gray-500 ltr:font-mono rtl:font-sans">{b.blockKey}</span>
                   </button>
                 </li>
@@ -112,8 +255,8 @@ export default function PortalContentManager() {
                     <p className="text-xs text-gray-500">ویرایش محتوای بلوک - آخرین بروزرسانی: {currentBlock.updatedAt ? new Date(currentBlock.updatedAt).toLocaleString('fa-IR') : '—'}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button disabled={saveMutation.isPending} onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50">
-                      <Save className="w-4 h-4" /> ذخیره
+                    <button disabled={!isDirty || isSaving} onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50">
+                      <Save className="w-4 h-4" /> {isSaving ? 'در حال ذخیره...' : isDirty ? 'ذخیره' : 'ذخیره شده'}
                     </button>
                   </div>
                 </div>
@@ -125,12 +268,11 @@ export default function PortalContentManager() {
                   <label className="block text-xs font-medium text-gray-700 mb-1">محتوا (Markdown ساده یا متن)</label>
                   <textarea value={editBody} onChange={e => setEditBody(e.target.value)} className="w-full px-3 py-2 border rounded-lg font-mono text-xs leading-relaxed" rows={14} />
                 </div>
-                {saveMutation.isError && (
-                  <div className="text-xs text-red-600">خطا در ذخیره. دوباره تلاش کنید.</div>
-                )}
-                {saveMutation.isSuccess && (
-                  <div className="text-xs text-green-600">ذخیره شد.</div>
-                )}
+                <div className="flex items-center gap-4 pt-2 text-[11px]">
+                  {isDirty && !isSaving && <span className="text-amber-600">تغییرات ذخیره نشده</span>}
+                  {isSaving && <span className="text-blue-600 animate-pulse">در حال ذخیره...</span>}
+                  {!isDirty && !isSaving && selectedKey && <span className="text-green-600">همه تغییرات ذخیره شده‌اند</span>}
+                </div>
               </div>
             )}
           </div>
@@ -138,9 +280,163 @@ export default function PortalContentManager() {
       )}
 
       {activeTab !== 'blocks' && (
-        <div className="bg-white rounded-lg shadow p-10 text-center text-sm text-gray-500 border border-dashed border-gray-300">
-          <p>تب «{tabs.find(t => t.key === activeTab)?.label}» در فاز بعدی یکپارچه خواهد شد.</p>
-          <p className="mt-2 text-xs">(Phase 1 scope محدود به بلوک‌های متنی است)</p>
+        <div className="bg-white rounded-lg shadow p-6 text-sm text-gray-700 border border-gray-200 min-h-[360px]">
+          {activeTab === 'announcements' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold">اطلاعیه‌ها</h2>
+                <button onClick={() => refetchAnnouncements()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
+              </div>
+              {/* Create */}
+              <div className="border rounded-lg p-4 bg-gray-50 space-y-2">
+                <div className="grid md:grid-cols-6 gap-2">
+                  <input value={newAnn.title} onChange={e => setNewAnn(a => ({ ...a, title: e.target.value }))} placeholder="عنوان" className="px-2 py-1 border rounded col-span-2 text-xs" />
+                  <input value={newAnn.content} onChange={e => setNewAnn(a => ({ ...a, content: e.target.value }))} placeholder="محتوا" className="px-2 py-1 border rounded col-span-2 text-xs" />
+                  <input type="number" value={newAnn.priority} onChange={e => setNewAnn(a => ({ ...a, priority: Number(e.target.value) }))} placeholder="اولویت" className="px-2 py-1 border rounded text-xs" />
+                  <select value={newAnn.type} onChange={e => setNewAnn(a => ({ ...a, type: e.target.value }))} className="px-2 py-1 border rounded text-xs">
+                    <option value="info">info</option><option value="warning">warning</option><option value="success">success</option><option value="error">error</option>
+                  </select>
+                </div>
+                <button disabled={!newAnn.title || !newAnn.content} onClick={() => createAnnMutation.mutate()} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1"><Plus className="w-3 h-3" />افزودن</button>
+              </div>
+              {/* List */}
+              <div className="space-y-2 max-h-72 overflow-auto">
+                {announcements.map(a => (
+                  <div key={a.id} className="border rounded p-3 bg-white flex flex-col gap-2">
+                    {editingAnnouncement?.id === a.id ? (
+                      <div className="space-y-2">
+                        <input value={editingAnnouncement.title} onChange={e => setEditingAnnouncement(o => o ? { ...o, title: e.target.value } : o)} className="w-full text-xs border px-2 py-1 rounded" />
+                        <textarea value={editingAnnouncement.content} onChange={e => setEditingAnnouncement(o => o ? { ...o, content: e.target.value } : o)} rows={2} className="w-full text-xs border px-2 py-1 rounded" />
+                        <div className="flex gap-2 items-center">
+                          <input type="number" value={editingAnnouncement.priority} onChange={e => setEditingAnnouncement(o => o ? { ...o, priority: Number(e.target.value) } : o)} className="w-20 text-xs border px-2 py-1 rounded" />
+                          <select value={editingAnnouncement.type} onChange={e => setEditingAnnouncement(o => o ? { ...o, type: e.target.value } : o)} className="text-xs border px-2 py-1 rounded">
+                            <option value="info">info</option><option value="warning">warning</option><option value="success">success</option><option value="error">error</option>
+                          </select>
+                          <label className="text-[10px] flex items-center gap-1"><input type="checkbox" checked={editingAnnouncement.isActive} onChange={e => setEditingAnnouncement(o => o ? { ...o, isActive: e.target.checked } : o)} />فعال</label>
+                          <button onClick={() => editingAnnouncement && updateAnnMutation.mutate(editingAnnouncement)} className="text-xs px-2 py-1 bg-green-600 text-white rounded">ذخیره</button>
+                          <button onClick={() => setEditingAnnouncement(null)} className="text-xs px-2 py-1 border rounded">لغو</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="text-xs leading-5">
+                          <div className="font-semibold flex items-center gap-2">{a.title}<span className="px-1 rounded bg-gray-100 border text-[10px]">{a.type}</span>{!a.isActive && <span className="text-[10px] bg-red-50 border border-red-200 text-red-600 rounded px-1">غیرفعال</span>}</div>
+                          <div className="text-gray-600 whitespace-pre-wrap">{a.content}</div>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <button onClick={() => setEditingAnnouncement(a)} className="text-[10px] px-2 py-1 border rounded">ویرایش</button>
+                          <button onClick={() => deleteAnnMutation.mutate(a.id)} className="text-[10px] px-2 py-1 border rounded text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3" />حذف</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {announcements.length === 0 && <div className="text-center text-xs text-gray-500">اطلاعیه‌ای ثبت نشده</div>}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'downloads' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold">اپلیکیشن‌های دانلود</h2>
+                <button onClick={() => refetchDownloads()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
+              </div>
+              {/* Create */}
+              <div className="border rounded-lg p-4 bg-gray-50 space-y-2">
+                <div className="grid md:grid-cols-5 gap-2">
+                  <input value={newDownload.title} onChange={e => setNewDownload(d => ({ ...d, title: e.target.value }))} placeholder="عنوان" className="px-2 py-1 border rounded text-xs" />
+                  <input value={newDownload.downloadLink} onChange={e => setNewDownload(d => ({ ...d, downloadLink: e.target.value }))} placeholder="لینک" className="px-2 py-1 border rounded text-xs col-span-2" />
+                  <input value={newDownload.description} onChange={e => setNewDownload(d => ({ ...d, description: e.target.value }))} placeholder="توضیح" className="px-2 py-1 border rounded text-xs" />
+                  <button disabled={!newDownload.title || !newDownload.downloadLink} onClick={() => createDownloadMutation.mutate()} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1"><Plus className="w-3 h-3" />افزودن</button>
+                </div>
+              </div>
+              {/* List */}
+              <div className="space-y-2 max-h-72 overflow-auto">
+                {downloads.map(d => (
+                  <div key={d.id} className="border rounded p-3 bg-white flex items-start justify-between gap-4">
+                    {editingDownload?.id === d.id ? (
+                      <div className="flex-1 space-y-2">
+                        <input value={editingDownload.title} onChange={e => setEditingDownload(o => o ? { ...o, title: e.target.value } : o)} className="w-full text-xs border px-2 py-1 rounded" />
+                        <input value={editingDownload.downloadLink} onChange={e => setEditingDownload(o => o ? { ...o, downloadLink: e.target.value } : o)} className="w-full text-xs border px-2 py-1 rounded" />
+                        <textarea value={editingDownload.description || ''} onChange={e => setEditingDownload(o => o ? { ...o, description: e.target.value } : o)} rows={2} className="w-full text-xs border px-2 py-1 rounded" />
+                        <div className="flex gap-2 items-center">
+                          <label className="text-[10px] flex items-center gap-1"><input type="checkbox" checked={editingDownload.isActive} onChange={e => setEditingDownload(o => o ? { ...o, isActive: e.target.checked } : o)} />فعال</label>
+                          <button onClick={() => editingDownload && updateDownloadMutation.mutate(editingDownload)} className="text-[10px] px-2 py-1 bg-green-600 text-white rounded">ذخیره</button>
+                          <button onClick={() => setEditingDownload(null)} className="text-[10px] px-2 py-1 border rounded">لغو</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex-1 text-xs space-y-1">
+                        <div className="font-semibold flex items-center gap-2">{d.title}{!d.isActive && <span className="text-[10px] bg-red-50 border border-red-200 text-red-600 rounded px-1">غیرفعال</span>}</div>
+                        <div className="text-gray-600 break-all">{d.downloadLink}</div>
+                        {d.description && <div className="text-gray-500 whitespace-pre-wrap">{d.description}</div>}
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1">
+                      {editingDownload?.id === d.id ? null : <button onClick={() => setEditingDownload(d)} className="text-[10px] px-2 py-1 border rounded">ویرایش</button>}
+                      <button onClick={() => deleteDownloadMutation.mutate(d.id)} className="text-[10px] px-2 py-1 border rounded text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3" />حذف</button>
+                    </div>
+                  </div>
+                ))}
+                {downloads.length === 0 && <div className="text-center text-xs text-gray-500">اپلیکیشنی ثبت نشده</div>}
+              </div>
+              <div className="pt-2 text-[10px] text-gray-500">(درگ و دراپ برای ترتیب‌دهی در گام بعدی افزوده می‌شود)</div>
+            </div>
+          )}
+
+          {activeTab === 'preview' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold">پیش‌نمایش پرتال (read-only)</h2>
+                <button onClick={() => refetchFull()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />بارگذاری</button>
+              </div>
+              {!fullContentData && <div className="text-xs text-gray-500">در حال بارگذاری...</div>}
+              {fullContentData && (
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2 space-y-4">
+                    <div className="border rounded-lg p-4 bg-white">
+                      <h3 className="font-semibold text-sm mb-2">بلوک‌ها</h3>
+                      <ul className="space-y-2 text-xs">
+                        {fullContentData.data.blocks.map((b: any) => (
+                          <li key={b.blockKey} className="border rounded p-2">
+                            <div className="font-medium">{b.title} <span className="text-[10px] text-gray-500">({b.blockKey})</span></div>
+                            <div className="text-gray-600 whitespace-pre-wrap mt-1 leading-relaxed text-[11px]">{b.body.slice(0, 500) || '—'}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="border rounded-lg p-4 bg-white">
+                      <h3 className="font-semibold text-sm mb-2">اطلاعیه‌های فعال</h3>
+                      <ul className="space-y-2 text-xs">
+                        {fullContentData.data.announcements.map((a: any) => (
+                          <li key={a.id} className="border rounded p-2">
+                            <div className="font-medium flex items-center gap-2">{a.title}<span className="text-[10px] bg-gray-100 border rounded px-1">{a.type}</span></div>
+                            <div className="text-gray-600 whitespace-pre-wrap mt-1 leading-relaxed text-[11px]">{a.content}</div>
+                          </li>
+                        ))}
+                        {fullContentData.data.announcements.length === 0 && <li className="text-gray-400">موردی نیست</li>}
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="border rounded-lg p-4 bg-white">
+                      <h3 className="font-semibold text-sm mb-2">اپلیکیشن‌ها</h3>
+                      <ul className="space-y-1 text-[11px]">
+                        {fullContentData.data.downloads.map((d: any) => (
+                          <li key={d.id} className="border rounded px-2 py-1 flex flex-col">
+                            <span className="font-medium">{d.title}</span>
+                            <span className="text-gray-600 break-all">{d.downloadLink}</span>
+                          </li>
+                        ))}
+                        {fullContentData.data.downloads.length === 0 && <li className="text-gray-400">موردی نیست</li>}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

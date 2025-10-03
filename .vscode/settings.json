@@ -14,5 +14,6 @@
         "html": "html",
         "typescript": "typescript",
         "typescriptreact": "typescriptreact"
-    }
+    },
+    "CodeGPT.apiKey": "grok"
 }

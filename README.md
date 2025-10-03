@@ -234,6 +234,103 @@ curl -s localhost:3000/api/admin/portal-content-blocks -b cookie.txt -c cookie.t
 خروجی باید شامل همه کلیدهای استاندارد حتی اگر مقدار body اولیه fallback باشد.
 
 ---
+## 21.2 مهاجرت خواندن محتوای پرتال (Feature Flag)
+فلگ چندمرحله‌ای جدید: portal_content_read_switch
+
+حالات:
+| حالت | توضیح |
+|------|-------|
+| off | رفتار legacy (خواندن از settings) |
+| shadow | خواندن موازی از portal_content_blocks + لاگ تفاوت‌ها (بدون تغییر خروجی) |
+| full | جایگزینی کامل فیلدهای متنی پرتال با بلوک‌های جدید |
+
+فعال‌سازی (نمونه API):
+```
+curl -X POST -H 'Content-Type: application/json' \
+	-d '{"feature":"portal_content_read_switch","state":"shadow"}' \
+	http://localhost:3000/api/feature-flags/multi-stage/update -b cookie.txt -c cookie.txt
+```
+
+لاگ Shadow: سطرهایی با برچسب 🌓 portal_content_read_switch shadow diffs در server.log که اختلاف طول محتوای legacy و بلوک جدید را نشان می‌دهد.
+
+Switch به full پس از بررسی تفاوت‌ها:
+```
+curl -X POST -H 'Content-Type: application/json' \
+	-d '{"feature":"portal_content_read_switch","state":"full"}' \
+	http://localhost:3000/api/feature-flags/multi-stage/update -b cookie.txt -c cookie.txt
+```
+
+Rollback: برگرداندن به off (ساختار legacy هنوز حفظ شده است)
+```
+curl -X POST -H 'Content-Type: application/json' \
+	-d '{"feature":"portal_content_read_switch","state":"off"}' \
+	http://localhost:3000/api/feature-flags/multi-stage/update -b cookie.txt -c cookie.txt
+```
+
+Deprecated Tabs: در صفحه Settings تب‌های Portal و Invoice Template حذف نشده‌اند بلکه با برچسب Deprecated و هشدار هدایت به صفحه جدید (/admin/portal-content) نشانه‌گذاری شده‌اند (اصل "حذف نه، ارتقا").
+
+Instrumentation اولیه پردازش Import:
+- جدول جدید import_jobs (migration 011) برای رهگیری وضعیت پردازش فایل‌های JSON.
+- API های اسکلت:
+	- GET /api/admin/import-jobs
+	- POST /api/admin/import-jobs (ایجاد رکورد ابتدایی)
+	- PATCH /api/admin/import-jobs/:jobCode (به‌روزرسانی وضعیت و شمارنده‌ها)
+	(TODO: اتصال کامل به جریان آپلود و نمایش UI مرحله‌ای)
+
+Regression Script به‌روزرسانی شده:
+```
+BASE_URL=http://localhost:3000 ts-node scripts/portal-content-regression.ts
+```
+خروجی شامل:
+1. تایید presence کلیدها
+2. تست upsert + revert guidance
+3. Snapshot SHA256 برای تشخیص drift
+4. (اختیاری) تست round-trip دوم با EXTRA_ROUND_TRIP=1
+
+گام‌های بعد (Phase 2):
+1. UI نمایش وضعیت import_jobs و نوار پیشرفت مرحله‌ای
+2. نسخه‌بندی portal_content_block_versions
+3. Preview زنده در PortalContentManager + آنونسمنت/دانلودها
+4. حذف تدریجی وابستگی portal_* legacy بعد از تثبیت full
+
+---
+## 21.3 مانیتور مرحله‌ای پردازش فایل‌ها (Import Jobs)
+این فاز، قابلیت مشاهده پیشرفت Job های پردازش فایل JSON را با مراحل زیر فراهم می‌کند:
+pending → validating → ingesting → enriching → completed (یا failed)
+
+جداول / API:
+| متد | مسیر | توضیح |
+|-----|------|-------|
+| GET | /api/admin/import-jobs | لیست آخرین Job ها (حداکثر ۵۰ مورد) |
+| POST | /api/admin/import-jobs | ایجاد Job اولیه (status=pending) |
+| PATCH | /api/admin/import-jobs/:jobCode | به‌روزرسانی status / شمارنده‌ها |
+| GET | /api/admin/active-actions | تجمیع import jobs فعال + فلگ‌های multi-stage فعال |
+
+UI جدید:
+| مسیر | توضیح |
+|------|-------|
+| /admin/import-jobs | Progress Bar مرحله‌ای + Polling خودکار (۴ ثانیه) |
+| /admin/debug-actions | نمایش ترکیبی Jobs فعال + فلگ‌های فعال |
+
+اسکریپت دمو:
+```
+BASE_URL=http://localhost:3000 ADMIN_COOKIE="$(cat cookie.txt 2>/dev/null)" ts-node scripts/demo-import-job.ts
+```
+نمایش Job در مسیر /admin/import-jobs.
+
+ملاحظات:
+1. Migration 011 ایجاد جدول import_jobs (افزودنی ایمن).
+2. هنوز اتصال خودکار به جریان واقعی آپلود JSON انجام نشده (Phase بعد: hook در file-upload-routes + ایجاد job در شروع پردازش).
+3. endpoint /api/admin/active-actions برای داشبورد دیباگ سبک وزن.
+4. ساختار فعلی status قابل توسعه به زیرمرحله (subStage) یا درصد واقعی ingestion.
+
+گام‌های بعد پیشنهادی:
+1. اتصال خودکار: ایجاد job با POST هنگام آپلود فایل.
+2. ثبت خطا در job.lastError هنگام exception در pipeline.
+3. افزودن websocket یا Server-Sent Events برای کاهش Polling.
+4. نگارش شاخص SLA (مدت validating، مدت ingesting و ...) برای تحلیل عملکرد.
+
+---
 
 ---
 ## 22. Cheat Sheet
