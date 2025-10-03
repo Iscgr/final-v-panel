@@ -171,6 +171,56 @@ router.delete('/app-downloads/:id', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * PATCH /api/admin/app-downloads/reorder
+ * بروزرسانی ترتیبی displayOrder برای مجموعه‌ای از اپلیکیشن‌ها
+ * Payload نمونه:
+ * { order: [ { id: 12, displayOrder: 0 }, { id: 7, displayOrder: 1 } ] }
+ */
+router.patch('/app-downloads/reorder', async (req: Request, res: Response) => {
+  try {
+    const { order } = req.body as { order?: Array<{ id: number; displayOrder: number }> };
+    if (!Array.isArray(order) || order.length === 0) {
+      return res.status(400).json({ success: false, error: 'order الزامی است' });
+    }
+
+    // اعتبار اولیه داده‌ها
+    const seen = new Set<number>();
+    for (const item of order) {
+      if (!item || typeof item.id !== 'number' || typeof item.displayOrder !== 'number') {
+        return res.status(400).json({ success: false, error: 'ساختار order نامعتبر است' });
+      }
+      if (seen.has(item.id)) {
+        return res.status(409).json({ success: false, error: 'شناسه تکراری در order' });
+      }
+      seen.add(item.id);
+    }
+
+    // دریافت آی‌دی‌های موجود برای اعتبارسنجی عدم ارسال آی‌دی جعلی
+    const existing = await db.select({ id: appDownloads.id }).from(appDownloads);
+    const existingIds = new Set(existing.map(r => r.id));
+    for (const item of order) {
+      if (!existingIds.has(item.id)) {
+        return res.status(404).json({ success: false, error: `اپلیکیشن با id=${item.id} یافت نشد` });
+      }
+    }
+
+    // اعمال آپدیت‌ها (حجم کم → حلقه مجزا قابل قبول است)
+    let updated = 0;
+    for (const item of order) {
+      await db.update(appDownloads)
+        .set({ displayOrder: item.displayOrder, updatedAt: new Date() })
+        .where(eq(appDownloads.id, item.id));
+      updated++;
+    }
+
+    return res.json({ success: true, updated });
+  } catch (error) {
+    console.error('❌ خطا در بروزرسانی ترتیب اپلیکیشن‌ها:', error);
+    return res.status(500).json({ success: false, error: 'خطا در اعمال ترتیب' });
+  }
+});
+
 // ==================== ANNOUNCEMENTS ====================
 
 /**

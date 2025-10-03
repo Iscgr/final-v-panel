@@ -85,6 +85,7 @@ const portalSettingsSchema = z.object({
   showOwnerName: z.boolean(),
   showDetailedUsage: z.boolean(),
   customCss: z.string().optional(),
+// ✅ Deprecated schemas (portal & invoice template) removed در Phase 1 (Portal Content Manager)
 });
 
 const invoiceTemplateSchema = z.object({
@@ -114,9 +115,11 @@ type TelegramSettingsData = z.infer<typeof telegramSettingsSchema>;
 type DataResetData = z.infer<typeof dataResetSchema>;
 type PortalSettingsData = z.infer<typeof portalSettingsSchema>;
 type InvoiceTemplateData = z.infer<typeof invoiceTemplateSchema>;
+// Deprecated types removed (PortalSettingsData, InvoiceTemplateData)
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("telegram");
+  // activeTab already declared above
   const [showDataCounts, setShowDataCounts] = useState(false);
   const [dataCounts, setDataCounts] = useState({
     representatives: 0,
@@ -168,6 +171,7 @@ export default function Settings() {
   // Fetch portal settings
   const { data: portalTitle } = useQuery({
     queryKey: ["/api/settings/portal_title"]
+  // Portal settings queries removed (deprecated)
   });
 
   const { data: portalDescription } = useQuery({
@@ -723,6 +727,8 @@ export default function Settings() {
 .portal-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
+  // Invoice template form removed
+          {/* Deprecated tabs (portal, invoice-template) removed - handled by new Portal Content Manager */}
 
 .portal-card {
   border-radius: 12px;
@@ -962,6 +968,7 @@ export default function Settings() {
                           </tr>
                         </tbody>
                       </table>
+  {/* Deprecated content (portal, invoice-template) removed */}
                     </div>
                   </div>
                 </div>

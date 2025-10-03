@@ -1046,6 +1046,19 @@ export const announcements = pgTable("announcements", {
   updatedAt: timestamp("updated_at").defaultNow()
 });
 
+// Portal Content Blocks (Phase 1 additive, not yet consumed directly by portal UI)
+export const portalContentBlocks = pgTable("portal_content_blocks", {
+  id: serial("id").primaryKey(),
+  blockKey: text("block_key").notNull().unique(), // guidance, contact_info, downloads_intro, support_hours, announcements_title
+  title: text("title"),
+  body: text("body").notNull().default(''),
+  updatedBy: text("updated_by"),
+  updatedAt: timestamp("updated_at").defaultNow()
+});
+
+export type PortalContentBlock = typeof portalContentBlocks.$inferSelect;
+export type InsertPortalContentBlock = typeof portalContentBlocks.$inferInsert;
+
 // App Download Views (آمار بازدید اپلیکیشن‌ها)
 // برای ثبت تاریخچه بازدید و تحلیل رفتار کاربران
 export const appDownloadViews = pgTable("app_download_views", {
