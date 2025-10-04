@@ -48,7 +48,6 @@ import portalContentRoutes from "./routes/portal-content-routes.js";
 import salesPartnersRoutes from "./routes/sales-partners-routes.js";
 // (Phase A) Import Jobs instrumentation routes (scaffold)
 
-
 // Import services
 import { unifiedFinancialEngine } from "./services/unified-financial-engine.js";
 import { featureFlagManager } from "./services/feature-flag-manager.js";
@@ -257,6 +256,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 🔷 Portal Resources Routes - Public Resources for Representatives Portal
   app.use('/api/portal', portalResourcesRoutes);
   console.log('✅ Portal resources routes registered (public access)');
+
+  // 🔷 System Routes - Backup, Restore, Health, etc.
+  app.use('/api/system', authMiddleware, systemRoutes);
+  console.log('✅ System routes registered (backup/restore)');
 
   // (Phase A) Import Jobs instrumentation scaffold (no breaking changes)
   app.get('/api/admin/import-jobs', authMiddleware, async (req, res) => {
@@ -1550,15 +1553,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`✅ پرداخت ${paymentId} با موفقیت حذف شد و اطلاعات مالی همگام‌سازی شدند`);
       res.json({
-        success: true,
-        message: "پرداخت با موفقیت حذف شد و تمام اطلاعات مالی به‌روزرسانی شدند",
-        deletedPayment: {
           id: paymentId,
           amount: payment.amount,
           paymentDate: payment.paymentDate,
           representativeId: payment.representativeId
         }
-      });
+      );
     } catch (error) {
       console.error('Error deleting payment:', error);
       res.status(500).json({ error: "خطا در حذف پرداخت" });

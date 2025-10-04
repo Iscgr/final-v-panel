@@ -3,7 +3,7 @@ import { useState, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UnifiedAuthProvider, useUnifiedAuth } from "@/contexts/unified-auth-context";
 import { SidebarProvider, useSidebar } from "@/contexts/sidebar-context";
@@ -34,6 +34,7 @@ const AnnouncementsManager = lazy(() => import("@/pages/admin/AnnouncementsManag
 const PortalContentManager = lazy(() => import("@/pages/admin/PortalContentManager"));
 const ImportJobsMonitor = lazy(() => import("@/pages/admin/ImportJobsMonitor"));
 const DebugActionsPanel = lazy(() => import("@/pages/admin/DebugActionsPanel"));
+const SystemSettingsPage = lazy(() => import("@/pages/admin/SystemSettingsPage")); // Lazy load the new page
 
 // Error boundary component
 
@@ -123,13 +124,9 @@ function AuthenticatedRouter() {
             <Route path="/admin/app-downloads" component={AppDownloadsManager} />
             <Route path="/admin/announcements" component={AnnouncementsManager} />
             <Route path="/admin/portal-content" component={PortalContentManager} />
-            <Route path="/admin/import-jobs" component={ImportJobsMonitor} />
-            <Route path="/admin/debug-actions" component={DebugActionsPanel} />
-            <Route path="/settings" component={Settings} />
-            <Route path="/admin-login">
-              <AdminLogin onLoginSuccess={() => { console.log('Admin login successful'); }} />
-            </Route>
-            <Route component={NotFound} />
+            <Route path="/admin/system-settings" component={SystemSettingsPage} /> {/* Add the new route */}
+            {/* Fallback for any other admin route */}
+            <Route path="/admin/:rest*" component={NotFound} />
           </Switch>
         </Suspense>
       </ErrorBoundary>

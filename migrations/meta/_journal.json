@@ -29,6 +29,13 @@
       "when": 1762354800000,
       "tag": "0003_sales_partner_commissions",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1759609666179,
+      "tag": "0004_amused_jackal",
+      "breakpoints": true
     }
   ]
 }

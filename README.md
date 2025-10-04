@@ -333,6 +333,18 @@ docker compose build app && docker compose up -d app
 TEST_BASE_URL=http://localhost:3000 ADMIN_USERNAME=admin ADMIN_PASSWORD=admin npx ts-node scripts/portal-content-regression.ts
 ```
 
+### Phase 5 – Backup & Disaster Recovery
+| قابلیت | توضیح | فایل‌های کلیدی |
+|--------|-------|-----------------|
+| Backup Creation | ایجاد پشتیبان کامل از داده‌های حیاتی به فرمت `.tar.gz` شامل فایل‌های NDJSON و متادیتا. | `server/services/backup-service.ts`, `server/routes/system-routes.ts` |
+| Backup Restoration | بازیابی اطلاعات از یک فایل پشتیبان آپلود شده. عملیات تمام داده‌های فعلی را حذف می‌کند. | `backup-service.ts`, `system-routes.ts` (با استفاده از `multer`) |
+| Audit Logging | ثبت تمام عملیات‌های موفق و ناموفق پشتیبان‌گیری و بازیابی در جدول `backup_audit_log`. | `shared/schema.ts`, `migrations/0004_backup_audit_log.sql` |
+| Admin UI | صفحه جدید در پنل ادمین برای ایجاد، بازیابی، مشاهده تاریخچه و دانلود فایل‌های پشتیبان. | `client/src/pages/admin/SystemSettingsPage.tsx`, `client/src/services/system.ts` |
+
+**نکات مهم:**
+- **محتوای پشتیبان:** شامل جداول اصلی مانند نمایندگان، فاکتورها، پرداخت‌ها و محتوای پورتال است. جداول موقتی مانند `outbox` و لاگ‌ها به صورت عمدی حذف شده‌اند.
+- **امنیت:** اندپوینت‌های پشتیبان‌گیری نیازمند احراز هویت ادمین هستند. فایل‌های پشتیبان روی سرور ذخیره می‌شوند و باید به صورت دوره‌ای به یک فضای ذخیره‌سازی امن منتقل شوند.
+
 ## پیشنهادهای بعدی
 - تکمیل پوشش تست کلاینت (React Testing Library) و API (Jest/TSX).
 - افزودن سرویس پایتونی به Compose با healthcheck جهت پایش مداوم drift.
