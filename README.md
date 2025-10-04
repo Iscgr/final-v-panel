@@ -316,6 +316,23 @@ docker compose build app && docker compose up -d app
 5. پایش لاگ‌ها حداقل ۱۵ دقیقه.
 6. در صورت مشاهده خطا: بازگشت به نسخه قبل با checkout commit قبلی.
 
+### Phase 4 – Portal Content Enhancements
+| قابلیت | توضیح | فایل‌های کلیدی |
+|--------|-------|-----------------|
+| Publication Workflow | singleton state با نسخه‌دهی انتشار (`contentVersion`) + endpoints: `/status`, `/publish` | `migrations/0003_portal_publication_state.sql`, `server/routes/portal-content-routes.ts`, `shared/schema.ts` |
+| Backend Cache (30s TTL) | کش درون‌حافظه‌ای `/full` و `/status` + اینوالیدیشن پس از Mutation | `server/utils/portalContentCache.ts`, `server/routes/portal-content-routes.ts` |
+| Unified Client Invalidation | helper و query keys متمرکز | `client/src/services/portal-content.ts` |
+| Preview Warning Banner | هشدار تغییرات منتشرنشده | `client/src/pages/admin/PortalContentManager.tsx` |
+| Multi-Select & Bulk Delete | حذف گروهی اعلان‌ها/دانلودها (batch UI) | `PortalContentManager.tsx`, `server/routes/admin-resources-routes.ts` |
+| i18n Placeholder & Locale Badge | وضعیت موقت زبان و badge | `PortalContentManager.tsx` |
+| Responsiveness Improvements | بهبود grid/spacing/overflow موبایل | `PortalContentManager.tsx` |
+| Regression Script | سناریوی CRUD + Publish + Cache HIT/MISS | `scripts/portal-content-regression.ts` |
+
+اجرای اسکریپت رگرسیون:
+```bash
+TEST_BASE_URL=http://localhost:3000 ADMIN_USERNAME=admin ADMIN_PASSWORD=admin npx ts-node scripts/portal-content-regression.ts
+```
+
 ## پیشنهادهای بعدی
 - تکمیل پوشش تست کلاینت (React Testing Library) و API (Jest/TSX).
 - افزودن سرویس پایتونی به Compose با healthcheck جهت پایش مداوم drift.

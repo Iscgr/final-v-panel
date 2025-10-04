@@ -213,7 +213,26 @@ export default function PortalContentManager() {
     onError: () => toast({ title: 'انتشار ناموفق', variant: 'destructive' })
   });
 
+  // محاسبه ماکزیمم updatedAt برای تشخیص نیاز به انتشار
+  const maxLastUpdate = React.useMemo(()=>{
+    const blockMax = blocks.reduce<Date | null>((acc,b)=> b.updatedAt ? (acc && acc > new Date(b.updatedAt) ? acc : new Date(b.updatedAt)) : acc, null);
+    const annMax = announcements.reduce<Date | null>((acc,a)=> a.expiresAt || a.id ? acc : acc, null); // فعلاً اطلاعیه‌ها updatedAt ندارند؛ قابل گسترش در آینده
+    const dlMax = downloads.reduce<Date | null>((acc,d)=> acc, null); // similar placeholder
+    return blockMax || annMax || dlMax || null;
+  }, [blocks, announcements, downloads]);
+
+  const unpublishedChanges = React.useMemo(()=>{
+    if(!statusData) return false;
+    if(!statusData.data.lastPublishedAt) return true; // اصلاً منتشر نشده
+    if(maxLastUpdate && new Date(statusData.data.lastPublishedAt) < maxLastUpdate) return true;
+    if(Object.keys(dirtyMap).length>0) return true;
+    return false;
+  }, [statusData, maxLastUpdate, dirtyMap]);
+
   // Announcement mutations
+  const [selectedAnnouncements, setSelectedAnnouncements] = useState<number[]>([]);
+  const toggleAnnouncement = (id:number) => setSelectedAnnouncements(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  const clearSelectedAnnouncements = () => setSelectedAnnouncements([]);
   const createAnnMutation = useMutation({
     mutationFn: (payload: Omit<Announcement, 'id'>) => PortalContentService.announcements.create(payload),
     onSuccess: () => {
@@ -246,8 +265,20 @@ export default function PortalContentManager() {
     },
     onSettled: () => { invalidatePortalContent(queryClient, { announcements: true, full: true }); }
   });
+  const bulkDeleteAnnouncements = async () => {
+    if(!selectedAnnouncements.length) return;
+    const ids = [...selectedAnnouncements];
+    clearSelectedAnnouncements();
+    const results = await Promise.allSettled(ids.map(id=> deleteAnnMutation.mutateAsync(id)));
+    const failed = results.filter(r=> r.status==='rejected').length;
+    toast({ title: failed? 'حذف گروهی با خطا' : 'حذف گروهی موفق', description: failed? `${failed} مورد حذف نشد` : `${ids.length} مورد حذف شد` , variant: failed? 'destructive': undefined });
+    invalidatePortalContent(queryClient, { announcements: true, full: true });
+  };
 
   // Download mutations
+  const [selectedDownloads, setSelectedDownloads] = useState<number[]>([]);
+  const toggleDownload = (id:number) => setSelectedDownloads(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  const clearSelectedDownloads = () => setSelectedDownloads([]);
   const createDownloadMutation = useMutation({
     mutationFn: (payload: Omit<AppDownload, 'id' | 'displayOrder'>) => PortalContentService.downloads.create(payload),
     onSuccess: () => {
@@ -280,12 +311,21 @@ export default function PortalContentManager() {
     },
     onSettled: () => { invalidatePortalContent(queryClient, { downloads: true, full: true }); }
   });
+  const bulkDeleteDownloads = async () => {
+    if(!selectedDownloads.length) return;
+    const ids = [...selectedDownloads];
+    clearSelectedDownloads();
+    const results = await Promise.allSettled(ids.map(id=> deleteDownloadMutation.mutateAsync(id)));
+    const failed = results.filter(r=> r.status==='rejected').length;
+    toast({ title: failed? 'حذف گروهی با خطا' : 'حذف گروهی موفق', description: failed? `${failed} مورد حذف نشد` : `${ids.length} مورد حذف شد` , variant: failed? 'destructive': undefined });
+    invalidatePortalContent(queryClient, { downloads: true, full: true });
+  };
 
   // Derived for editor
   const currentBlock = selectedKey ? blocks.find(b => b.blockKey === selectedKey) : null;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+  <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">مدیریت محتوای پرتال</h1>
         <p className="text-gray-600 text-sm">
@@ -294,7 +334,7 @@ export default function PortalContentManager() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap border-b pb-2">
+  <div className="flex gap-2 mb-4 md:mb-6 flex-wrap border-b pb-2">
         {tabs.map(t => (
           <button 
             key={t.key} 
@@ -309,12 +349,19 @@ export default function PortalContentManager() {
             {t.label}
           </button>
         ))}
+        <div className="ms-auto flex items-center gap-2 ml-auto mr-0 pr-2">
+          <span className="text-[10px] px-2 py-1 rounded bg-gray-200 text-gray-700 border border-gray-300">locale: fa-IR (preview)</span>
+          <select disabled className="text-[10px] border rounded px-1 py-0.5 bg-gray-100 text-gray-400">
+            <option>fa-IR</option>
+            <option>en-US</option>
+          </select>
+        </div>
       </div>
 
       {activeTab === 'blocks' && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
           {/* List */}
-          <div className="md:col-span-1 bg-white rounded-lg shadow p-4 border border-gray-200 h-fit">
+          <div className="md:col-span-1 bg-white rounded-lg shadow p-4 border border-gray-200 h-fit max-h-[70vh] overflow-auto">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-gray-800 text-sm">بلوک‌ها</h2>
               <button onClick={() => refetch()} className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 flex items-center gap-1"><RefreshCcw className={`w-3 h-3 ${isFetching ? 'animate-spin' : ''}`} />بارگذاری</button>
@@ -333,7 +380,7 @@ export default function PortalContentManager() {
           </div>
 
           {/* Editor */}
-          <div className="md:col-span-3 bg-white rounded-lg shadow p-6 border border-gray-200 min-h-[400px]">
+          <div className="md:col-span-3 bg-white rounded-lg shadow p-4 md:p-6 border border-gray-200 min-h-[400px]">
             {!currentBlock && <div className="text-center text-gray-500 text-sm">یک بلوک را از لیست انتخاب کنید</div>}
             {currentBlock && (
               <div className="space-y-4">
@@ -381,7 +428,16 @@ export default function PortalContentManager() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold">اطلاعیه‌ها</h2>
-                <button onClick={() => refetchAnnouncements()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
+                <div className="flex items-center gap-2">
+                  {selectedAnnouncements.length>0 && (
+                    <div className="flex items-center gap-1 text-[10px] bg-amber-50 border border-amber-300 rounded px-2 py-1">
+                      <span>{selectedAnnouncements.length} انتخاب شده</span>
+                      <button onClick={bulkDeleteAnnouncements} className="text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3" />حذف گروهی</button>
+                      <button onClick={clearSelectedAnnouncements} className="text-gray-500">×</button>
+                    </div>
+                  )}
+                  <button onClick={() => refetchAnnouncements()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
+                </div>
               </div>
               {/* Create */}
               <div className="border rounded-lg p-4 bg-gray-50 space-y-2">
@@ -424,6 +480,9 @@ export default function PortalContentManager() {
                     ) : (
                       <div className="flex items-start justify-between gap-4">
                         <div className="text-xs leading-5">
+                          <label className="flex items-center gap-1 text-[10px] mb-1 select-none">
+                            <input type="checkbox" checked={selectedAnnouncements.includes(a.id)} onChange={()=>toggleAnnouncement(a.id)} />انتخاب
+                          </label>
                           <div className="font-semibold flex items-center gap-2">{a.title}<span className="px-1 rounded bg-gray-100 border text-[10px]">{a.type}</span>{!a.isActive && <span className="text-[10px] bg-red-50 border border-red-200 text-red-600 rounded px-1">غیرفعال</span>}</div>
                           <div className="text-gray-600 whitespace-pre-wrap">{a.content}</div>
                         </div>
@@ -444,7 +503,16 @@ export default function PortalContentManager() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold">اپلیکیشن‌های دانلود</h2>
-                <button onClick={() => refetchDownloads()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
+                <div className="flex items-center gap-2">
+                  {selectedDownloads.length>0 && (
+                    <div className="flex items-center gap-1 text-[10px] bg-amber-50 border border-amber-300 rounded px-2 py-1">
+                      <span>{selectedDownloads.length} انتخاب شده</span>
+                      <button onClick={bulkDeleteDownloads} className="text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3" />حذف گروهی</button>
+                      <button onClick={clearSelectedDownloads} className="text-gray-500">×</button>
+                    </div>
+                  )}
+                  <button onClick={() => refetchDownloads()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
+                </div>
               </div>
               {/* Create */}
               <div className="border rounded-lg p-4 bg-gray-50 space-y-2">
@@ -502,6 +570,9 @@ export default function PortalContentManager() {
                     ) : (
                       <div className="flex-1 text-xs space-y-1">
                         <div className="font-semibold flex items-center gap-2">{d.title}{!d.isActive && <span className="text-[10px] bg-red-50 border border-red-200 text-red-600 rounded px-1">غیرفعال</span>}</div>
+                        <label className="flex items-center gap-1 text-[10px] select-none">
+                          <input type="checkbox" checked={selectedDownloads.includes(d.id)} onChange={()=>toggleDownload(d.id)} />انتخاب
+                        </label>
                         <div className="text-gray-600 break-all">{d.downloadLink}</div>
                         {d.description && <div className="text-gray-500 whitespace-pre-wrap">{d.description}</div>}
                       </div>
@@ -553,6 +624,15 @@ export default function PortalContentManager() {
                 <span>آخرین انتشار: {statusData?.data.lastPublishedAt ? new Date(statusData.data.lastPublishedAt).toLocaleString('fa-IR') : 'منتشر نشده'}</span>
                 {statusData?.data.lastPublishedBy && <span>منتشر کننده: {statusData.data.lastPublishedBy}</span>}
               </div>
+              {unpublishedChanges && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-800 flex items-start gap-2">
+                  <Megaphone className="w-3 h-3 mt-0.5" />
+                  <div>
+                    <div className="font-medium">تغییرات منتشر نشده</div>
+                    <div>برخی ویرایش‌ها اعمال شده‌اند اما هنوز منتشر نشده‌اند. برای اعمال در پرتال عمومی دکمه انتشار را بزنید.</div>
+                  </div>
+                </div>
+              )}
               {!fullContentData && <div className="text-xs text-gray-500">در حال بارگذاری...</div>}
               {fullContentData && (
                 <div className="grid md:grid-cols-3 gap-4">

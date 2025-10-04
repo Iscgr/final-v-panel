@@ -16,6 +16,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db.js';
 import { appDownloads, announcements } from '../../shared/schema.js';
+import { invalidateAllPortalContent } from '../utils/portalContentCache.js';
 import { eq, desc } from 'drizzle-orm';
 
 const router = Router();
@@ -77,10 +78,8 @@ router.post('/app-downloads', async (req: Request, res: Response) => {
 
     console.log('✅ اپلیکیشن جدید ایجاد شد:', newDownload.id);
 
-    res.json({
-      success: true,
-      data: newDownload
-    });
+    invalidateAllPortalContent();
+    res.json({ success: true, data: newDownload, cacheInvalidated: true });
   } catch (error) {
     console.error('❌ خطا در ایجاد اپلیکیشن:', error);
     res.status(500).json({
@@ -123,10 +122,8 @@ router.put('/app-downloads/:id', async (req: Request, res: Response) => {
 
     console.log('✅ اپلیکیشن ویرایش شد:', updatedDownload.id);
 
-    res.json({
-      success: true,
-      data: updatedDownload
-    });
+    invalidateAllPortalContent();
+    res.json({ success: true, data: updatedDownload, cacheInvalidated: true });
   } catch (error) {
     console.error('❌ خطا در ویرایش اپلیکیشن:', error);
     res.status(500).json({
@@ -158,10 +155,8 @@ router.delete('/app-downloads/:id', async (req: Request, res: Response) => {
 
     console.log('✅ اپلیکیشن حذف شد:', deletedDownload.id);
 
-    res.json({
-      success: true,
-      message: 'اپلیکیشن با موفقیت حذف شد'
-    });
+    invalidateAllPortalContent();
+    res.json({ success: true, message: 'اپلیکیشن با موفقیت حذف شد', cacheInvalidated: true });
   } catch (error) {
     console.error('❌ خطا در حذف اپلیکیشن:', error);
     res.status(500).json({
@@ -214,7 +209,8 @@ router.patch('/app-downloads/reorder', async (req: Request, res: Response) => {
       updated++;
     }
 
-    return res.json({ success: true, updated });
+  invalidateAllPortalContent();
+  return res.json({ success: true, updated, cacheInvalidated: true });
   } catch (error) {
     console.error('❌ خطا در بروزرسانی ترتیب اپلیکیشن‌ها:', error);
     return res.status(500).json({ success: false, error: 'خطا در اعمال ترتیب' });
@@ -277,10 +273,8 @@ router.post('/announcements', async (req: Request, res: Response) => {
 
     console.log('✅ اطلاعیه جدید ایجاد شد:', newAnnouncement.id);
 
-    res.json({
-      success: true,
-      data: newAnnouncement
-    });
+    invalidateAllPortalContent();
+    res.json({ success: true, data: newAnnouncement, cacheInvalidated: true });
   } catch (error) {
     console.error('❌ خطا در ایجاد اطلاعیه:', error);
     res.status(500).json({
@@ -322,10 +316,8 @@ router.put('/announcements/:id', async (req: Request, res: Response) => {
 
     console.log('✅ اطلاعیه ویرایش شد:', updatedAnnouncement.id);
 
-    res.json({
-      success: true,
-      data: updatedAnnouncement
-    });
+    invalidateAllPortalContent();
+    res.json({ success: true, data: updatedAnnouncement, cacheInvalidated: true });
   } catch (error) {
     console.error('❌ خطا در ویرایش اطلاعیه:', error);
     res.status(500).json({
@@ -357,10 +349,8 @@ router.delete('/announcements/:id', async (req: Request, res: Response) => {
 
     console.log('✅ اطلاعیه حذف شد:', deletedAnnouncement.id);
 
-    res.json({
-      success: true,
-      message: 'اطلاعیه با موفقیت حذف شد'
-    });
+    invalidateAllPortalContent();
+    res.json({ success: true, message: 'اطلاعیه با موفقیت حذف شد', cacheInvalidated: true });
   } catch (error) {
     console.error('❌ خطا در حذف اطلاعیه:', error);
     res.status(500).json({
