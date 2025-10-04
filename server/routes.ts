@@ -54,6 +54,7 @@ import { featureFlagManager } from "./services/feature-flag-manager.js";
 import { isCanaryRepresentative } from "./services/allocation-canary-helper.js";
 import { sendInvoiceToTelegram, formatInvoiceStatus, getDefaultTelegramTemplate } from "./services/telegram.js";
 import { PersianDate } from "./utils/type-helpers.js";
+import { getPortalLink } from "./config.js";
 
 // Extend Request interface to include multer file
 interface MulterRequest extends Request {
@@ -2214,9 +2215,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
            * - Portal Link: generated via getPortalLink(representative.publicId)
            * - Send Status: invoice.sentToTelegram, invoice.telegramSendCount
            */
-          
-          // Import portal link generator
-          const { getPortalLink } = await import('./config');
           
           // Generate portal link from representative's publicId
           const portalLink = getPortalLink(representative.publicId);

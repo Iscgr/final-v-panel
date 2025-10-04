@@ -81,6 +81,8 @@ export default function InvoiceUpload() {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append('usageFile', file);
+
+      const jobCode = `upload-${nanoid(10)}`;
       
       // Add invoice date parameters
       formData.append('invoiceDateMode', invoiceDateMode);
@@ -98,8 +100,6 @@ export default function InvoiceUpload() {
       
       console.log('Uploading file:', file.name, 'Size:', file.size);
       console.log('Invoice date mode:', invoiceDateMode, 'Custom date:', customInvoiceDate);
-      
-      const jobCode = `upload-${nanoid(10)}`;
       
       // ایجاد job tracking
       setCurrentJobCode(jobCode);
