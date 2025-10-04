@@ -45,6 +45,7 @@ import activeReconciliationRoutes from "./routes/active-reconciliation-routes.js
 import guardMetricsRoutes from "./routes/guard-metrics-routes.js";
 // Phase 1: Portal Content Management (NEW modular content blocks)
 import portalContentRoutes from "./routes/portal-content-routes.js";
+import salesPartnersRoutes from "./routes/sales-partners-routes.js";
 // (Phase A) Import Jobs instrumentation routes (scaffold)
 
 
@@ -238,6 +239,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register integration health routes for Phase 9
   registerIntegrationHealthRoutes(app);
   app.use('/api/feature-flags', featureFlagRoutes);
+  app.use('/api/sales-partners', salesPartnersRoutes);
+  console.log('✅ Sales partners routes registered');
 
   // 🔷 Representatives Routes - Refactored & Modular (5 columns: name, ownerName, totalSales, totalDebt, actions)
   app.use('/api/representatives', authMiddleware, representativesRoutes);

@@ -1,9 +1,10 @@
 import { InvoiceEditRecord, TransactionRecord, ConfigRecord } from './storage-interfaces.js';
 import {
-  representatives, salesPartners, invoices, payments, activityLogs, settings, adminUsers, invoiceEdits,
+  representatives, salesPartners, partnerCommissionPayments, invoices, payments, activityLogs, settings, adminUsers, invoiceEdits,
   financialTransactions, dataIntegrityConstraints, invoiceBatches, telegramSendHistory,
   type Representative, type InsertRepresentative,
   type SalesPartner, type InsertSalesPartner, type SalesPartnerWithCount,
+  type PartnerCommissionPayment, type InsertPartnerCommissionPayment,
   type Invoice, type InsertInvoice,
   type Payment, type InsertPayment,
   type ActivityLog, type InsertActivityLog,
@@ -41,6 +42,11 @@ export interface IStorage {
   deleteSalesPartner(id: number): Promise<void>;
   getSalesPartnersStatistics(): Promise<any>;
   getRepresentativesBySalesPartner(partnerId: number): Promise<Representative[]>;
+  recalculateSalesPartnerFinancials(partnerId: number): Promise<void>;
+  getPartnerCommissionPayments(partnerId: number): Promise<PartnerCommissionPayment[]>;
+  createPartnerCommissionPayment(payment: InsertPartnerCommissionPayment): Promise<PartnerCommissionPayment>;
+  updatePartnerCommissionPayment(paymentId: number, payment: Partial<PartnerCommissionPayment>): Promise<PartnerCommissionPayment>;
+  deletePartnerCommissionPayment(paymentId: number): Promise<void>;
 
   // فاز ۱: Invoice Batches - مدیریت دوره‌ای فاکتورها
   getInvoiceBatches(): Promise<InvoiceBatch[]>;
@@ -266,20 +272,64 @@ export class DatabaseStorage implements IStorage {
       relatedId: newRep.id
     });
 
+    if (newRep.salesPartnerId != null) {
+      await this.recalculateSalesPartnerFinancials(newRep.salesPartnerId);
+    }
+
     return newRep;
   }
 
   async updateRepresentative(id: number, rep: Partial<Representative>): Promise<Representative> {
+    const [existing] = await db
+      .select()
+      .from(representatives)
+      .where(eq(representatives.id, id))
+      .limit(1);
+
+    if (!existing) {
+      throw new Error(`Representative with id ${id} not found`);
+    }
+
     const [updated] = await db
       .update(representatives)
       .set({ ...rep, updatedAt: new Date() })
       .where(eq(representatives.id, id))
       .returning();
+    if (!updated) {
+      throw new Error(`Representative with id ${id} not found`);
+    }
+
+    const partnerIds = new Set<number>();
+    if (existing.salesPartnerId != null) {
+      partnerIds.add(existing.salesPartnerId);
+    }
+    if (updated.salesPartnerId != null) {
+      partnerIds.add(updated.salesPartnerId);
+    }
+
+    for (const partnerId of partnerIds) {
+      await this.recalculateSalesPartnerFinancials(partnerId);
+    }
+
     return updated;
   }
 
   async deleteRepresentative(id: number): Promise<void> {
+    const [existing] = await db
+      .select()
+      .from(representatives)
+      .where(eq(representatives.id, id))
+      .limit(1);
+
+    if (!existing) {
+      return;
+    }
+
     await db.delete(representatives).where(eq(representatives.id, id));
+
+    if (existing.salesPartnerId != null) {
+      await this.recalculateSalesPartnerFinancials(existing.salesPartnerId);
+    }
   }
 
   async getSalesPartners(): Promise<SalesPartnerWithCount[]> {
@@ -301,13 +351,32 @@ export class DatabaseStorage implements IStorage {
               .from(representatives)
               .where(eq(representatives.salesPartnerId, partner.id));
 
+            const [commissionAggregates] = await db
+              .select({
+                paid: sql<string>`COALESCE(SUM(CAST(amount AS DECIMAL)), 0)`,
+                lastPaymentAt: sql<string>`MAX(payment_date)`
+              })
+              .from(partnerCommissionPayments)
+              .where(eq(partnerCommissionPayments.salesPartnerId, partner.id));
+
+            const totalSalesValue = Number(aggregateResult?.totalSales || 0);
+            const totalDebtValue = Number(aggregateResult?.totalDebt || 0);
+            const commissionRate = Number(partner.commissionRate || 0);
+            const commissionDue = Number(((totalSalesValue * commissionRate) / 100).toFixed(2));
+            const commissionPaid = Number(commissionAggregates?.paid || 0);
+            const commissionOutstanding = Math.max(commissionDue - commissionPaid, 0);
+
             return {
               ...partner,
               representativesCount: aggregateResult?.count || 0,
-              // S-01 Fix: Add aggregated fields
-              totalSales: Number(aggregateResult?.totalSales || 0),
-              totalDebt: Number(aggregateResult?.totalDebt || 0),
-              lastActivity: aggregateResult?.lastActivity || null
+              totalSales: totalSalesValue,
+              totalDebt: totalDebtValue,
+              commissionDue,
+              commissionPaid,
+              commissionOutstanding,
+              lastSettlementAt: commissionAggregates?.lastPaymentAt || null,
+              lastActivity: aggregateResult?.lastActivity || null,
+              totalCommission: commissionPaid.toString()
             };
           })
         );
@@ -323,6 +392,148 @@ export class DatabaseStorage implements IStorage {
     return partner || undefined;
   }
 
+  async recalculateSalesPartnerFinancials(partnerId: number): Promise<void> {
+    return executeWithRetry(
+      async () => {
+        const [partner] = await db
+          .select({
+            id: salesPartners.id,
+            commissionRate: salesPartners.commissionRate
+          })
+          .from(salesPartners)
+          .where(eq(salesPartners.id, partnerId))
+          .limit(1);
+
+        if (!partner) {
+          return;
+        }
+
+        const [representativeAggregates] = await db
+          .select({
+            totalSales: sql<string>`COALESCE(SUM(CAST(total_sales AS DECIMAL)), 0)`,
+            totalDebt: sql<string>`COALESCE(SUM(CAST(total_debt AS DECIMAL)), 0)`
+          })
+          .from(representatives)
+          .where(eq(representatives.salesPartnerId, partnerId));
+
+        const [commissionAggregates] = await db
+          .select({
+            paid: sql<string>`COALESCE(SUM(CAST(amount AS DECIMAL)), 0)`,
+            lastPaymentAt: sql<string>`MAX(payment_date)`
+          })
+          .from(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.salesPartnerId, partnerId));
+
+        const totalSales = Number(representativeAggregates?.totalSales || 0);
+        const commissionRate = Number(partner.commissionRate || 0);
+        const commissionDue = Number(((totalSales * commissionRate) / 100).toFixed(2));
+        const commissionPaid = Number(commissionAggregates?.paid || 0);
+        const outstanding = Math.max(commissionDue - commissionPaid, 0);
+
+        await db
+          .update(salesPartners)
+          .set({
+            totalCommission: commissionPaid.toString()
+          })
+          .where(eq(salesPartners.id, partnerId));
+
+        console.log('📊 SalesPartner Aggregate Refresh', {
+          partnerId,
+          totalSales,
+          commissionRate,
+          commissionDue,
+          commissionPaid,
+          outstanding
+        });
+      },
+      'recalculateSalesPartnerFinancials'
+    );
+  }
+
+  async getPartnerCommissionPayments(partnerId: number): Promise<PartnerCommissionPayment[]> {
+    return executeWithRetry(
+      () =>
+        db
+          .select()
+          .from(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.salesPartnerId, partnerId))
+          .orderBy(desc(partnerCommissionPayments.paymentDate), desc(partnerCommissionPayments.createdAt)),
+      'getPartnerCommissionPayments'
+    );
+  }
+
+  async createPartnerCommissionPayment(payment: InsertPartnerCommissionPayment): Promise<PartnerCommissionPayment> {
+    return executeWithRetry(
+      async () => {
+        const timestampedPayment = {
+          ...payment,
+          updatedAt: new Date()
+        };
+
+        const [created] = await db
+          .insert(partnerCommissionPayments)
+          .values(timestampedPayment)
+          .returning();
+
+        await this.recalculateSalesPartnerFinancials(created.salesPartnerId);
+        return created;
+      },
+      'createPartnerCommissionPayment'
+    );
+  }
+
+  async updatePartnerCommissionPayment(paymentId: number, payment: Partial<PartnerCommissionPayment>): Promise<PartnerCommissionPayment> {
+    return executeWithRetry(
+      async () => {
+        const [existing] = await db
+          .select()
+          .from(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.id, paymentId))
+          .limit(1);
+
+        if (!existing) {
+          throw new Error(`Commission payment with id ${paymentId} not found`);
+        }
+
+        const [updated] = await db
+          .update(partnerCommissionPayments)
+          .set({
+            ...payment,
+            updatedAt: new Date()
+          })
+          .where(eq(partnerCommissionPayments.id, paymentId))
+          .returning();
+
+        await this.recalculateSalesPartnerFinancials(existing.salesPartnerId);
+        return updated;
+      },
+      'updatePartnerCommissionPayment'
+    );
+  }
+
+  async deletePartnerCommissionPayment(paymentId: number): Promise<void> {
+    return executeWithRetry(
+      async () => {
+        const [existing] = await db
+          .select()
+          .from(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.id, paymentId))
+          .limit(1);
+
+        if (!existing) {
+          throw new Error(`Commission payment with id ${paymentId} not found`);
+        }
+
+        await db
+          .delete(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.id, paymentId));
+
+        await this.recalculateSalesPartnerFinancials(existing.salesPartnerId);
+      },
+      'deletePartnerCommissionPayment'
+    );
+  }
+
   async createSalesPartner(partner: InsertSalesPartner): Promise<SalesPartner> {
     const [newPartner] = await db
       .insert(salesPartners)
@@ -335,6 +546,7 @@ export class DatabaseStorage implements IStorage {
       relatedId: newPartner.id
     });
 
+    await this.recalculateSalesPartnerFinancials(newPartner.id);
     return newPartner;
   }
 
@@ -344,6 +556,10 @@ export class DatabaseStorage implements IStorage {
       .set(partner)
       .where(eq(salesPartners.id, id))
       .returning();
+    if (!updated) {
+      throw new Error(`Sales partner with id ${id} not found`);
+    }
+    await this.recalculateSalesPartnerFinancials(updated.id);
     return updated;
   }
 
@@ -2432,38 +2648,28 @@ export class DatabaseStorage implements IStorage {
   async getSalesPartnersStatistics(): Promise<any> {
     return executeWithRetry(
       async () => {
-        // S-01 Fix: Enhanced statistics with proper numeric conversion
-        const result = await db
-          .select({
-            totalPartners: sql<number>`count(*)`,
-            totalActivePartners: sql<number>`count(*) filter (where is_active = true)`,
-            totalCommission: sql<string>`COALESCE(SUM(CAST(total_commission as DECIMAL)), 0)`,
-            averageCommissionRate: sql<number>`COALESCE(AVG(commission_rate), 0)`
-          })
-          .from(salesPartners);
+        const partners = await this.getSalesPartners();
 
-        // Calculate financial coupling - total sales from sub-representatives
-        const salesCouplingResult = await db
-          .select({
-            totalCoupledSales: sql<string>`COALESCE(SUM(CAST(total_sales as DECIMAL)), 0)`,
-            totalCoupledDebt: sql<string>`COALESCE(SUM(CAST(total_debt as DECIMAL)), 0)`,
-            coupledRepresentatives: sql<number>`COUNT(*)`
-          })
-          .from(representatives)
-          .where(sql`sales_partner_id IS NOT NULL`);
+        const totalPartners = partners.length;
+        const activePartners = partners.filter((partner) => partner.isActive).length;
+        const totalSales = partners.reduce((sum, partner) => sum + Number(partner.totalSales || 0), 0);
+        const totalDebt = partners.reduce((sum, partner) => sum + Number(partner.totalDebt || 0), 0);
+        const totalCommissionPaid = partners.reduce((sum, partner) => sum + Number(partner.commissionPaid || partner.totalCommission || 0), 0);
+        const totalCommissionDue = partners.reduce((sum, partner) => sum + Number(partner.commissionDue || 0), 0);
+        const totalOutstanding = partners.reduce((sum, partner) => sum + Number(partner.commissionOutstanding || 0), 0);
+        const averageCommissionRate = totalPartners === 0
+          ? 0
+          : partners.reduce((sum, partner) => sum + Number(partner.commissionRate || 0), 0) / totalPartners;
 
-        console.log(`📊 S-01 Fixed: Sales partners statistics - ${result[0].totalPartners} partners, $${salesCouplingResult[0].totalCoupledSales} total sales from ${salesCouplingResult[0].coupledRepresentatives} representatives`);
-
-        // S-01 Fix: Return numeric values, not strings
         return {
-          totalPartners: Number(result[0].totalPartners || 0),
-          activePartners: Number(result[0].totalActivePartners || 0),
-          totalCommission: Number(result[0].totalCommission || 0),
-          totalSales: Number(salesCouplingResult[0].totalCoupledSales || 0), // Numeric
-          averageCommissionRate: Number(result[0].averageCommissionRate || 0),
-          totalCoupledSales: Number(salesCouplingResult[0].totalCoupledSales || 0), // Numeric
-          totalCoupledDebt: Number(salesCouplingResult[0].totalCoupledDebt || 0), // Numeric
-          coupledRepresentatives: Number(salesCouplingResult[0].coupledRepresentatives || 0)
+          totalPartners,
+          activePartners,
+          totalCommission: Number(totalCommissionPaid.toFixed(2)),
+          totalCommissionDue: Number(totalCommissionDue.toFixed(2)),
+          outstandingCommission: Number(totalOutstanding.toFixed(2)),
+          totalCoupledSales: Number(totalSales.toFixed(2)),
+          totalCoupledDebt: Number(totalDebt.toFixed(2)),
+          averageCommissionRate: Number(averageCommissionRate.toFixed(2))
         };
       },
       'getSalesPartnersStatistics'

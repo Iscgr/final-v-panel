@@ -28,13 +28,26 @@ export const representatives = pgTable("representatives", {
 // Sales Partners (همکاران فروش)
 export const salesPartners = pgTable("sales_partners", {
   id: serial("id").primaryKey(),
+  code: text("code"), // شناسه داخلی همکار فروش
   name: text("name").notNull(),
   phone: text("phone"),
   email: text("email"),
+  contactPerson: text("contact_person"),
   commissionRate: decimal("commission_rate", { precision: 5, scale: 2 }).default("0"), // نرخ کمیسیون درصدی
   totalCommission: decimal("total_commission", { precision: 15, scale: 2 }).default("0"), // کل کمیسیون
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow()
+});
+
+export const partnerCommissionPayments = pgTable("partner_commission_payments", {
+  id: serial("id").primaryKey(),
+  salesPartnerId: integer("sales_partner_id").notNull().references(() => salesPartners.id, { onDelete: "cascade" }),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  paymentDate: timestamp("payment_date").defaultNow(),
+  note: text("note"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
 });
 
 // Reconciliation Actions (اقدامات اصلاحی drift)
@@ -642,7 +655,15 @@ export const representativesRelations = relations(representatives, ({ one, many 
 }));
 
 export const salesPartnersRelations = relations(salesPartners, ({ many }) => ({
-  representatives: many(representatives)
+  representatives: many(representatives),
+  commissionPayments: many(partnerCommissionPayments)
+}));
+
+export const partnerCommissionPaymentsRelations = relations(partnerCommissionPayments, ({ one }) => ({
+  salesPartner: one(salesPartners, {
+    fields: [partnerCommissionPayments.salesPartnerId],
+    references: [salesPartners.id]
+  })
 }));
 
 // فاز ۱: Relations برای مدیریت دوره‌ای فاکتورها
@@ -702,6 +723,7 @@ export const dataIntegrityConstraintsRelations = relations(dataIntegrityConstrai
 export const insertRepresentativeSchema = omitInsert(createInsertSchema(representatives), "id", "publicId", "totalDebt", "totalSales", "credit", "createdAt", "updatedAt");
 
 export const insertSalesPartnerSchema = omitInsert(createInsertSchema(salesPartners), "id", "totalCommission", "createdAt");
+export const insertPartnerCommissionPaymentSchema = omitInsert(createInsertSchema(partnerCommissionPayments), "id", "createdAt", "updatedAt");
 
 // فاز ۱: Insert Schema برای مدیریت دوره‌ای
 export const insertInvoiceBatchSchema = omitInsert(createInsertSchema(invoiceBatches), "id", "totalInvoices", "totalAmount", "createdAt", "completedAt");
@@ -771,7 +793,16 @@ export type InsertSalesPartner = z.infer<typeof insertSalesPartnerSchema>;
 // Extended SalesPartner with calculated fields (for API responses)
 export interface SalesPartnerWithCount extends SalesPartner {
   representativesCount?: number;
+  totalSales?: number;
+  totalDebt?: number;
+  commissionDue?: number;
+  commissionPaid?: number;
+  commissionOutstanding?: number;
+  lastSettlementAt?: string | null;
 }
+
+export type PartnerCommissionPayment = typeof partnerCommissionPayments.$inferSelect;
+export type InsertPartnerCommissionPayment = z.infer<typeof insertPartnerCommissionPaymentSchema>;
 
 export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;

@@ -55,9 +55,6 @@ import type { SalesPartnerWithCount } from "@shared/schema";
 
 // Extend the shared type with additional fields needed for UI
 interface SalesPartner extends SalesPartnerWithCount {
-  code?: string;
-  contactPerson?: string;
-  totalSales?: string;
   lastActivityDate?: string;
   updatedAt?: string;
 }
@@ -386,7 +383,7 @@ export default function SalesPartners() {
                           </Badge>
                         </TableCell>
                         <TableCell className="font-mono text-sm">
-                          {formatCurrency(parseFloat(partner.totalSales || "0"))}
+                          {formatCurrency(partner.totalSales ?? 0)}
                         </TableCell>
                         <TableCell>
                           {getStatusBadge(partner.isActive === true)}
@@ -453,7 +450,7 @@ export default function SalesPartners() {
                     <div className="space-y-2">
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-400">کل فروش:</span>
-                        <span className="font-semibold">{formatCurrency(parseFloat(partner.totalSales || "0"))}</span>
+                        <span className="font-semibold">{formatCurrency(partner.totalSales ?? 0)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-400">کمیسیون:</span>
@@ -534,7 +531,9 @@ export default function SalesPartners() {
                   </TableHeader>
                   <TableBody>
                     {filteredPartners.map((partner) => {
-                      const calculatedCommission = (parseFloat(partner.totalSales || "0") * parseFloat((partner.commissionRate || 0).toString())) / 100;
+                      const totalSales = partner.totalSales ?? 0;
+                      const commissionRate = parseFloat((partner.commissionRate || 0).toString());
+                      const calculatedCommission = (totalSales * commissionRate) / 100;
                       const paidCommission = parseFloat(partner.totalCommission || "0");
                       const remaining = calculatedCommission - paidCommission;
                       
@@ -552,7 +551,7 @@ export default function SalesPartners() {
                             </Badge>
                           </TableCell>
                           <TableCell className="font-mono">
-                            {formatCurrency(parseFloat(partner.totalSales || "0"))}
+                            {formatCurrency(totalSales)}
                           </TableCell>
                           <TableCell className="font-mono">
                             {formatCurrency(calculatedCommission)}
@@ -639,7 +638,7 @@ export default function SalesPartners() {
                   <div className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-400">کل فروش:</span>
                     <span className="font-bold text-green-600 dark:text-green-400">
-                      {formatCurrency(parseFloat(selectedPartner.totalSales || "0"))}
+                      {formatCurrency(selectedPartner.totalSales ?? 0)}
                     </span>
                   </div>
                   <div className="flex justify-between">
