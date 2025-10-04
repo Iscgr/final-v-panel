@@ -63,7 +63,8 @@ const getDefaultTelegramTemplate = () => `📋 فاکتور شماره {invoice_
 🏪 نماینده: {representative_name}
 👤 صاحب فروشگاه: {shop_owner}
 📱 شناسه پنل: {panel_id}
-💰 مبلغ فاکتور: {amount} تومان
+� تلگرام: {telegram_handle}
+�💰 مبلغ فاکتور: {amount} تومان
 📅 تاریخ صدور: {issue_date}
 🔍 وضعیت: {status}
 

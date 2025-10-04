@@ -66,8 +66,13 @@ interface Payment {
 }
 
 export default function RepresentativeProfile() {
-  const [match, params] = useRoute<{ code: string }>("/representatives/:code");
-  const code = params?.code || '';
+  // پشتیبانی از هر دو نوع مسیر:
+  // 1) مسیر قدیمی: /representatives/:code (نماینده با code)
+  // 2) مسیر جدید Phase3: /representatives/id/:id (نماینده با id)
+  const [matchByCode, paramsByCode] = useRoute<{ code: string }>("/representatives/:code");
+  const [matchById, paramsById] = useRoute<{ id: string }>("/representatives/id/:id");
+  const code = matchByCode ? (paramsByCode?.code || '') : '';
+  const repIdParam = matchById ? Number(paramsById?.id) : undefined;
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -103,6 +108,27 @@ export default function RepresentativeProfile() {
     });
     setIsEditProfileOpen(true);
   };
+
+  // --- Input Mask Helpers (Phase3 Enhancement) ---
+  const sanitizePhone = (val: string) => {
+    // مجاز: رقم، + در ابتدای رشته، فاصله و خط تیره
+    let cleaned = val.replace(/[^\d+\s-]/g, '');
+    // فقط اولین + را نگه دار
+    cleaned = cleaned.replace(/(\+)(?=.*\+)/g, '');
+    // کوتاه سازی به حداکثر 18 کاراکتر مفید
+    if (cleaned.length > 18) cleaned = cleaned.slice(0,18);
+    return cleaned;
+  };
+  const sanitizeTelegram = (val: string) => {
+    // حذف فاصله و کاراکترهای غیر مجاز
+    let v = val.replace(/\s+/g,'').replace(/[^@A-Za-z0-9_]/g,'');
+    // فقط یک @ در ابتدای رشته مجاز است
+    v = v.replace(/@+/g,'@');
+    if (v.length > 0 && !v.startsWith('@')) v = '@'+v; // auto prefix
+    // طول مجاز 33 با احتساب @ (حداکثر 32 پس از @)
+    if (v.length > 33) v = v.slice(0,33);
+    return v;
+  };
   const updateProfileMutation = useMutation({
     mutationFn: async (values: EditProfileFormValues) => {
       if (!representative) throw new Error('نماینده موجود نیست');
@@ -125,24 +151,28 @@ export default function RepresentativeProfile() {
   });
 
   const { data: representative, isLoading: isLoadingRep, error: repError, refetch: refetchRepresentative } = useQuery<RepresentativeDetails>({
-    queryKey: [`/api/representatives/${code}`],
+    // کلید کوئری وابسته به نوع مسیر
+    queryKey: matchById && repIdParam ? ["/api/representatives/id", repIdParam] : ["/api/representatives/code", code],
     queryFn: async () => {
-      const response = await fetch(`/api/representatives/${code}`, {
-        credentials: 'include',
-      });
+      const url = matchById && repIdParam
+        ? `/api/representatives/id/${repIdParam}`
+        : `/api/representatives/${code}`; // fallback قدیمی برای سازگاری
+      const response = await fetch(url, { credentials: 'include' });
       if (!response.ok) {
         throw new Error('Failed to fetch representative details');
       }
       return response.json();
     },
-    enabled: !!code,
+    enabled: (matchById && !!repIdParam) || (!!code),
     staleTime: 30000,
   });
 
   const { data: invoicesData, isLoading: isLoadingInvoices, refetch: refetchInvoices } = useQuery<{ invoices: Invoice[], total: number }>({
-    queryKey: [`/api/representatives/${code}/invoices`],
+    queryKey: representative?.id ? ["/api/representatives", representative.id, "invoices"] : ["/api/representatives", code, "invoices"],
     queryFn: async () => {
-      const response = await fetch(`/api/representatives/${code}/invoices?page=1&pageSize=10`, {
+      if (!representative) throw new Error('Representative not loaded');
+      // استفاده از code برای سازگاری سمت سرور (endpointهای فاکتور فعلاً مبتنی بر code هستند)
+      const response = await fetch(`/api/representatives/${representative.code}/invoices?page=1&pageSize=10`, {
         credentials: 'include',
       });
       if (!response.ok) {
@@ -150,14 +180,15 @@ export default function RepresentativeProfile() {
       }
       return response.json();
     },
-    enabled: !!code,
+    enabled: !!representative?.code,
     staleTime: 30000,
   });
 
   const { data: paymentsData, isLoading: isLoadingPayments } = useQuery<{ payments: Payment[], total: number }>({
-    queryKey: [`/api/representatives/${code}/payments`],
+    queryKey: representative?.id ? ["/api/representatives", representative.id, "payments"] : ["/api/representatives", code, "payments"],
     queryFn: async () => {
-      const response = await fetch(`/api/representatives/${code}/payments?page=1&pageSize=10`, {
+      if (!representative) throw new Error('Representative not loaded');
+      const response = await fetch(`/api/representatives/${representative.code}/payments?page=1&pageSize=10`, {
         credentials: 'include',
       });
       if (!response.ok) {
@@ -165,7 +196,7 @@ export default function RepresentativeProfile() {
       }
       return response.json();
     },
-    enabled: !!code,
+    enabled: !!representative?.code,
     staleTime: 30000,
   });
 
@@ -414,6 +445,17 @@ export default function RepresentativeProfile() {
                 </p>
               </div>
             )}
+            {representative.telegramHandle && (
+              <div className="space-y-1">
+                <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                  <span className="h-3 w-3 inline-block">💬</span>
+                  آیدی تلگرام
+                </p>
+                <p className="text-base font-semibold text-blue-700 dark:text-blue-300" dir="ltr">
+                  {representative.telegramHandle.startsWith('@') ? representative.telegramHandle : '@'+representative.telegramHandle}
+                </p>
+              </div>
+            )}
             {representative.email && (
               <div className="space-y-1">
                 <p className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
@@ -598,7 +640,7 @@ export default function RepresentativeProfile() {
             status: selectedInvoice.status,
             usageData: selectedInvoice.usageData,
           }}
-          representativeCode={code}
+          representativeCode={representative.code}
           isOpen={isEditDialogOpen}
           onOpenChange={setIsEditDialogOpen}
           onEditComplete={handleEditComplete}
@@ -634,14 +676,14 @@ export default function RepresentativeProfile() {
       {/* Payment Dialog */}
       {representative && (
         <PaymentDialog
-          representativeCode={code}
+          representativeCode={representative.code}
           representativeId={representative.id}
           isOpen={isPaymentDialogOpen}
           onOpenChange={setIsPaymentDialogOpen}
           onPaymentComplete={() => {
             refetchInvoices();
             refetchRepresentative();
-            queryClient.invalidateQueries({ queryKey: [`/api/representatives/${code}/payments`] });
+            queryClient.invalidateQueries({ queryKey: ["/api/representatives", representative?.id, "payments"] });
           }}
         />
       )}
@@ -671,16 +713,38 @@ export default function RepresentativeProfile() {
                 )} />
                 <FormField name="phone" control={editProfileForm.control} render={({ field }) => (
                   <FormItem>
-                    <FormLabel>شماره تماس</FormLabel>
-                    <FormControl><Input placeholder="09121234567" {...field} /></FormControl>
+                    <FormLabel title="فرمت مجاز: +98 912-123-4567 یا 09121234567">شماره تماس</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="09121234567"
+                        {...field}
+                        onChange={(e) => {
+                          const val = sanitizePhone(e.target.value);
+                          field.onChange(val);
+                        }}
+                        inputMode="tel"
+                        aria-describedby="phone-help"
+                      />
+                    </FormControl>
+                    <p id="phone-help" className="text-xs text-gray-500">فقط ارقام، فاصله و - مجاز. مثال: +98 912-123-4567</p>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField name="telegramHandle" control={editProfileForm.control} render={({ field }) => (
                   <FormItem>
-                    <FormLabel>آیدی تلگرام</FormLabel>
-                    <FormControl><Input placeholder="@example_handle" {...field} /></FormControl>
-                    <p className="text-xs text-gray-500">بدون @ نیز قابل ورود است؛ خودکار افزوده می‌شود.</p>
+                    <FormLabel title="حداقل ۵ و حداکثر ۳۲ نویسه: حروف، عدد و _ مجاز">آیدی تلگرام</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="@example_handle"
+                        {...field}
+                        onChange={(e) => {
+                          const val = sanitizeTelegram(e.target.value);
+                          field.onChange(val);
+                        }}
+                        aria-describedby="tg-help"
+                      />
+                    </FormControl>
+                    <p id="tg-help" className="text-xs text-gray-500">حروف، عدد و underscore. حداقل ۵ نویسه. @ خودکار افزوده می‌شود.</p>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -702,6 +766,12 @@ export default function RepresentativeProfile() {
                 )} />
               </div>
               <div className="flex justify-end gap-2 pt-2">
+                <div className="text-xs text-gray-500 flex-1 leading-5 space-y-1">
+                  <p className="font-semibold">راهنما:</p>
+                  <p><strong>آیدی تلگرام:</strong> فقط حروف لاتین، عدد و _ . مثال معتبر: @My_Shop123</p>
+                  <p><strong>شماره تماس:</strong> می‌توانید با پیش‌شماره کشور شروع کنید. + اختیاری است.</p>
+                  <p><strong>همکار فروش:</strong> در صورت انتخاب، کمیسیون به آن همکار نسبت داده می‌شود.</p>
+                </div>
                 <Button type="button" variant="outline" onClick={() => setIsEditProfileOpen(false)}>انصراف</Button>
                 <Button type="submit" disabled={updateProfileMutation.isPending}>{updateProfileMutation.isPending ? 'در حال ذخیره...' : 'ذخیره تغییرات'}</Button>
               </div>

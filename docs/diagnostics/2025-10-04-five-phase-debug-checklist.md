@@ -10,7 +10,8 @@
 - [ ] تهیه بکاپ کامل از پایگاه داده فعلی با `docker compose exec -T db pg_dump -U postgres marfanet > backups/pre-debug-$(date +%F-%H%M).sql`.
 - [ ] فعال‌سازی لاگ ساختاریافته (سطح `debug`) در `.env` آزمایشی برای ردگیری فلو‌های مالی و محتوا.
 - [ ] همگام‌سازی `uploads/` و ثبت هش SHA256 برای بازرسى تطابق پس از تست.
-- [x] اجرای smoke تست پایه (`npm run check`, `npm run test:outbox`) جهت اطمینان از سلامت فعلی قبل از تغییرات.
+- [x] اجرای smoke تست پایه (`npm run check`, `npm run test:outbox`) جهت اطمینان از سلامت فعلی قبل از تغییرات.  
+  *یادداشت 1404/07/12:* `npm run check` موفق بود؛ تست outbox اجرا شد ولی به علت نبود `DATABASE_URL` در محیط تست، خطا داد (Baseline ثبت شد — نیاز به پیکربندی env تست در گام بعدی قبل از افزودن تست‌های جدید).
 - [ ] مستندسازی نسخه‌های سرویس پایتونی و Node جهت ردیابی ناسازگاری احتمالی.
 
 ## ۲. اسکن ۳۶۰° لایه‌ها و وابستگی‌ها
@@ -139,38 +140,38 @@ graph LR
 
 **Frontend**
 - [x] افزودن دکمه «ویرایش» در باکس اطلاعات نماینده. *(افزوده شد: دکمه "ویرایش پروفایل" در `representative-profile.tsx`)*
-- [x] ساخت فرم ویرایش (Drawer یا Modal) با فیلدهای: `username`, `ownerName`, `salesPartnerId`, `phone`, `telegramHandle`. *(Dialog + فرم با Zod + auto-prefix @ برای تلگرام پیاده‌سازی شد)*
-- [ ] همگام‌سازی داده با React Query (`/api/representatives/:id`). *(در حال حاضر fetch با `/:code` انجام می‌شود؛ تصمیم: پیاده‌سازی GET بر اساس id یا حفظ مدل code → نیاز به انطباق با چک لیست و تکمیل در گام بعد)*
-- [ ] به‌روزرسانی قالب فاکتور در تب تنظیمات تلگرام برای placeholder آیدی.
+- [x] ساخت فرم ویرایش (Dialog) با فیلدهای: `username`, `ownerName`, `salesPartnerId`, `phone`, `telegramHandle`. *(Zod + auto-prefix @)*
+- [x] همگام‌سازی داده با React Query اکنون بر پایه شناسه (مسیر id) پشتیبانی می‌شود (مسیر dual code/id اضافه و فرانت به id سوییچ شده – سازگاری عقب‌رو حفظ شد).
+- [x] به‌روزرسانی قالب فاکتور در تب تنظیمات تلگرام برای placeholder آیدی (`{telegram_handle}`).
 
 **Backend**
-- [x] پیاده‌سازی endpoint PUT `/api/representatives/:id/profile` با Zod validation. *(1404/07/12: مسیر در `server/routes/representatives-routes.ts` افزوده شد و اسکیما `updateRepresentativeProfileSchema` اعمال می‌شود.)*
-- [x] به‌روزرسانی Drizzle schema برای ذخیره `telegramHandle` در جدول نمایندگان (در صورت نبود). *(نیاز به تغییر جدید نبود؛ فیلد موجود `telegram_id` در `shared/schema.ts` استفاده و در سرویس به عنوان `telegramHandle` مپ شد.)*
-- [x] انتشار webhook یا log برای تغییرات حساس (owner, sales partner). *(ثبت Activity log با نوع `representative_profile_updated` + `STRUCT_LOG` در `representatives-service.ts` – شامل diff فیلدهای حساس)*
+- [x] Endpoint PUT `/api/representatives/:id/profile` + Validation.
+- [x] فیلد `telegramHandle` از `telegram_id` نگاشت و نیازی به Migration جدید نبود.
+- [x] Activity log تغییرات حساس ثبت می‌شود.
 
 **UX/Content**
-- [ ] تضمین نمایش آیدی تلگرام در فاکتور (template fetch در `settings/telegram`).
-- [ ] افزودن mask/validation برای شماره تماس و آیدی تلگرام (شروع با `@`).
-- [ ] به‌روزرسانی Tooltipها و legend جهت آگاهی کاربران.
+- [x] نمایش آیدی تلگرام در فاکتور (Template بروزرسانی شده + مسیر ارسال پیام تلگرام).
+- [x] Mask/Validation: تلگرام با auto-prefix و حداقل طول؛ تلفن دارای قیود طول/الگو در فرم.
+- [x] Tooltipها و legend بروزرسانی شدند.
 
 ### فاز ۴ – «پرتال محتوا و CRUD کامل»
 
 **Frontend**
-- [ ] تحلیل `PortalContentManager` و تب‌های چهارگانه (Blocks, Announcements, Apps, Preview).
-- [ ] اصلاح mutationها تا نتیجه در QueryCache و نهایتاً پرتال عمومی (`client/src/pages/portal.tsx`) نمایش یابد.
-- [ ] افزودن قابلیت افزودن/حذف چندگانه و ترتیب‌گذاری Drag & Drop (در صورت وجود نیاز).
-- [ ] نمایش پیغام وضعیت انتشار و آخرین همگام‌سازی.
+- [x] تحلیل `PortalContentManager` و تب‌های چهارگانه (Blocks, Announcements, Apps, Preview). *انجام شد (ممیزی کامل خطوط فایل + ثبت گپ‌ها)*
+- [ ] اصلاح mutationها تا نتیجه در QueryCache و نهایتاً پرتال عمومی (`client/src/pages/portal.tsx`) نمایش یابد. *گپ: عدم auto-refetch preview / عدم invalidate تجمیعی پس از batch/reorder*
+- [ ] افزودن قابلیت افزودن/حذف چندگانه (Multi-select + Bulk delete) و گسترش Drag & Drop در صورت نیاز. *گپ: فقط Drag & Drop downloads پیاده شده؛ multi-delete موجود نیست*
+- [ ] نمایش پیغام وضعیت انتشار و آخرین همگام‌سازی. *گپ: مفاهیم publishStatus/lastSyncedAt در اسکیمای فعلی وجود ندارد*
 
 **Backend**
-- [ ] مرور سرویس `server/services/portal-content.ts` برای کش/اینوالیدیشن.
-- [ ] اطمینان از آپدیت Redis یا In-memory cache پس از هرmutation.
-- [ ] همگام‌سازی endpointهای GET عمومی (`/api/public/portal/*`).
-- [ ] افزودن تست‌های کاهشی برای جلوگیری از رگرسیون.
+- [x] مرور روت‌ها (`portal-content-routes.ts`, `admin-resources-routes.ts`) و Bootstrap. *نتیجه: کش / publish هنوز وجود ندارد*
+- [ ] پیاده‌سازی لایه Cache (Redis یا in-memory) و invalidation پس از mutation. *گپ کامل*
+- [ ] توسعه/اعتبارسنجی endpointهای GET عمومی (هماهنگی با حالت منتشر شده). *نیاز به مدل انتشار*
+- [ ] افزودن تست‌های رگرسیون CRUD + full preview.
 
 **UX**
-- [ ] نمایش پیش‌نمایش زنده و هشدار اگر انتشار انجام نشده.
-- [ ] امکان انتخاب زبان آینده (I18n placeholder).
-- [ ] اطمینان از واکنش‌گرایی موبایل.
+- [ ] نمایش پیش‌نمایش زنده و هشدار اگر انتشار انجام نشده. *گپ: Banner هشدار و state انتشار نداریم*
+- [ ] امکان انتخاب زبان آینده (I18n placeholder). *گپ کامل*
+- [ ] اطمینان از واکنش‌گرایی موبایل. *گپ: Audit ریسپانسیو انجام نشده*
 
 ### فاز ۵ – «بکاپ/ریستور در تب تنظیمات»
 

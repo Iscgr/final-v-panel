@@ -2161,7 +2161,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: formatInvoiceStatus(invoice.status),
             portalLink,
             isResend: invoice.sentToTelegram || false,
-            sendCount: (invoice.telegramSendCount || 0) + 1
+            sendCount: (invoice.telegramSendCount || 0) + 1,
+            telegramHandle: (representative as any).telegramId || null
           };
           
           console.log('📋 Telegram message data prepared:', {
