@@ -25,7 +25,7 @@ export const systemService = {
   },
 
   async getBackupHistory(): Promise<any[]> {
-    const response = await fetchApi('/api/system/backup-history');
+    const response = await fetchApi('/api/system/backup/history');
     return response.data;
   },
 };

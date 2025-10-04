@@ -5,7 +5,7 @@ import { backupService } from '../services/backup-service.js';
 import { db } from '../db.js';
 import { backupAuditLog } from '../../shared/schema.js';
 import { desc } from 'drizzle-orm';
-import { promises as fs } from 'fs';
+import { promises as fs, createReadStream } from 'fs';
 
 const router = Router();
 
@@ -29,13 +29,15 @@ router.post('/backup', async (req: Request, res: Response) => {
   const username = (req as any).user?.username || 'unknown';
   try {
     const { filePath, fileSize, checksum } = await backupService.createBackup(username);
-    res.json({ 
-      success: true, 
-      message: 'Backup created successfully.',
-      fileName: path.basename(filePath),
-      fileSize,
-      checksum
-    });
+    const fileName = path.basename(filePath);
+    // هدرهای دانلود مستقیم
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    // متادیتا در هدرهای سفارشی برای مصرف احتمالی کلاینت
+    res.setHeader('X-Backup-Filename', fileName);
+    res.setHeader('X-Backup-Size', fileSize.toString());
+    res.setHeader('X-Backup-Checksum', checksum);
+    createReadStream(filePath).pipe(res);
   } catch (error) {
     console.error('❌ Backup creation failed:', error);
     await db.insert(backupAuditLog).values({
@@ -44,7 +46,9 @@ router.post('/backup', async (req: Request, res: Response) => {
       status: 'failed',
       notes: (error as Error).message
     });
-    res.status(500).json({ success: false, error: 'Backup creation failed.' });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: 'Backup creation failed.' });
+    }
   }
 });
 

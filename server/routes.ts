@@ -4,7 +4,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { db } from "./db.js";
 import { sql, eq, and, or, like, gte, lte, asc, count, desc } from "drizzle-orm";
-import { invoices, representatives, payments, activityLogs, insertRepresentativeSchema, insertInvoiceSchema, insertInvoiceBatchSchema, type InsertInvoice, portalContentBlocks, importJobs } from "@shared/schema";
+import { invoices, representatives, payments, activityLogs, insertRepresentativeSchema, insertInvoiceSchema, insertInvoiceBatchSchema, type InsertInvoice, portalContentBlocks } from "@shared/schema";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 
@@ -43,6 +43,7 @@ import databaseOptimizationRoutes from "./routes/database-optimization-routes.js
 import debtVerificationRoutes from "./routes/debt-verification-routes.js";
 import activeReconciliationRoutes from "./routes/active-reconciliation-routes.js";
 import guardMetricsRoutes from "./routes/guard-metrics-routes.js";
+import systemRoutes from "./routes/system-routes.js";
 // Phase 1: Portal Content Management (NEW modular content blocks)
 import portalContentRoutes from "./routes/portal-content-routes.js";
 import salesPartnersRoutes from "./routes/sales-partners-routes.js";
@@ -261,44 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/system', authMiddleware, systemRoutes);
   console.log('✅ System routes registered (backup/restore)');
 
-  // (Phase A) Import Jobs instrumentation scaffold (no breaking changes)
-  app.get('/api/admin/import-jobs', authMiddleware, async (req, res) => {
-    try {
-      const jobs = await db.select().from(importJobs).orderBy(desc(importJobs.id)).limit(50);
-      res.json({ success: true, data: jobs });
-    } catch (e) {
-      res.status(500).json({ success: false, error: 'failed_list_import_jobs', message: (e as Error).message });
-    }
-  });
-  app.post('/api/admin/import-jobs', authMiddleware, async (req, res) => {
-    try {
-      const { jobCode, sourceFileName, totalRecords } = req.body || {};
-      if (!jobCode) return res.status(400).json({ success:false, error:'missing_job_code' });
-      await db.insert(importJobs).values({ jobCode, sourceFileName, totalRecords: totalRecords||0 }).onConflictDoNothing();
-      res.json({ success:true });
-    } catch (e) {
-      res.status(500).json({ success:false, error:'failed_create_import_job', message:(e as Error).message });
-    }
-  });
-
-  app.patch('/api/admin/import-jobs/:jobCode', authMiddleware, async (req, res) => {
-    try {
-      const { jobCode } = req.params;
-      const { status, processedRecords, errorIncrement, lastError } = req.body || {};
-      // TODO: add more granular atomic update logic & constraints
-      const updates: any = {};
-      if (status) updates.status = status;
-      if (typeof processedRecords === 'number') updates.processedRecords = processedRecords;
-      if (lastError) updates.lastError = lastError;
-      if (errorIncrement) updates.errorCount = sql`${importJobs.errorCount} + ${errorIncrement}`;
-      if (status === 'completed' || status === 'failed') updates.finishedAt = new Date();
-      if (Object.keys(updates).length === 0) return res.json({ success:true, noop:true });
-      await db.update(importJobs).set(updates).where(eq(importJobs.jobCode, jobCode));
-      res.json({ success:true });
-    } catch (e) {
-      res.status(500).json({ success:false, error:'failed_update_import_job', message:(e as Error).message });
-    }
-  });
+  // (Import Jobs scaffold removed intentionally – will be reintroduced with proper schema in future phase)
 
   // 📤 NEW: Upload JSON file and create Import Job with processing
   app.post('/api/admin/upload-json', authMiddleware, upload.single('file'), async (req: MulterRequest, res) => {
@@ -336,27 +300,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`📊 JSON parsed: ${totalRecords} records`);
 
-      // Create Import Job
-      await db.insert(importJobs).values({
-        jobCode,
-        sourceFileName: file.originalname,
-        totalRecords,
-        status: 'pending',
-        processedRecords: 0,
-        errorCount: 0
-      }).onConflictDoNothing();
-
-      console.log(`✅ Import Job created: ${jobCode}`);
-
-      // Immediately start processing (fire and forget)
-      fetch(`http://localhost:3000/api/admin/import-jobs/${jobCode}/start`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Cookie': req.headers.cookie || ''
-        }
-      }).catch(err => console.error('Failed to start job:', err));
-
       res.json({ 
         success: true, 
         jobCode,
@@ -377,10 +320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Aggregated active actions: import jobs (not completed/failed) + active multi-stage flags
   app.get('/api/admin/active-actions', authMiddleware, async (req, res) => {
     try {
-      const activeJobs = await db.select().from(importJobs)
-        .where(or(eq(importJobs.status,'pending'), eq(importJobs.status,'validating'), eq(importJobs.status,'ingesting'), eq(importJobs.status,'enriching')))
-        .orderBy(desc(importJobs.id))
-        .limit(100);
+      const activeJobs: any[] = [];
       const flagsStatus = featureFlagManager.getStatus();
       const multiStageActive = Object.entries(flagsStatus)
         .filter(([k,v]: any) => v.state && v.state !== 'off')

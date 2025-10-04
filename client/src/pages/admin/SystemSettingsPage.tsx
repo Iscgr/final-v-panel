@@ -1,26 +1,36 @@
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { systemService } from '../services/system';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { systemService } from '../../services/system';
+import { Button } from '../../components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
 import { toast } from 'sonner';
 import { Upload, Download, History } from 'lucide-react';
-import { format } from 'date-fns-jalali';
+import { format } from 'date-fns';
+
+// Types for backup history rows
+interface BackupLogRow {
+  id: number;
+  action: 'backup' | 'restore';
+  performedBy: string;
+  status: 'success' | 'failed';
+  createdAt: string | Date;
+  notes?: string | null;
+}
 
 const SystemSettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
-  const { data: history, isLoading: isLoadingHistory } = useQuery({
+  const { data: history, isLoading: isLoadingHistory } = useQuery<BackupLogRow[]>({
     queryKey: ['backupHistory'],
     queryFn: systemService.getBackupHistory,
   });
 
-  const createBackupMutation = useMutation({
-    mutationFn: systemService.createBackup,
-    onSuccess: (blob) => {
+  const createBackupMutation = useMutation<Blob, Error>({
+    mutationFn: () => systemService.createBackup(),
+    onSuccess: (blob: Blob) => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -33,7 +43,7 @@ const SystemSettingsPage: React.FC = () => {
       toast.success('پشتیبان با موفقیت ایجاد و دانلود شد.');
       queryClient.invalidateQueries({ queryKey: ['backupHistory'] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast.error(`خطا در ایجاد پشتیبان: ${error.message}`);
     },
     onSettled: () => {
@@ -41,14 +51,14 @@ const SystemSettingsPage: React.FC = () => {
     },
   });
 
-  const restoreBackupMutation = useMutation({
-    mutationFn: systemService.restoreFromBackup,
+  const restoreBackupMutation = useMutation<any, Error, File>({
+    mutationFn: (file: File) => systemService.restoreFromBackup(file),
     onSuccess: () => {
       toast.success('بازیابی با موفقیت انجام شد. سیستم مجدداً راه‌اندازی می‌شود.');
       // Give a moment for the toast to be seen before reloading
       setTimeout(() => window.location.reload(), 2000);
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast.error(`خطا در بازیابی: ${error.message}`);
     },
     onSettled: () => {
@@ -146,7 +156,7 @@ const SystemSettingsPage: React.FC = () => {
               {isLoadingHistory ? (
                 <TableRow><TableCell colSpan={5} className="text-center">در حال بارگذاری تاریخچه...</TableCell></TableRow>
               ) : (
-                history?.map((log) => (
+                history?.map((log: BackupLogRow) => (
                   <TableRow key={log.id}>
                     <TableCell>{log.action === 'backup' ? 'پشتیبان‌گیری' : 'بازیابی'}</TableCell>
                     <TableCell>{log.performedBy}</TableCell>
