@@ -48,10 +48,13 @@ export interface IStorage {
     partnerId?: number;
     startDate?: Date;
     endDate?: Date;
+    status?: string;
   }): Promise<Array<PartnerCommissionPayment & { partnerName: string | null; partnerCode: string | null }>>;
   createPartnerCommissionPayment(payment: InsertPartnerCommissionPayment): Promise<PartnerCommissionPayment>;
   updatePartnerCommissionPayment(paymentId: number, payment: Partial<PartnerCommissionPayment>): Promise<PartnerCommissionPayment>;
   deletePartnerCommissionPayment(paymentId: number): Promise<void>;
+  // Partial Settlement (Phase 2 remaining item)
+  applyPartialSettlement(paymentId: number, amount: number, note?: string, actor?: string): Promise<PartnerCommissionPayment & { remaining: number }>;
 
   // فاز ۱: Invoice Batches - مدیریت دوره‌ای فاکتورها
   getInvoiceBatches(): Promise<InvoiceBatch[]>;
@@ -500,12 +503,14 @@ export class DatabaseStorage implements IStorage {
             id: partnerCommissionPayments.id,
             salesPartnerId: partnerCommissionPayments.salesPartnerId,
             amount: partnerCommissionPayments.amount,
+            settledAmount: partnerCommissionPayments.settledAmount,
             paymentDate: partnerCommissionPayments.paymentDate,
             note: partnerCommissionPayments.note,
             createdBy: partnerCommissionPayments.createdBy,
             createdAt: partnerCommissionPayments.createdAt,
             updatedAt: partnerCommissionPayments.updatedAt,
             status: partnerCommissionPayments.status,
+            lastPartialSettlementAt: partnerCommissionPayments.lastPartialSettlementAt,
             partnerName: salesPartners.name,
             partnerCode: salesPartners.code
           })
@@ -623,6 +628,84 @@ export class DatabaseStorage implements IStorage {
         });
       },
       'deletePartnerCommissionPayment'
+    );
+  }
+
+  /**
+   * اعمال تسویه جزئی روی یک پرداخت پورسانت.
+   * قوانین:
+   *  - فقط در وضعیت pending مجاز است.
+   *  - مبلغ باید > 0 و <= مانده باشد.
+   *  - در صورت صفر شدن مانده، وضعیت به paid تغییر می‌کند.
+   */
+  async applyPartialSettlement(paymentId: number, amount: number, note?: string, actor?: string): Promise<PartnerCommissionPayment & { remaining: number }> {
+    return executeWithRetry(
+      async () => {
+        if (!(amount > 0)) {
+          throw new Error('مبلغ تسویه جزئی باید بزرگتر از صفر باشد');
+        }
+
+        const [existing] = await db
+          .select()
+          .from(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.id, paymentId))
+          .limit(1);
+
+        if (!existing) {
+          throw new Error(`پرداخت با شناسه ${paymentId} یافت نشد`);
+        }
+
+        const total = Number(existing.amount || 0);
+        const settled = Number((existing as any).settledAmount || 0);
+        const status = (existing as any).status || 'pending';
+
+        if (status !== 'pending') {
+          throw new Error('تسویه جزئی فقط برای پرداخت‌های در انتظار مجاز است');
+        }
+
+        const remainingBefore = Math.max(total - settled, 0);
+        if (amount > remainingBefore) {
+          throw new Error('مبلغ تسویه جزئی از مانده بیشتر است');
+        }
+
+        const newSettled = settled + amount;
+        const remainingAfter = Math.max(total - newSettled, 0);
+        const shouldClose = remainingAfter === 0;
+
+        const [updated] = await db
+          .update(partnerCommissionPayments)
+          .set({
+            settledAmount: newSettled.toFixed(2),
+            lastPartialSettlementAt: new Date(),
+            updatedAt: new Date(),
+            note: note ?? existing.note,
+            status: shouldClose ? 'paid' : status
+          })
+            .where(eq(partnerCommissionPayments.id, paymentId))
+            .returning();
+
+        await this.recalculateSalesPartnerFinancials(updated.salesPartnerId);
+
+        await this.createActivityLog({
+          type: 'commission_payment_partial_settled',
+          description: `تسویه جزئی پرداخت پورسانت #${paymentId} به مبلغ ${amount} انجام شد` + (shouldClose ? ' (تسویه کامل)' : ''),
+            relatedId: paymentId,
+            metadata: {
+              paymentId,
+              partialAmount: amount,
+              beforeSettled: settled,
+              afterSettled: newSettled,
+              total,
+              remainingBefore,
+              remainingAfter,
+              autoStatusChange: shouldClose ? 'paid' : undefined,
+              actor: actor || 'SYSTEM'
+            }
+        });
+
+        return { ...updated, remaining: remainingAfter } as PartnerCommissionPayment & { remaining: number };
+      },
+      'applyPartialSettlement'
     );
   }
 

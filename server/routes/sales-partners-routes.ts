@@ -22,6 +22,12 @@ const updateSalesPartnerSchema = insertSalesPartnerSchema.partial();
 const updateCommissionPaymentSchema = insertPartnerCommissionPaymentSchema.partial();
 type UpdateCommissionPaymentPayload = z.infer<typeof updateCommissionPaymentSchema>;
 
+// Schema برای تسویه جزئی
+const partialSettlementBodySchema = z.object({
+  amount: z.coerce.number().positive('مبلغ باید بزرگتر از صفر باشد'),
+  note: z.string().trim().max(500).optional()
+});
+
 router.get("/", async (_req: Request, res: Response) => {
   try {
     const partners = await storage.getSalesPartners();
@@ -309,6 +315,36 @@ router.delete("/:partnerId/payments/:paymentId", async (req: Request, res: Respo
     res.status(500).json({
       error: "خطا در حذف پرداخت کمیسیون",
       message: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
+// Partial Settlement Endpoint
+router.post('/:partnerId/payments/:paymentId/partial-settlement', async (req: Request, res: Response) => {
+  try {
+    const { partnerId, paymentId } = partnerPaymentIdParamSchema.parse(req.params);
+    const body = partialSettlementBodySchema.parse(req.body);
+
+    // بازیابی برای اعتبار همخوانی مالکیت (اختیاری: می‌توان حذف کرد اگر applyPartialSettlement تضمین کند)
+    // (در این نسخه ساده به storage بسنده می‌کنیم)
+    const result = await storage.applyPartialSettlement(paymentId, body.amount, body.note, (req.session as any)?.user?.username);
+
+    if (result.salesPartnerId !== partnerId) {
+      return res.status(400).json({ error: 'شناسه همکار با پرداخت تطابق ندارد' });
+    }
+
+    res.status(200).json({
+      data: result,
+      remaining: result.remaining
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'داده نامعتبر', details: error.flatten() });
+    }
+    console.error('❌ Error in POST /api/sales-partners/:partnerId/payments/:paymentId/partial-settlement:', error);
+    res.status(500).json({
+      error: 'خطا در تسویه جزئی پرداخت',
+      message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 });

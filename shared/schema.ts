@@ -53,6 +53,10 @@ export const partnerCommissionPayments = pgTable("partner_commission_payments", 
   paymentDate: timestamp("payment_date").defaultNow(),
   // وضعیت تسویه: pending (ثبت شده ولی تسویه نهایی نشده) | paid (تسویه شده) | cancelled (باطل شده)
   status: text("status").notNull().default("pending"),
+  // مجموع مبالغ تسویه جزئی انجام‌شده روی این پرداخت (برای partial settlement)
+  settledAmount: decimal("settled_amount", { precision: 15, scale: 2 }).notNull().default("0"),
+  // آخرین زمان انجام یک عمل تسویه جزئی (برای گزارش و لاگ تحلیلی)
+  lastPartialSettlementAt: timestamp("last_partial_settlement_at"),
   note: text("note"),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -732,7 +736,7 @@ export const dataIntegrityConstraintsRelations = relations(dataIntegrityConstrai
 export const insertRepresentativeSchema = omitInsert(createInsertSchema(representatives), "id", "publicId", "totalDebt", "totalSales", "credit", "createdAt", "updatedAt");
 
 export const insertSalesPartnerSchema = omitInsert(createInsertSchema(salesPartners), "id", "totalCommission", "createdAt");
-export const insertPartnerCommissionPaymentSchema = omitInsert(createInsertSchema(partnerCommissionPayments), "id", "createdAt", "updatedAt").extend({
+export const insertPartnerCommissionPaymentSchema = omitInsert(createInsertSchema(partnerCommissionPayments), "id", "createdAt", "updatedAt", "settledAmount", "lastPartialSettlementAt").extend({
   status: z.enum(['pending','paid','cancelled']).optional()
 });
 

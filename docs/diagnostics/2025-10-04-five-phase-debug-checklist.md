@@ -120,17 +120,20 @@ graph LR
 - [x] تعریف مدل داده برای ثبت تاریخچه محاسبه پورسانت و پرداخت‌های مرتبط (جداول `partner_commission_payments`).
 - [x] پیاده‌سازی job به‌روزرسانی پورسانت پس از آپلود فایل‌های فروش (hook روی `generate-standard`).
 - [x] تصحیح اعتبارسنجی ورودی در مسیر `/api/sales-partners/payments` برای پشتیبانی `partnerId` اختیاری و جلوگیری از خطای ۵۰۰. *(1404/07/12)*
- - [x] ثبت Activity log برای هر ویرایش پورسانت.
+- [x] ثبت Activity log برای هر ویرایش / ایجاد / حذف / تغییر وضعیت پرداخت پورسانت (رویدادهای: `commission_payment_created`, `commission_payment_updated`, `commission_payment_status_changed`, `commission_payment_deleted`).
+ - [x] ثبت Activity log برای هر ویرایش / ایجاد / حذف / تغییر وضعیت پرداخت پورسانت (رویدادهای: `commission_payment_created`, `commission_payment_updated`, `commission_payment_status_changed`, `commission_payment_deleted`, `commission_payment_partial_settled`). *(1404/07/12: رویداد جدید partial settlement نیز افزوده شد)*
 
 **محاسبات مالی**
-- [ ] Cross-check فرمول: پورسانت = مجموع فروش تخصیص‌یافته * درصد کمیسیون فعال.
-- [ ] پشتیبانی از حالت‌های جزئی (partial settle) و تسویه کامل با ثبت سند تراکنش.
-- [x] انبار کردن رکوردهای تسویه برای auditing.
+- [ ] Cross-check فرمول: پورسانت = مجموع فروش تخصیص‌یافته * درصد کمیسیون فعال. (نیاز: اسکریپت یا تست مقایسه مجموع فروش * نرخ با مقدار محاسبه‌شده و ثبت انحراف)، خروجی: گزارش JSON با آستانه تحمل.
+- [ ] پشتیبانی از حالت‌های جزئی (partial settle) و تسویه کامل با ثبت سند تراکنش. (نیاز: ستون‌های `settled_amount`، محاسبه مانده پویا، Transition خودکار به `paid` در صورت صفر شدن مانده، Activity log رویدادهای جزئی.)
+ - [ ] پشتیبانی از حالت‌های جزئی (partial settle) و تسویه کامل با ثبت سند تراکنش. (نیاز: ستون‌های `settled_amount`، محاسبه مانده پویا، Transition خودکار به `paid` در صورت صفر شدن مانده، Activity log رویدادهای جزئی.)  
+   *پیشرفت:* Backend + Migration (`0003_partner_commission_partial_settlement.sql`) + Endpoint `POST /api/sales-partners/:partnerId/payments/:paymentId/partial-settlement` پیاده‌سازی شد؛ UI (دکمه/دیالوگ)، تست‌های محاسباتی و ARIA هنوز مانده است.
+- [x] انبار کردن رکوردهای تسویه برای auditing (ثبت کامل در جدول `partner_commission_payments` + activity log وضعیت‌ها).
 
 **UX**
- - [x] ارائه جدول خلاصه پورسانت به‌همراه فیلتر نماینده، دوره، وضعیت تسویه.
- - [x] افزودن دیالوگ تأیید هنگام تسویه.
- - [ ] تضمین ترجمه فارسی و دسترس‌پذیری (ARIA labels).
+- [x] ارائه جدول خلاصه پورسانت به‌همراه فیلتر نماینده، دوره، وضعیت تسویه.
+- [x] افزودن دیالوگ تأیید هنگام تسویه و لغو (settle/cancel) با جلوگیری از تغییر وضعیت پس از خروج از pending.
+- [ ] تضمین ترجمه کامل فارسی و دسترس‌پذیری (ARIA labels، نقش‌ها، Focus trap ارزیابی مجدد، اعلان وضعیت به Screen Reader پس از تغییر وضعیت پرداخت).
 
 ### فاز ۳ – «ویرایش پروفایل نماینده و آیدی تلگرام»
 
@@ -229,3 +232,5 @@ graph LR
 - برای هر فاز، لاگ‌های `STRUCT_LOG` با شناسه فاز (`PHASE1_MANUAL_INVOICE` و ...) ثبت گردد.
 - اسکیمای `sales_partners` پس از اجرای مایگریشن 0003 همگام‌سازی شد (افزودن ستون‌های `code` و `contact_person` و جدول `partner_commission_payments`)؛ در استقرارهای بعدی اجرای push الزامی است.
 - جدول `session` اکنون در `shared/schema.ts` تعریف شده و باید در چک‌های استقرار کنترل شود تا از حذف تصادفی session store جلوگیری گردد.
+ - رفع Drift ستون `status` در جدول `partner_commission_payments` (افزوده شده در کد ولی نبود در DB → ایجاد خطای 500 در GET `/api/sales-partners/payments`) با اجرای ALTER دستی؛ سپس Migration رسمی `0003_partner_commission_partial_settlement.sql` ایجاد و اعمال شد تا ستون‌های `settled_amount` و `last_partial_settlement_at` و تثبیت وضعیت `status` ثبت گردد.
+ - سه آیتم باز بحرانی فاز ۲: (1) Cross-check فرمول کمیسیون (2) Partial Settlement (3) تکمیل ARIA و دسترس‌پذیری.

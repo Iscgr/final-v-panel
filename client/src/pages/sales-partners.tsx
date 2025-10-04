@@ -91,6 +91,9 @@ interface CommissionPaymentRow {
   partnerName: string | null;
   partnerCode: string | null;
   status?: string | null;
+  // ✅ Partial Settlement fields (backend added in migration 0003 & endpoint) – may be undefined until backend returns
+  settledAmount?: string | number | null;
+  lastPartialSettlementAt?: string | null;
 }
 
 interface CommissionPaymentsResult {
@@ -159,6 +162,10 @@ export default function SalesPartners() {
   const [commissionStatusFilter, setCommissionStatusFilter] = useState<string>('all');
   const [settleDialogPayment, setSettleDialogPayment] = useState<CommissionPaymentRow | null>(null);
   const [cancelDialogPayment, setCancelDialogPayment] = useState<CommissionPaymentRow | null>(null);
+  // Partial settlement dialog state
+  const [partialSettlePayment, setPartialSettlePayment] = useState<CommissionPaymentRow | null>(null);
+  const [partialAmount, setPartialAmount] = useState<string>("");
+  const [partialNote, setPartialNote] = useState<string>("");
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -338,6 +345,35 @@ export default function SalesPartners() {
     }
   });
 
+  // Mutation: partial settlement
+  const partialSettlementMutation = useMutation({
+    mutationFn: async (vars: { payment: CommissionPaymentRow; amount: number; note?: string }) => {
+      if (!vars.payment.salesPartnerId) throw new Error('شناسه همکار موجود نیست');
+      return apiRequest(`/sales-partners/${vars.payment.salesPartnerId}/payments/${vars.payment.id}/partial-settlement`, {
+        method: 'POST',
+        data: { amount: vars.amount, note: vars.note }
+      });
+    },
+    onSuccess: (_resp, vars) => {
+      toast({
+        title: 'تسویه جزئی ثبت شد',
+        description: `مبلغ ${formatCurrency(vars.amount)} با موفقیت اعمال شد.`
+      });
+      setPartialSettlePayment(null);
+      setPartialAmount("");
+      setPartialNote("");
+      queryClient.invalidateQueries({ queryKey: commissionQueryKey });
+      queryClient.invalidateQueries({ queryKey: ["/sales-partners"] });
+    },
+    onError: (error: unknown) => {
+      toast({
+        variant: 'destructive',
+        title: 'خطا در تسویه جزئی',
+        description: error instanceof Error ? error.message : 'خطای ناشناخته'
+      });
+    }
+  });
+
   const getPaymentStatusBadge = (status?: string | null) => {
     const st = status || 'pending';
     const base = 'px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap';
@@ -508,13 +544,13 @@ export default function SalesPartners() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" aria-labelledby="sales-partners-heading">
       {/* Header */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            مدیریت همکاران فروش
-          </h1>
+          <h1 id="sales-partners-heading" className="text-2xl font-bold text-gray-900 dark:text-white" tabIndex={-1}>
+             مدیریت همکاران فروش
+           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             مدیریت جامع همکاران فروش، کمیسیون‌ها و عملکرد
           </p>
@@ -529,7 +565,7 @@ export default function SalesPartners() {
           }}
         >
           <DialogTrigger asChild>
-            <Button disabled={createPartnerMutation.isPending}>
+            <Button disabled={createPartnerMutation.isPending} aria-label="افزودن همکار فروش جدید">
               <Plus className="w-4 h-4 ml-2" />
               همکار جدید
             </Button>
@@ -817,7 +853,7 @@ export default function SalesPartners() {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <Table>
+                <Table role="table" aria-label="فهرست همکاران فروش">
                   <TableHeader>
                     <TableRow>
                       <TableHead>کد</TableHead>
@@ -869,6 +905,7 @@ export default function SalesPartners() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              aria-label={`جزئیات همکار ${partner.name}`}
                               onClick={() => handleViewDetails(partner)}
                             >
                               <Eye className="w-4 h-4" />
@@ -876,6 +913,7 @@ export default function SalesPartners() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              aria-label={`ویرایش کمیسیون ${partner.name}`}
                               onClick={() => handleEdit(partner)}
                             >
                               <Edit className="w-4 h-4" />
@@ -1106,7 +1144,7 @@ export default function SalesPartners() {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <Table>
+                <Table role="table" aria-label="جدول خلاصه کمیسیون همکاران">
                   <TableHeader>
                     <TableRow>
                       <TableHead>همکار</TableHead>
@@ -1175,12 +1213,14 @@ export default function SalesPartners() {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <Table>
+                <Table role="table" aria-label="تاریخچه پرداخت‌های پورسانت">
                   <TableHeader>
                     <TableRow>
                       <TableHead>تاریخ پرداخت</TableHead>
                       <TableHead>همکار</TableHead>
                       <TableHead>مبلغ</TableHead>
+                      <TableHead>مبلغ تسویه‌شده</TableHead>
+                      <TableHead>مانده</TableHead>
                       <TableHead>وضعیت</TableHead>
                       <TableHead>توضیحات</TableHead>
                       <TableHead>ثبت‌کننده</TableHead>
@@ -1215,6 +1255,9 @@ export default function SalesPartners() {
                     ) : (
                       commissionPayments.map((payment) => {
                         const paymentDate = payment.paymentDate ?? payment.createdAt;
+                        const originalAmount = Number(payment.amount || 0);
+                        const settled = Number(payment.settledAmount || (payment.status === 'paid' ? payment.amount || 0 : 0));
+                        const remaining = Math.max(originalAmount - settled, 0);
                         return (
                           <TableRow key={payment.id}>
                             <TableCell className="font-mono whitespace-nowrap">
@@ -1228,6 +1271,14 @@ export default function SalesPartners() {
                             </TableCell>
                             <TableCell className="font-mono text-green-600 dark:text-green-400">
                               {formatCurrency(payment.amount ?? 0)}
+                            </TableCell>
+                            <TableCell className="font-mono text-teal-600 dark:text-teal-400">
+                              {formatCurrency(settled)}
+                            </TableCell>
+                            <TableCell className="font-mono">
+                              <span className={remaining > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}>
+                                {formatCurrency(remaining)}
+                              </span>
                             </TableCell>
                             <TableCell>
                               {getPaymentStatusBadge(payment.status)}
@@ -1245,23 +1296,40 @@ export default function SalesPartners() {
                             </TableCell>
                             <TableCell>
                               {payment.status === 'pending' && (
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setSettleDialogPayment(payment)}
-                                  >
-                                    <Check className="w-4 h-4 ml-1" />
-                                    تسویه
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    onClick={() => setCancelDialogPayment(payment)}
-                                  >
-                                    <XCircle className="w-4 h-4 ml-1" />
-                                    لغو
-                                  </Button>
+                                <div className="flex flex-col gap-2 min-w-[140px]">
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      aria-label={`تسویه کامل پرداخت شماره ${payment.id}`}
+                                      onClick={() => setSettleDialogPayment(payment)}
+                                    >
+                                      <Check className="w-4 h-4 ml-1" />
+                                      تسویه کامل
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="destructive"
+                                      aria-label={`لغو پرداخت شماره ${payment.id}`}
+                                      onClick={() => setCancelDialogPayment(payment)}
+                                    >
+                                      <XCircle className="w-4 h-4 ml-1" />
+                                      لغو
+                                    </Button>
+                                  </div>
+                                  {remaining > 0 && (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      aria-label={`تسویه جزئی پرداخت شماره ${payment.id}`}
+                                      onClick={() => {
+                                        setPartialSettlePayment(payment);
+                                        setPartialAmount(remaining > 0 ? Math.min(remaining, originalAmount).toString() : '');
+                                      }}
+                                    >
+                                      تسویه جزئی
+                                    </Button>
+                                  )}
                                 </div>
                               )}
                             </TableCell>
@@ -1460,12 +1528,89 @@ export default function SalesPartners() {
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setCancelDialogPayment(null)} disabled={updatePaymentStatusMutation.isPending}>انصراف</Button>
-                <Button variant="destructive" onClick={() => updatePaymentStatusMutation.mutate({ payment: cancelDialogPayment, status: 'cancelled' })} disabled={updatePaymentStatusMutation.isPending}>
+                <Button
+                  onClick={() => updatePaymentStatusMutation.mutate({ payment: cancelDialogPayment, status: 'cancelled' })}
+                  disabled={updatePaymentStatusMutation.isPending}
+                >
                   {updatePaymentStatusMutation.isPending ? 'در حال لغو...' : 'تایید لغو'}
                 </Button>
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Partial Settlement Dialog */}
+      <Dialog open={!!partialSettlePayment} onOpenChange={(open) => !open && setPartialSettlePayment(null)}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>تسویه جزئی پرداخت</DialogTitle>
+            <DialogDescription>
+              مبلغی کمتر از کل پرداخت را برای ثبت تسویه جزئی وارد کنید.
+            </DialogDescription>
+          </DialogHeader>
+          {partialSettlePayment && (() => {
+            const originalAmount = Number(partialSettlePayment.amount || 0);
+            const alreadySettled = Number(partialSettlePayment.settledAmount || (partialSettlePayment.status === 'paid' ? partialSettlePayment.amount || 0 : 0));
+            const remaining = Math.max(originalAmount - alreadySettled, 0);
+            return (
+              <div className="space-y-5 py-2">
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="p-3 rounded bg-gray-50 dark:bg-gray-800">
+                    <div className="text-xs text-gray-500">مبلغ کل</div>
+                    <div className="font-mono font-semibold">{formatCurrency(originalAmount)}</div>
+                  </div>
+                  <div className="p-3 rounded bg-gray-50 dark:bg-gray-800">
+                    <div className="text-xs text-gray-500">تسویه شده تاکنون</div>
+                    <div className="font-mono font-semibold text-teal-600 dark:text-teal-400">{formatCurrency(alreadySettled)}</div>
+                  </div>
+                  <div className="p-3 rounded bg-gray-50 dark:bg-gray-800 col-span-2">
+                    <div className="text-xs text-gray-500">مانده</div>
+                    <div className={`font-mono font-semibold ${remaining > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500'}`}>{formatCurrency(remaining)}</div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="partial-amount">مبلغ تسویه *</label>
+                  <Input
+                    id="partial-amount"
+                    type="number"
+                    min={0.01}
+                    step={0.01}
+                    value={partialAmount}
+                    onChange={(e) => setPartialAmount(e.target.value)}
+                    placeholder="مثال: 500000"
+                  />
+                  <p className="text-xs text-gray-500">حداکثر مجاز: {formatCurrency(remaining)}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium" htmlFor="partial-note">توضیح (اختیاری)</label>
+                  <Input
+                    id="partial-note"
+                    value={partialNote}
+                    onChange={(e) => setPartialNote(e.target.value)}
+                    placeholder="مثال: پیش‌پرداخت مرحله اول"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setPartialSettlePayment(null)} disabled={partialSettlementMutation.isPending}>انصراف</Button>
+                  <Button
+                    disabled={partialSettlementMutation.isPending || !partialAmount || Number(partialAmount) <= 0 || Number(partialAmount) > remaining}
+                    onClick={() => {
+                      if (!partialSettlePayment) return;
+                      const amt = Number(partialAmount);
+                      if (!Number.isFinite(amt)) return;
+                      partialSettlementMutation.mutate({ payment: partialSettlePayment, amount: amt, note: partialNote || undefined });
+                    }}
+                  >
+                    {partialSettlementMutation.isPending ? 'در حال ثبت...' : 'ثبت تسویه جزئی'}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </div>

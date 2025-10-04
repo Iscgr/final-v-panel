@@ -8,6 +8,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { representativesService } from '../services/representatives-service.js';
 
 const router = Router();
@@ -136,6 +137,39 @@ router.get('/:code/payments', async (req: Request, res: Response) => {
     console.error(`❌ Error in GET /api/representatives/${req.params.code}/payments:`, error);
     res.status(500).json({ 
       error: 'خطا در دریافت پرداخت‌های نماینده',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ================== Phase 3: Update Representative Profile ==================
+const updateRepresentativeProfileSchema = z.object({
+  ownerName: z.string().trim().max(120).optional(),
+  phone: z.string().trim().max(32).regex(/^\+?[\d\s-]{5,18}$/,'شماره تماس نامعتبر است').optional(),
+  telegramHandle: z.string().trim().regex(/^@?[A-Za-z0-9_]{5,32}$/,'آیدی تلگرام نامعتبر است').optional(),
+  salesPartnerId: z.number().int().positive().nullable().optional(),
+  panelUsername: z.string().trim().min(3).max(64).optional()
+}).refine(data => Object.keys(data).length > 0, {
+  message: 'بدون فیلد برای بروزرسانی',
+  path: ['_root']
+});
+
+router.put('/:id/profile', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'شناسه نامعتبر است' });
+    }
+    const payload = updateRepresentativeProfileSchema.parse(req.body);
+    const updated = await representativesService.updateRepresentativeProfile(id, payload as any);
+    res.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'داده نامعتبر', details: error.flatten() });
+    }
+    console.error('❌ Error in PUT /api/representatives/:id/profile:', error);
+    res.status(500).json({
+      error: 'خطا در بروزرسانی پروفایل نماینده',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

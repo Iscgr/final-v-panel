@@ -9,7 +9,7 @@
 
 import { eq, desc, asc, sql, like, or } from 'drizzle-orm';
 import { db } from '../db.js';
-import { representatives, invoices, payments, paymentAllocations } from '../../shared/schema.js';
+import { representatives, invoices, payments, paymentAllocations, activityLogs } from '../../shared/schema.js';
 import { unifiedFinancialEngine } from './unified-financial-engine.js';
 
 export interface RepresentativeListItem {
@@ -354,6 +354,75 @@ class RepresentativesService {
       console.error(`❌ RepresentativesService: Error fetching payments for ${code}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * بروزرسانی پروفایل نماینده بر اساس شناسه عددی (Phase 3)
+   * فقط فیلدهای ارسال‌شده بروزرسانی می‌شوند؛ تغییرات حساس لاگ می‌گردد.
+   */
+  async updateRepresentativeProfile(id: number, payload: {
+    ownerName?: string | null;
+    phone?: string | null;
+    telegramHandle?: string | null; // mapped to telegramId
+    salesPartnerId?: number | null;
+    panelUsername?: string | null;
+  }) {
+    // استخراج فیلدهای قابل تنظیم
+    const updateData: Record<string, any> = {};
+    if (payload.ownerName !== undefined) updateData.ownerName = payload.ownerName || null;
+    if (payload.phone !== undefined) updateData.phone = payload.phone || null;
+    if (payload.telegramHandle !== undefined) updateData.telegramId = payload.telegramHandle || null;
+    if (payload.salesPartnerId !== undefined) updateData.salesPartnerId = payload.salesPartnerId || null;
+    if (payload.panelUsername !== undefined) updateData.panelUsername = payload.panelUsername || null;
+    updateData.updatedAt = new Date();
+
+    // اگر هیچ فیلدی ارسال نشده
+    if (Object.keys(updateData).length === 1) { // فقط updatedAt
+      throw new Error('هیچ فیلد معتبری برای بروزرسانی ارسال نشده است');
+    }
+
+    // بازیابی وضعیت فعلی برای ثبت تغییرات حساس
+    const [before] = await db.select().from(representatives).where(eq(representatives.id, id)).limit(1);
+    if (!before) throw new Error('نماینده یافت نشد');
+
+    await db.update(representatives).set(updateData).where(eq(representatives.id, id));
+
+    const [after] = await db.select().from(representatives).where(eq(representatives.id, id)).limit(1);
+
+    // تشخیص تغییرات حساس
+    const sensitiveChanges: Record<string, { from: any; to: any }> = {};
+    ['ownerName', 'salesPartnerId', 'panelUsername', 'telegramId', 'phone'].forEach(key => {
+      if ((before as any)[key] !== (after as any)[key]) {
+        sensitiveChanges[key] = { from: (before as any)[key], to: (after as any)[key] };
+      }
+    });
+
+    if (Object.keys(sensitiveChanges).length > 0) {
+      await db.insert(activityLogs).values({
+        type: 'representative_profile_updated',
+        description: `بروزرسانی پروفایل نماینده #${id}`,
+        relatedId: id,
+        metadata: sensitiveChanges
+      });
+      console.log('STRUCT_LOG', JSON.stringify({
+        phase: 'PHASE3_REP_PROFILE',
+        action: 'profile_updated',
+        representativeId: id,
+        changes: sensitiveChanges
+      }));
+    }
+
+    return {
+      id: after.id,
+      code: after.code,
+      name: after.name,
+      ownerName: after.ownerName,
+      phone: after.phone,
+      telegramHandle: after.telegramId,
+      salesPartnerId: after.salesPartnerId,
+      panelUsername: after.panelUsername,
+      updatedAt: after.updatedAt
+    };
   }
 }
 
