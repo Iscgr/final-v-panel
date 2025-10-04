@@ -87,6 +87,39 @@ router.get('/:code', async (req: Request, res: Response) => {
 });
 
 /**
+ * ✅ Phase3 Support: GET /api/representatives/id/:id
+ * دریافت جزئیات نماینده بر اساس شناسه عددی برای همگام‌سازی با چک لیست (همگام‌سازی React Query بر مبنای id)
+ */
+router.get('/id/:id', async (req: Request, res: Response) => {
+  try {
+    const idNum = Number(req.params.id);
+    if (!Number.isInteger(idNum) || idNum <= 0) {
+      return res.status(400).json({ error: 'شناسه نامعتبر است' });
+    }
+    // یافتن code و سپس استفاده از سرویس موجود (اجتناب از تکرار منطق)
+    const result = await representativesService.getRepresentativesList({ limit: 1, offset: 0 });
+    // روش بهینه‌تر: query مستقیم - برای سادگی فعلاً سریع: (TODO بهینه¬سازی select مستقیم در صورت نیاز عملکردی)
+    // با توجه به اینکه service اختصاصی getById نداریم، مستقیماً مشابه getRepresentativeByCode را تکرار نمی‌کنیم.
+    // رویکرد دقیق: افزودن تابع getRepresentativeById در Service (در صورت نیاز عملکردی آینده).
+    // در این پیاده سازی سریع: ابتدا code را از DB استخراج می‌کنیم.
+    const repList = await (await import('../services/representatives-service.js')).representativesService;
+    // استفاده مجدد از db برای استخراج code
+    // (به دلیل محدودیت عدم تکرار منطق مالی، فقط select ساده انجام می‌شود)
+    const { db } = await import('../db.js');
+    const { representatives } = await import('../../shared/schema.js');
+    const { eq } = await import('drizzle-orm');
+    const [row] = await db.select().from(representatives).where(eq(representatives.id, idNum)).limit(1);
+    if (!row) return res.status(404).json({ error: 'نماینده یافت نشد' });
+    const data = await repList.getRepresentativeByCode(row.code);
+    if (!data) return res.status(404).json({ error: 'نماینده یافت نشد' });
+    res.json(data);
+  } catch (error) {
+    console.error('❌ Error in GET /api/representatives/id/:id:', error);
+    res.status(500).json({ error: 'خطا در دریافت اطلاعات نماینده', message: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+/**
  * GET /api/representatives/:code/invoices
  * فاکتورهای یک نماینده
  */

@@ -138,15 +138,15 @@ graph LR
 ### فاز ۳ – «ویرایش پروفایل نماینده و آیدی تلگرام»
 
 **Frontend**
-- [ ] افزودن دکمه «ویرایش» در باکس اطلاعات نماینده.
-- [ ] ساخت فرم ویرایش (Drawer یا Modal) با فیلدهای: `username`, `ownerName`, `salesPartnerId`, `phone`, `telegramHandle`.
-- [ ] همگام‌سازی داده با React Query (`/api/representatives/:id`).
+- [x] افزودن دکمه «ویرایش» در باکس اطلاعات نماینده. *(افزوده شد: دکمه "ویرایش پروفایل" در `representative-profile.tsx`)*
+- [x] ساخت فرم ویرایش (Drawer یا Modal) با فیلدهای: `username`, `ownerName`, `salesPartnerId`, `phone`, `telegramHandle`. *(Dialog + فرم با Zod + auto-prefix @ برای تلگرام پیاده‌سازی شد)*
+- [ ] همگام‌سازی داده با React Query (`/api/representatives/:id`). *(در حال حاضر fetch با `/:code` انجام می‌شود؛ تصمیم: پیاده‌سازی GET بر اساس id یا حفظ مدل code → نیاز به انطباق با چک لیست و تکمیل در گام بعد)*
 - [ ] به‌روزرسانی قالب فاکتور در تب تنظیمات تلگرام برای placeholder آیدی.
 
 **Backend**
-- [ ] پیاده‌سازی endpoint PUT `/api/representatives/:id/profile` با Zod validation.
-- [ ] به‌روزرسانی Drizzle schema برای ذخیره `telegramHandle` در جدول نمایندگان (در صورت نبود).
-- [ ] انتشار webhook یا log برای تغییرات حساس (owner, sales partner).
+- [x] پیاده‌سازی endpoint PUT `/api/representatives/:id/profile` با Zod validation. *(1404/07/12: مسیر در `server/routes/representatives-routes.ts` افزوده شد و اسکیما `updateRepresentativeProfileSchema` اعمال می‌شود.)*
+- [x] به‌روزرسانی Drizzle schema برای ذخیره `telegramHandle` در جدول نمایندگان (در صورت نبود). *(نیاز به تغییر جدید نبود؛ فیلد موجود `telegram_id` در `shared/schema.ts` استفاده و در سرویس به عنوان `telegramHandle` مپ شد.)*
+- [x] انتشار webhook یا log برای تغییرات حساس (owner, sales partner). *(ثبت Activity log با نوع `representative_profile_updated` + `STRUCT_LOG` در `representatives-service.ts` – شامل diff فیلدهای حساس)*
 
 **UX/Content**
 - [ ] تضمین نمایش آیدی تلگرام در فاکتور (template fetch در `settings/telegram`).

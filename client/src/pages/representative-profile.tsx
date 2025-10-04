@@ -10,6 +10,14 @@ import { formatCurrency, toPersianDigits } from "@/lib/persian-date";
 import InvoiceEditDialog from "@/components/invoice-edit-dialog";
 import PaymentDialog from "@/components/payment-dialog";
 import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { z } from 'zod';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { apiRequest } from '@/lib/queryClient';
+import { Form, FormField, FormItem, FormControl, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -36,6 +44,8 @@ interface RepresentativeDetails {
   isActive: boolean;
   createdAt: string;
   panelUsername: string;
+  telegramHandle?: string | null;
+  salesPartnerId?: number | null;
 }
 
 interface Invoice {
@@ -67,6 +77,52 @@ export default function RepresentativeProfile() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [invoiceToDelete, setInvoiceToDelete] = useState<Invoice | null>(null);
   const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+
+  // Phase3 Edit Profile Form
+  const editProfileSchema = z.object({
+    ownerName: z.string().trim().max(120,'حداکثر ۱۲۰ نویسه').optional().or(z.literal('')).transform(v => v === '' ? undefined : v),
+    panelUsername: z.string().trim().min(3,'حداقل ۳ نویسه').max(64,'حداکثر ۶۴ نویسه'),
+    phone: z.string().trim().regex(/^\+?[\d\s-]{5,18}$/,'شماره تماس نامعتبر است').optional().or(z.literal('')).transform(v => v === '' ? undefined : v),
+    telegramHandle: z.string().trim().regex(/^@?[A-Za-z0-9_]{5,32}$/,'آیدی تلگرام نامعتبر است').optional().or(z.literal('')).transform(v => v === '' ? undefined : (v.startsWith('@') ? v : '@'+v)),
+    salesPartnerId: z.string().optional().or(z.literal('')).transform(v => v === '' ? undefined : Number(v))
+  });
+  type EditProfileFormValues = z.infer<typeof editProfileSchema>;
+  const editProfileForm = useForm<EditProfileFormValues>({
+    resolver: zodResolver(editProfileSchema),
+    defaultValues: { ownerName: '', panelUsername: '', phone: '', telegramHandle: '', salesPartnerId: '' as any }
+  });
+  const openEditForm = () => {
+    if (!representative) return;
+    editProfileForm.reset({
+      ownerName: representative.ownerName === '-' ? '' : representative.ownerName,
+      panelUsername: representative.panelUsername,
+      phone: representative.phone || '',
+      telegramHandle: representative.telegramHandle || '',
+      salesPartnerId: representative.salesPartnerId ? String(representative.salesPartnerId) as any : '' as any
+    });
+    setIsEditProfileOpen(true);
+  };
+  const updateProfileMutation = useMutation({
+    mutationFn: async (values: EditProfileFormValues) => {
+      if (!representative) throw new Error('نماینده موجود نیست');
+      const payload: Record<string, any> = {};
+      if (values.ownerName !== undefined) payload.ownerName = values.ownerName;
+      if (values.panelUsername) payload.panelUsername = values.panelUsername;
+      if (values.phone !== undefined) payload.phone = values.phone;
+      if (values.telegramHandle !== undefined) payload.telegramHandle = values.telegramHandle;
+      if (values.salesPartnerId !== undefined) payload.salesPartnerId = values.salesPartnerId;
+      return apiRequest(`/representatives/${representative.id}/profile`, { method: 'PUT', data: payload });
+    },
+    onSuccess: () => {
+      toast({ title: 'پروفایل بروزرسانی شد', description: 'تغییرات نماینده با موفقیت ذخیره شد.' });
+      setIsEditProfileOpen(false);
+      refetchRepresentative();
+    },
+    onError: (error: any) => {
+      toast({ variant: 'destructive', title: 'خطا در بروزرسانی', description: error?.message || 'خطای ناشناخته' });
+    }
+  });
 
   const { data: representative, isLoading: isLoadingRep, error: repError, refetch: refetchRepresentative } = useQuery<RepresentativeDetails>({
     queryKey: [`/api/representatives/${code}`],
@@ -253,6 +309,9 @@ export default function RepresentativeProfile() {
               </Button>
             </a>
           )}
+          <Button variant="secondary" onClick={openEditForm} aria-label="ویرایش پروفایل نماینده">
+            <Edit3 className="h-4 w-4 ml-2" /> ویرایش پروفایل
+          </Button>
           <Badge variant={representative.isActive ? "default" : "secondary"}>
             {representative.isActive ? "فعال" : "غیرفعال"}
           </Badge>
@@ -586,6 +645,70 @@ export default function RepresentativeProfile() {
           }}
         />
       )}
+
+      <Dialog open={isEditProfileOpen} onOpenChange={setIsEditProfileOpen}>
+        <DialogContent className="sm:max-w-[620px]">
+          <DialogHeader>
+            <DialogTitle>ویرایش پروفایل نماینده</DialogTitle>
+            <DialogDescription>به‌روزرسانی اطلاعات پایه و آیدی تلگرام</DialogDescription>
+          </DialogHeader>
+          <Form {...editProfileForm}>
+            <form className="space-y-6" onSubmit={editProfileForm.handleSubmit(values => updateProfileMutation.mutate(values))}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField name="ownerName" control={editProfileForm.control} render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>نام مالک / همکار فروش</FormLabel>
+                    <FormControl><Input placeholder="مثال: علی رضایی" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField name="panelUsername" control={editProfileForm.control} render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>نام کاربری پنل *</FormLabel>
+                    <FormControl><Input placeholder="panel_user" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField name="phone" control={editProfileForm.control} render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>شماره تماس</FormLabel>
+                    <FormControl><Input placeholder="09121234567" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField name="telegramHandle" control={editProfileForm.control} render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>آیدی تلگرام</FormLabel>
+                    <FormControl><Input placeholder="@example_handle" {...field} /></FormControl>
+                    <p className="text-xs text-gray-500">بدون @ نیز قابل ورود است؛ خودکار افزوده می‌شود.</p>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField name="salesPartnerId" control={editProfileForm.control} render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>همکار فروش معرف</FormLabel>
+                    <FormControl>
+                      <Select value={field.value ? String(field.value) : ''} onValueChange={(val) => field.onChange(val)}>
+                        <SelectTrigger><SelectValue placeholder="انتخاب همکار" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">بدون همکار</SelectItem>
+                          {/* Sales partners dynamically */}
+                          {/* این لیست بعداً با کوئری React Query ادغام خواهد شد */}
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setIsEditProfileOpen(false)}>انصراف</Button>
+                <Button type="submit" disabled={updateProfileMutation.isPending}>{updateProfileMutation.isPending ? 'در حال ذخیره...' : 'ذخیره تغییرات'}</Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
