@@ -151,20 +151,36 @@ export function useJSONParser(options: UseJSONParserOptions = {}) {
       });
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'خطای ناشناخته';
-      
-      setState(prev => ({
-        ...prev,
-        isProcessing: false,
-        error: errorMessage
-      }));
+      console.error('JSON parser worker failed, attempting fallback parsing...', error);
 
-      // Log error
-      observabilityService.logUploadFail(`${type}_worker:${file.name}`, errorMessage);
+      try {
+        const fallback = await parseFileDirectly(file, type);
 
-      // Call error callback
-      if (optionsRef.current.onError) {
-        optionsRef.current.onError(errorMessage);
+        setState(prev => ({
+          ...prev,
+          isProcessing: false,
+          progress: 100,
+          stage: 'تکمیل شده',
+          error: null,
+          result: fallback.data,
+          metadata: fallback.metadata
+        }));
+
+        observabilityService.logUploadSuccess(fallback.metadata.recordCount || 0);
+
+        optionsRef.current.onProgress?.(100, 'تکمیل شده');
+        optionsRef.current.onComplete?.(fallback.data, fallback.metadata);
+      } catch (fallbackError) {
+        const errorMessage = fallbackError instanceof Error ? fallbackError.message : 'خطای ناشناخته';
+
+        setState(prev => ({
+          ...prev,
+          isProcessing: false,
+          error: errorMessage
+        }));
+
+        observabilityService.logUploadFail(`${type}_fallback:${file.name}`, errorMessage);
+        optionsRef.current.onError?.(errorMessage);
       }
     }
   }, [cleanup]);
@@ -210,6 +226,95 @@ export function useJSONParser(options: UseJSONParserOptions = {}) {
     hasResult: !!state.result,
     hasError: !!state.error
   };
+}
+
+async function parseFileDirectly(file: File, type: 'json' | 'pfx') {
+  const start = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+
+  if (type === 'json') {
+    const text = await file.text();
+    let data: any;
+
+    try {
+      data = JSON.parse(text);
+    } catch (error) {
+      throw new Error('فایل JSON نامعتبر است');
+    }
+
+    const recordCount = Array.isArray(data)
+      ? data.length
+      : Array.isArray((data as any)?.records)
+        ? (data as any).records.length
+        : undefined;
+
+    const duration = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - start;
+
+    return {
+      data,
+      metadata: {
+        fileName: file.name,
+        fileSize: file.size,
+        processingTime: Math.round(duration),
+        recordCount,
+        mode: 'fallback'
+      }
+    };
+  }
+
+  if (type === 'pfx') {
+    const arrayBuffer = await file.arrayBuffer();
+    const decoder = new TextDecoder('utf-8');
+    let data: any;
+    let recordCount: number | undefined;
+
+    try {
+      data = JSON.parse(decoder.decode(arrayBuffer));
+      recordCount = Array.isArray(data) ? data.length : undefined;
+    } catch {
+      const view = new Uint8Array(arrayBuffer);
+      const sample = view.slice(0, Math.min(1000, view.length));
+      let textChars = 0;
+      for (const byte of sample) {
+        if ((byte >= 32 && byte <= 126) || byte === 9 || byte === 10 || byte === 13) {
+          textChars++;
+        }
+      }
+      const isTextBased = sample.length ? (textChars / sample.length) > 0.7 : false;
+      const previewSlice = view.slice(0, Math.min(200, view.length));
+      let preview: string;
+      try {
+        preview = decoder.decode(previewSlice);
+      } catch {
+        preview = Array.from(view.slice(0, 32))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join(' ');
+      }
+
+      data = {
+        type: 'pfx',
+        size: arrayBuffer.byteLength,
+        filename: file.name,
+        lastModified: file.lastModified,
+        isTextBased,
+        preview
+      };
+    }
+
+    const duration = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - start;
+
+    return {
+      data,
+      metadata: {
+        fileName: file.name,
+        fileSize: file.size,
+        processingTime: Math.round(duration),
+        recordCount,
+        mode: 'fallback'
+      }
+    };
+  }
+
+  throw new Error(`نوع فایل پشتیبانی نمی‌شود: ${type}`);
 }
 
 function getStageText(stage: string): string {
