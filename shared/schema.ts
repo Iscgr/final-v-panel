@@ -1133,6 +1133,19 @@ export const uploadedFiles = pgTable("uploaded_files", {
   createdAt: timestamp("created_at").defaultNow()
 });
 
+// Publication State (singleton)
+// نگهداری وضعیت انتشار کلی مجموعه محتوای پرتال
+export const portalContentPublicationState = pgTable("portal_content_publication_state", {
+  id: serial("id").primaryKey(),
+  contentVersion: integer("content_version").notNull().default(1),
+  lastPublishedAt: timestamp("last_published_at"),
+  lastPublishedBy: text("last_published_by"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow()
+});
+
+export type PortalContentPublicationState = typeof portalContentPublicationState.$inferSelect;
+export type InsertPortalContentPublicationState = typeof portalContentPublicationState.$inferInsert;
+
 // Import Jobs (پایش فرایند پردازش فایل‌های JSON) - Phase A instrumentation scaffold
 export const importJobs = pgTable('import_jobs', {
   id: serial('id').primaryKey(),

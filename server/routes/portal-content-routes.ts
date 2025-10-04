@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db.js';
-import { portalContentBlocks, announcements, appDownloads } from '../../shared/schema.js';
+import { portalContentBlocks, announcements, appDownloads, portalContentPublicationState } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
 
 /**
@@ -86,6 +86,49 @@ router.get('/full', async (req: Request, res: Response) => {
   } catch (e) {
     console.error('❌ Error fetching full portal content:', e);
     res.status(500).json({ success:false, error:'خطا در دریافت محتوای کامل پرتال' });
+  }
+});
+
+// GET /status → وضعیت انتشار و نسخه محتوا
+router.get('/status', async (_req: Request, res: Response) => {
+  try {
+    const rows = await db.select().from(portalContentPublicationState).limit(1);
+    const state = rows[0] || null;
+    res.json({ success: true, data: state ? {
+      contentVersion: state.contentVersion,
+      lastPublishedAt: state.lastPublishedAt,
+      lastPublishedBy: state.lastPublishedBy
+    } : { contentVersion: 0, lastPublishedAt: null, lastPublishedBy: null } });
+  } catch (e) {
+    console.error('❌ Error fetching portal content status:', e);
+    res.status(500).json({ success:false, error:'خطا در دریافت وضعیت انتشار' });
+  }
+});
+
+// POST /publish → افزایش نسخه و ثبت timestamp انتشار
+router.post('/publish', async (req: Request, res: Response) => {
+  try {
+    const username = (req as any).user?.username || 'system';
+    // اگر ردیف وجود ندارد ایجاد شود؛ در غیر اینصورت به روزرسانی و version++
+    const existing = await db.select().from(portalContentPublicationState).limit(1);
+    if (existing.length === 0) {
+      await db.insert(portalContentPublicationState).values({
+        contentVersion: 1,
+        lastPublishedAt: new Date(),
+        lastPublishedBy: username
+      });
+      return res.json({ success:true, data:{ contentVersion:1, lastPublishedAt:new Date(), lastPublishedBy: username } });
+    } else {
+      const current = existing[0];
+      const newVersion = (current.contentVersion || 0) + 1;
+      await db.update(portalContentPublicationState)
+        .set({ contentVersion: newVersion, lastPublishedAt: new Date(), lastPublishedBy: username, updatedAt: new Date() })
+        .where(eq(portalContentPublicationState.id, current.id));
+      return res.json({ success:true, data:{ contentVersion:newVersion, lastPublishedAt:new Date(), lastPublishedBy: username } });
+    }
+  } catch (e) {
+    console.error('❌ Error publishing portal content:', e);
+    res.status(500).json({ success:false, error:'خطا در انتشار محتوا' });
   }
 });
 

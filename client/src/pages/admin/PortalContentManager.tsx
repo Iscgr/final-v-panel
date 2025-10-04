@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Save, RefreshCcw, FileText, Megaphone, Download, Eye, Plus, Trash2 } from 'lucide-react';
-import { PortalContentService } from '@/services/portal-content';
+import { PortalContentService, invalidatePortalContent, portalContentQueryKeys } from '@/services/portal-content';
 import { useToast } from '@/hooks/use-toast';
 
 interface PortalContentBlock {
@@ -79,7 +79,7 @@ export default function PortalContentManager() {
 
   // Fetch blocks
   const { data, isLoading, refetch, isFetching } = useQuery<{ success: boolean; data: PortalContentBlock[] }>({
-    queryKey: ['/api/admin/portal-content-blocks'],
+    queryKey: portalContentQueryKeys.blocks,
     queryFn: () => PortalContentService.blocks.list()
   });
 
@@ -92,16 +92,16 @@ export default function PortalContentManager() {
     },
     onMutate: async (payload) => {
       // Optimistic update cache
-      await queryClient.cancelQueries({ queryKey: ['/api/admin/portal-content-blocks'] });
-      const prev = queryClient.getQueryData<any>(['/api/admin/portal-content-blocks']);
+      await queryClient.cancelQueries({ queryKey: portalContentQueryKeys.blocks });
+      const prev = queryClient.getQueryData<any>(portalContentQueryKeys.blocks);
       if (prev?.data) {
         const newData = prev.data.map((b: PortalContentBlock) => b.blockKey === payload.blockKey ? { ...b, title: payload.title, body: payload.body, updatedAt: new Date().toISOString() } : b);
-        queryClient.setQueryData(['/api/admin/portal-content-blocks'], { ...prev, data: newData });
+        queryClient.setQueryData(portalContentQueryKeys.blocks, { ...prev, data: newData });
       }
       return { prev };
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['/api/admin/portal-content-blocks'], ctx.prev);
+      if (ctx?.prev) queryClient.setQueryData(portalContentQueryKeys.blocks, ctx.prev);
       toast({ title: 'خطا در ذخیره', description: 'عملیات ذخیره بلوک انجام نشد', variant: 'destructive' });
     },
     onSuccess: (_data, vars) => {
@@ -109,10 +109,7 @@ export default function PortalContentManager() {
       setOriginalBody(editBody);
       setOriginalTitle(editTitle);
     },
-    onSettled: () => {
-      // این همیشه اجرا می‌شود و داده‌ها را تازه می‌کند
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/portal-content-blocks'] });
-    }
+    onSettled: () => { invalidatePortalContent(queryClient, { blocks: true, full: true }); }
   });
 
   const startEdit = (b: PortalContentBlock) => {
@@ -175,14 +172,14 @@ export default function PortalContentManager() {
 
   // Fetch announcements
   const { data: announcementsData, refetch: refetchAnnouncements } = useQuery<{ success: boolean; data: Announcement[] }>({
-    queryKey: ['/api/admin/announcements'],
+    queryKey: portalContentQueryKeys.announcements,
     queryFn: () => PortalContentService.announcements.list()
   });
   const announcements = announcementsData?.data || [];
 
   // Fetch downloads
   const { data: downloadsData, refetch: refetchDownloads } = useQuery<{ success: boolean; data: AppDownload[] }>({
-    queryKey: ['/api/admin/app-downloads'],
+    queryKey: portalContentQueryKeys.downloads,
     queryFn: () => PortalContentService.downloads.list()
   });
   const downloads = downloadsData?.data || [];
@@ -195,9 +192,25 @@ export default function PortalContentManager() {
 
   // Full content for preview
   const { data: fullContentData, refetch: refetchFull } = useQuery<{ success: boolean; data: any }>({
-    queryKey: ['/api/admin/portal-content-blocks/full'],
+    queryKey: portalContentQueryKeys.full,
     queryFn: () => PortalContentService.blocks.full(),
     enabled: activeTab === 'preview'
+  });
+
+  // Publication status
+  const { data: statusData, refetch: refetchStatus } = useQuery<{ success: boolean; data: { contentVersion: number; lastPublishedAt: string | null; lastPublishedBy: string | null } }>({
+    queryKey: ['portal-content-status'],
+    queryFn: () => PortalContentService.blocks.status(),
+    enabled: activeTab === 'preview'
+  });
+  const publishMutation = useMutation({
+    mutationFn: () => PortalContentService.blocks.publish(),
+    onSuccess: () => {
+      toast({ title: 'منتشر شد', description: 'نسخه جدید محتوا فعال شد' });
+      invalidatePortalContent(queryClient, { blocks: true, announcements: true, downloads: true, full: true });
+      refetchStatus();
+    },
+    onError: () => toast({ title: 'انتشار ناموفق', variant: 'destructive' })
   });
 
   // Announcement mutations
@@ -210,9 +223,7 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در ایجاد', variant: 'destructive' });
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/announcements'] });
-    }
+    onSettled: () => { invalidatePortalContent(queryClient, { announcements: true, full: true }); }
   });
   const updateAnnMutation = useMutation({
     mutationFn: (ann: Announcement) => PortalContentService.announcements.update(ann.id, ann),
@@ -223,9 +234,7 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در ویرایش', variant: 'destructive' });
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/announcements'] });
-    }
+    onSettled: () => { invalidatePortalContent(queryClient, { announcements: true, full: true }); }
   });
   const deleteAnnMutation = useMutation({
     mutationFn: (id: number) => PortalContentService.announcements.delete(id),
@@ -235,9 +244,7 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در حذف', variant: 'destructive' });
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/announcements'] });
-    }
+    onSettled: () => { invalidatePortalContent(queryClient, { announcements: true, full: true }); }
   });
 
   // Download mutations
@@ -250,9 +257,7 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در افزودن', variant: 'destructive' });
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/app-downloads'] });
-    }
+    onSettled: () => { invalidatePortalContent(queryClient, { downloads: true, full: true }); }
   });
   const updateDownloadMutation = useMutation({
     mutationFn: (d: AppDownload) => PortalContentService.downloads.update(d.id, d),
@@ -263,9 +268,7 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در ویرایش', variant: 'destructive' });
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/app-downloads'] });
-    }
+    onSettled: () => { invalidatePortalContent(queryClient, { downloads: true, full: true }); }
   });
   const deleteDownloadMutation = useMutation({
     mutationFn: (id: number) => PortalContentService.downloads.delete(id),
@@ -275,9 +278,7 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در حذف', variant: 'destructive' });
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/app-downloads'] });
-    }
+    onSettled: () => { invalidatePortalContent(queryClient, { downloads: true, full: true }); }
   });
 
   // Derived for editor
@@ -540,7 +541,17 @@ export default function PortalContentManager() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold">پیش‌نمایش پرتال (read-only)</h2>
-                <button onClick={() => refetchFull()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />بارگذاری</button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => { refetchFull(); refetchStatus(); }} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />بارگذاری</button>
+                  <button disabled={publishMutation.isPending} onClick={() => publishMutation.mutate()} className="text-xs px-2 py-1 bg-emerald-600 text-white rounded flex items-center gap-1 disabled:opacity-50">
+                    {publishMutation.isPending ? 'در حال انتشار...' : 'انتشار' }
+                  </button>
+                </div>
+              </div>
+              <div className="text-[11px] rounded border p-2 bg-gray-50 flex flex-wrap gap-4">
+                <span>نسخه محتوا: <strong>{statusData?.data.contentVersion ?? '—'}</strong></span>
+                <span>آخرین انتشار: {statusData?.data.lastPublishedAt ? new Date(statusData.data.lastPublishedAt).toLocaleString('fa-IR') : 'منتشر نشده'}</span>
+                {statusData?.data.lastPublishedBy && <span>منتشر کننده: {statusData.data.lastPublishedBy}</span>}
               </div>
               {!fullContentData && <div className="text-xs text-gray-500">در حال بارگذاری...</div>}
               {fullContentData && (

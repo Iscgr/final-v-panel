@@ -51,7 +51,9 @@ export const PortalBlocksAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     }),
-  full: () => apiFetch<{ success: boolean; data: any }>(`/api/admin/portal-content-blocks/full`)
+  full: () => apiFetch<{ success: boolean; data: any }>(`/api/admin/portal-content-blocks/full`),
+  status: () => apiFetch<{ success: boolean; data: { contentVersion: number; lastPublishedAt: string | null; lastPublishedBy: string | null } }>(`/api/admin/portal-content-blocks/status`),
+  publish: () => apiFetch<{ success: boolean; data: { contentVersion: number; lastPublishedAt: string; lastPublishedBy: string | null } }>(`/api/admin/portal-content-blocks/publish`, { method: 'POST' })
 };
 
 // Announcements
@@ -86,6 +88,34 @@ export const PortalContentService = {
   announcements: AnnouncementsAPI,
   downloads: AppDownloadsAPI
 };
+
+// کلیدهای ثابت کوئری برای تمرکز در invalidate ها
+export const portalContentQueryKeys = {
+  blocks: ['/api/admin/portal-content-blocks'] as const,
+  announcements: ['/api/admin/announcements'] as const,
+  downloads: ['/api/admin/app-downloads'] as const,
+  full: ['/api/admin/portal-content-blocks/full'] as const
+};
+
+/**
+ * Helper واحد برای invalidation کوئری‌های محتوای پرتال.
+ * مزایا:
+ *  - جلوگیری از تکرار queryKey ها در فایل‌های متعدد
+ *  - آماده‌سازی برای اضافه شدن publish/status در آینده (Task های Phase 4)
+ *  - امکان گسترش جهت prefetch یا refetch مشروط
+ */
+export async function invalidatePortalContent(
+  queryClient: import('@tanstack/react-query').QueryClient,
+  scope: { blocks?: boolean; announcements?: boolean; downloads?: boolean; full?: boolean } = {}
+) {
+  const { blocks = true, announcements = true, downloads = true, full = true } = scope;
+  const tasks: Promise<any>[] = [];
+  if (blocks) tasks.push(queryClient.invalidateQueries({ queryKey: portalContentQueryKeys.blocks }));
+  if (announcements) tasks.push(queryClient.invalidateQueries({ queryKey: portalContentQueryKeys.announcements }));
+  if (downloads) tasks.push(queryClient.invalidateQueries({ queryKey: portalContentQueryKeys.downloads }));
+  if (full) tasks.push(queryClient.invalidateQueries({ queryKey: portalContentQueryKeys.full }));
+  await Promise.all(tasks);
+}
 
 // ملاحظات آینده:
 // - افزودن endpoint تنظیمات تجمیعی برای Save All
