@@ -19,7 +19,7 @@ import {
   type TelegramSendHistory, type InsertTelegramSendHistory
 } from "@shared/schema";
 import { db, checkDatabaseHealth, executeWithRetry } from "./database-manager.js";
-import { eq, desc, sql, and, or, ilike, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, or, ilike, inArray, gte, lte } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from "bcryptjs";
 
@@ -44,6 +44,11 @@ export interface IStorage {
   getRepresentativesBySalesPartner(partnerId: number): Promise<Representative[]>;
   recalculateSalesPartnerFinancials(partnerId: number): Promise<void>;
   getPartnerCommissionPayments(partnerId: number): Promise<PartnerCommissionPayment[]>;
+  getPartnerCommissionPaymentsFiltered(options: {
+    partnerId?: number;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<Array<PartnerCommissionPayment & { partnerName: string | null; partnerCode: string | null }>>;
   createPartnerCommissionPayment(payment: InsertPartnerCommissionPayment): Promise<PartnerCommissionPayment>;
   updatePartnerCommissionPayment(paymentId: number, payment: Partial<PartnerCommissionPayment>): Promise<PartnerCommissionPayment>;
   deletePartnerCommissionPayment(paymentId: number): Promise<void>;
@@ -462,11 +467,68 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
+  async getPartnerCommissionPaymentsFiltered(options: {
+    partnerId?: number;
+    startDate?: Date;
+    endDate?: Date;
+    status?: string;
+  }): Promise<Array<PartnerCommissionPayment & { partnerName: string | null; partnerCode: string | null }>> {
+    return executeWithRetry(
+      async () => {
+        const conditions = [] as any[];
+
+        if (options.partnerId != null) {
+          conditions.push(eq(partnerCommissionPayments.salesPartnerId, options.partnerId));
+        }
+
+        if (options.startDate) {
+          conditions.push(gte(partnerCommissionPayments.paymentDate, options.startDate));
+        }
+
+        if (options.endDate) {
+          conditions.push(lte(partnerCommissionPayments.paymentDate, options.endDate));
+        }
+
+        if (options.status && ['pending','paid','cancelled'].includes(options.status)) {
+          conditions.push(eq(partnerCommissionPayments.status, options.status));
+        }
+
+        const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+        let query = db
+          .select({
+            id: partnerCommissionPayments.id,
+            salesPartnerId: partnerCommissionPayments.salesPartnerId,
+            amount: partnerCommissionPayments.amount,
+            paymentDate: partnerCommissionPayments.paymentDate,
+            note: partnerCommissionPayments.note,
+            createdBy: partnerCommissionPayments.createdBy,
+            createdAt: partnerCommissionPayments.createdAt,
+            updatedAt: partnerCommissionPayments.updatedAt,
+            status: partnerCommissionPayments.status,
+            partnerName: salesPartners.name,
+            partnerCode: salesPartners.code
+          })
+          .from(partnerCommissionPayments)
+          .leftJoin(salesPartners, eq(partnerCommissionPayments.salesPartnerId, salesPartners.id))
+          .orderBy(desc(partnerCommissionPayments.paymentDate), desc(partnerCommissionPayments.createdAt));
+
+        if (whereClause) {
+          query = query.where(whereClause);
+        }
+
+        return query;
+      },
+      'getPartnerCommissionPaymentsFiltered'
+    );
+  }
+
   async createPartnerCommissionPayment(payment: InsertPartnerCommissionPayment): Promise<PartnerCommissionPayment> {
     return executeWithRetry(
       async () => {
         const timestampedPayment = {
           ...payment,
+          status: (payment as any).status && ['pending','paid','cancelled'].includes((payment as any).status!) ? (payment as any).status : 'pending',
           updatedAt: new Date()
         };
 
@@ -476,6 +538,13 @@ export class DatabaseStorage implements IStorage {
           .returning();
 
         await this.recalculateSalesPartnerFinancials(created.salesPartnerId);
+
+        await this.createActivityLog({
+          type: 'commission_payment_created',
+          description: `پرداخت پورسانت به مبلغ ${created.amount} برای همکار #${created.salesPartnerId} ثبت شد`,
+          relatedId: created.id,
+          metadata: { partnerId: created.salesPartnerId, amount: created.amount, status: (created as any).status }
+        });
         return created;
       },
       'createPartnerCommissionPayment'
@@ -505,6 +574,22 @@ export class DatabaseStorage implements IStorage {
           .returning();
 
         await this.recalculateSalesPartnerFinancials(existing.salesPartnerId);
+
+        if (payment.status && payment.status !== (existing as any).status) {
+          await this.createActivityLog({
+            type: 'commission_payment_status_changed',
+            description: `وضعیت پرداخت پورسانت #${paymentId} از ${(existing as any).status || 'pending'} به ${payment.status} تغییر کرد`,
+            relatedId: paymentId,
+            metadata: { from: (existing as any).status || 'pending', to: payment.status }
+          });
+        } else {
+          await this.createActivityLog({
+            type: 'commission_payment_updated',
+            description: `پرداخت پورسانت #${paymentId} بروزرسانی شد`,
+            relatedId: paymentId,
+            metadata: { changes: Object.keys(payment) }
+          });
+        }
         return updated;
       },
       'updatePartnerCommissionPayment'
@@ -529,6 +614,13 @@ export class DatabaseStorage implements IStorage {
           .where(eq(partnerCommissionPayments.id, paymentId));
 
         await this.recalculateSalesPartnerFinancials(existing.salesPartnerId);
+
+        await this.createActivityLog({
+          type: 'commission_payment_deleted',
+            description: `پرداخت پورسانت #${paymentId} حذف شد`,
+            relatedId: paymentId,
+            metadata: { partnerId: existing.salesPartnerId, amount: existing.amount, status: (existing as any).status }
+        });
       },
       'deletePartnerCommissionPayment'
     );

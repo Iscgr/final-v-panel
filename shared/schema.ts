@@ -51,6 +51,8 @@ export const partnerCommissionPayments = pgTable("partner_commission_payments", 
   salesPartnerId: integer("sales_partner_id").notNull().references(() => salesPartners.id, { onDelete: "cascade" }),
   amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
   paymentDate: timestamp("payment_date").defaultNow(),
+  // وضعیت تسویه: pending (ثبت شده ولی تسویه نهایی نشده) | paid (تسویه شده) | cancelled (باطل شده)
+  status: text("status").notNull().default("pending"),
   note: text("note"),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -730,7 +732,9 @@ export const dataIntegrityConstraintsRelations = relations(dataIntegrityConstrai
 export const insertRepresentativeSchema = omitInsert(createInsertSchema(representatives), "id", "publicId", "totalDebt", "totalSales", "credit", "createdAt", "updatedAt");
 
 export const insertSalesPartnerSchema = omitInsert(createInsertSchema(salesPartners), "id", "totalCommission", "createdAt");
-export const insertPartnerCommissionPaymentSchema = omitInsert(createInsertSchema(partnerCommissionPayments), "id", "createdAt", "updatedAt");
+export const insertPartnerCommissionPaymentSchema = omitInsert(createInsertSchema(partnerCommissionPayments), "id", "createdAt", "updatedAt").extend({
+  status: z.enum(['pending','paid','cancelled']).optional()
+});
 
 // فاز ۱: Insert Schema برای مدیریت دوره‌ای
 export const insertInvoiceBatchSchema = omitInsert(createInsertSchema(invoiceBatches), "id", "totalInvoices", "totalAmount", "createdAt", "completedAt");

@@ -48,6 +48,68 @@ router.get("/statistics", async (_req: Request, res: Response) => {
   }
 });
 
+const commissionPaymentsQuerySchema = z.object({
+  partnerId: z
+    .string()
+    .optional()
+    .refine((value) => !value || !Number.isNaN(Number(value)), "partnerId نامعتبر است")
+    .transform((value) => (value ? Number(value) : undefined)),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  status: z.string().optional().refine(v => !v || ['pending','paid','cancelled'].includes(v), 'status نامعتبر است')
+});
+
+router.get("/payments", async (req: Request, res: Response) => {
+  try {
+    const parsed = commissionPaymentsQuerySchema.parse(req.query);
+
+    const filters = {
+      partnerId: parsed.partnerId,
+      startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
+      endDate: parsed.endDate ? new Date(parsed.endDate) : undefined,
+      status: parsed.status
+    };
+
+    if (filters.startDate && Number.isNaN(filters.startDate.getTime())) {
+      return res.status(400).json({ error: "startDate نامعتبر است" });
+    }
+
+    if (filters.endDate && Number.isNaN(filters.endDate.getTime())) {
+      return res.status(400).json({ error: "endDate نامعتبر است" });
+    }
+
+    if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) {
+      return res.status(400).json({ error: "بازه زمانی نامعتبر است" });
+    }
+
+    const payments = await storage.getPartnerCommissionPaymentsFiltered(filters);
+
+    const summary = payments.reduce(
+      (acc, payment) => {
+        const amount = Number(payment.amount ?? 0);
+        acc.totalAmount += Number.isFinite(amount) ? amount : 0;
+        return acc;
+      },
+      { totalAmount: 0 }
+    );
+
+    res.json({
+      data: payments,
+      count: payments.length,
+      summary
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "پارامترهای نامعتبر", details: error.flatten() });
+    }
+    console.error("❌ Error in GET /api/sales-partners/payments:", error);
+    res.status(500).json({
+      error: "خطا در دریافت رویدادهای پورسانت",
+      message: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
 router.get("/:partnerId", async (req: Request, res: Response) => {
   try {
     const { partnerId } = partnerIdParamSchema.parse(req.params);
@@ -194,6 +256,24 @@ router.put("/:partnerId/payments/:paymentId", async (req: Request, res: Response
 
     if (Object.keys(payload).length === 0) {
       return res.status(400).json({ error: "هیچ داده‌ای برای به‌روزرسانی ارسال نشده است" });
+    }
+
+    // کنترل transition وضعیت
+    if (payload.status) {
+      const allowed = ['pending','paid','cancelled'];
+      if (!allowed.includes(payload.status as string)) {
+        return res.status(400).json({ error: 'وضعیت ارسالی نامعتبر است' });
+      }
+      // سیاست: جلوگیری از بازگشت از paid یا cancelled به pending / تغییر بین paid و cancelled
+      const existingList = await storage.getPartnerCommissionPaymentsFiltered({});
+      const existing = existingList.find(p => p.id === paymentId);
+      if (!existing) {
+        return res.status(404).json({ error: 'پرداخت یافت نشد' });
+      }
+      const currentStatus = (existing as any).status || 'pending';
+      if (currentStatus !== 'pending' && payload.status !== currentStatus) {
+        return res.status(400).json({ error: 'تغییر وضعیت پس از خروج از pending مجاز نیست' });
+      }
     }
 
     const updatedPayment = await storage.updatePartnerCommissionPayment(paymentId, payload);
