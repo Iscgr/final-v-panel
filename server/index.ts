@@ -71,7 +71,7 @@ const sessionMiddleware = session({
   store: new PgSession({
     pool: pool as any, // Type assertion for compatibility
     tableName: 'session',
-    createTableIfMissing: true
+    createTableIfMissing: true,
   }),
   secret: process.env.SESSION_SECRET || 'fallback-secret-key-change-in-production',
   resave: false,

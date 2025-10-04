@@ -97,7 +97,7 @@ graph LR
 
 **Backend**
 - [ ] ارزیابی `insertInvoiceSchema` و تبدیل تاریخ (Persian -> Gregorian).
-- [ ] بررسی middleware احراز هویت (`authMiddleware`) و session قبل از endpoint.
+- [x] بررسی middleware احراز هویت (`authMiddleware`) و session قبل از endpoint. *(1404/07/13: جدول `session` به اسکیمای Drizzle اضافه شد و `db:push` اجرا گردید تا خطای `relation "session" does not exist` حذف شود.)*
 - [ ] اطمینان از وجود متد `createInvoice` و فیلد `isManual` در Drizzle schema.
 - [ ] پایش لاگ سرور برای مشاهده `🔧 فاز ۲` هنگام ارسال درخواست.
 
@@ -117,7 +117,7 @@ graph LR
 **Backend**
 - [x] ایجاد یا تکمیل مسیرهای `/api/sales-partners` (POST/PUT/DELETE/GET).
 - [x] تعریف مدل داده برای ثبت تاریخچه محاسبه پورسانت و پرداخت‌های مرتبط (جداول `partner_commission_payments`).
-- [ ] پیاده‌سازی job به‌روزرسانی پورسانت پس از آپلود فایل‌های فروش (hook روی `generate-standard`).
+- [x] پیاده‌سازی job به‌روزرسانی پورسانت پس از آپلود فایل‌های فروش (hook روی `generate-standard`).
 - [ ] ثبت Activity log برای هر ویرایش پورسانت.
 
 **محاسبات مالی**
@@ -225,3 +225,5 @@ graph LR
 - کلیه تغییرات باید با استاندارد README جاری همسو باشند (Node 20، Vite، Drizzle ORM).
 - توکن‌های حساس (Telegram, Session) هنگام بکاپ نباید در خروجی متنی ذخیره شوند؛ Mask یا رمزنگاری ضروری است.
 - برای هر فاز، لاگ‌های `STRUCT_LOG` با شناسه فاز (`PHASE1_MANUAL_INVOICE` و ...) ثبت گردد.
+- اسکیمای `sales_partners` پس از اجرای مایگریشن 0003 همگام‌سازی شد (افزودن ستون‌های `code` و `contact_person` و جدول `partner_commission_payments`)؛ در استقرارهای بعدی اجرای push الزامی است.
+- جدول `session` اکنون در `shared/schema.ts` تعریف شده و باید در چک‌های استقرار کنترل شود تا از حذف تصادفی session store جلوگیری گردد.

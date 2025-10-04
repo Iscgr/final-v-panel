@@ -25,6 +25,13 @@ export const representatives = pgTable("representatives", {
   updatedAt: timestamp("updated_at").defaultNow()
 });
 
+// Session Store (connect-pg-simple)
+export const sessions = pgTable("session", {
+  sid: text("sid").primaryKey(),
+  sess: json("sess").notNull(),
+  expire: timestamp("expire", { withTimezone: true }).notNull()
+});
+
 // Sales Partners (همکاران فروش)
 export const salesPartners = pgTable("sales_partners", {
   id: serial("id").primaryKey(),

@@ -107,12 +107,13 @@ export function registerStandardizedInvoiceRoutes(app: any, requireAuth: any, st
         : null;
 
       // پردازش استاندارد
-      const processedInvoices = processStandardUsageData(valid, invoiceDate);
+  const processedInvoices = processStandardUsageData(valid, invoiceDate);
       console.log(`🔄 Processed ${processedInvoices.length} invoices`);
 
       // ایجاد فاکتورها در دیتابیس
       const createdInvoices = [];
       const newRepresentatives = [];
+  const affectedSalesPartnerIds = new Set<number>();
 
       for (const processedInvoice of processedInvoices) {
         try {
@@ -138,6 +139,10 @@ export function registerStandardizedInvoiceRoutes(app: any, requireAuth: any, st
 
             representative = await storage.createRepresentative(newRepData);
             newRepresentatives.push(representative);
+          }
+
+          if (representative.salesPartnerId != null) {
+            affectedSalesPartnerIds.add(representative.salesPartnerId);
           }
 
           // ایجاد فاکتور
@@ -172,6 +177,15 @@ export function registerStandardizedInvoiceRoutes(app: any, requireAuth: any, st
 
         } catch (error) {
           console.error(`❌ Error processing invoice for ${processedInvoice.representativeCode}:`, error);
+        }
+      }
+
+      // بروزرسانی اطلاعات مالی شرکای فروش تحت تأثیر
+      for (const partnerId of affectedSalesPartnerIds) {
+        try {
+          await storage.recalculateSalesPartnerFinancials(partnerId);
+        } catch (partnerError) {
+          console.error(`⚠️ خطا در محاسبه مجدد شریک فروش ${partnerId}:`, partnerError);
         }
       }
 

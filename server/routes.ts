@@ -4,7 +4,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { db } from "./db.js";
 import { sql, eq, and, or, like, gte, lte, asc, count, desc } from "drizzle-orm";
-import { invoices, representatives, payments, activityLogs, insertRepresentativeSchema, insertSalesPartnerSchema, insertInvoiceSchema, insertInvoiceBatchSchema, type InsertInvoice, portalContentBlocks, importJobs } from "@shared/schema";
+import { invoices, representatives, payments, activityLogs, insertRepresentativeSchema, insertInvoiceSchema, insertInvoiceBatchSchema, type InsertInvoice, portalContentBlocks, importJobs } from "@shared/schema";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 
@@ -1385,30 +1385,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Sales Partners API - Protected
-  app.get("/api/sales-partners", authMiddleware, async (req, res) => {
-    try {
-      const partners = await storage.getSalesPartners();
-      res.json(partners);
-    } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت همکاران فروش" });
-    }
-  });
-
-  app.get("/api/sales-partners/statistics", authMiddleware, async (req, res) => {
-    try {
-      const stats = await storage.getSalesPartnersStatistics();
-      res.json(stats);
-    } catch (error) {
-      res.status(500).json({
-        totalPartners: "0",
-        activePartners: "0",
-        totalCommission: "0",
-        averageCommissionRate: "0"
-      });
-    }
-  });
-
   // SHERLOCK v12.4: Manual Invoices API - Dedicated endpoint for manual invoices management
   app.get("/api/invoices/manual", authMiddleware, async (req, res) => {
     try {
@@ -1442,60 +1418,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error fetching manual invoices statistics:', error);
       res.status(500).json({ error: "خطا در دریافت آمار فاکتورهای دستی" });
-    }
-  });
-
-  app.get("/api/sales-partners/:id", authMiddleware, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const partner = await storage.getSalesPartner(id);
-      if (!partner) {
-        return res.status(404).json({ error: "همکار فروش یافت نشد" });
-      }
-
-      // Get related representatives
-      const representatives = await storage.getRepresentativesBySalesPartner(id);
-
-      res.json({
-        partner,
-        representatives
-      });
-    } catch (error) {
-      res.status(500).json({ error: "خطا در دریافت اطلاعات همکار فروش" });
-    }
-  });
-
-  app.post("/api/sales-partners", authMiddleware, async (req, res) => {
-    try {
-      const validatedData = insertSalesPartnerSchema.parse(req.body);
-      const partner = await storage.createSalesPartner(validatedData);
-      res.json(partner);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: "داده‌های ورودی نامعتبر", details: error.errors });
-      } else {
-        res.status(500).json({ error: "خطا در ایجاد همکار فروش" });
-      }
-    }
-  });
-
-  app.put("/api/sales-partners/:id", authMiddleware, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const partner = await storage.updateSalesPartner(id, req.body);
-      res.json(partner);
-    } catch (error) {
-      res.status(500).json({ error: "خطا در بروزرسانی همکار فروش" });
-    }
-  });
-
-  app.delete("/api/sales-partners/:id", authMiddleware, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      await storage.deleteSalesPartner(id);
-      res.json({ success: true });
-    } catch (error) {
-      res.status(500).json({ error: "خطا در حذف همکار فروش" });
     }
   });
 
