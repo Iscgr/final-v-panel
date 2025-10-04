@@ -1,135 +1,91 @@
-import React, { useMemo, Suspense, lazy } from 'react';
-import StatCard from '@/components/dashboard/StatCard';
-import UploadZone from '@/components/dashboard/UploadZone';
-import ActivityFeed, { ActivityItem } from '@/components/dashboard/ActivityFeed';
-import VirtualizedActivityFeed from '@/components/dashboard/VirtualizedActivityFeed';
-import { useRecentActivity } from '@/services/activity-service';
-import { useQuery } from '@tanstack/react-query';
-import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton';
-import { fetchKPI, kpiQueryKey } from '@/services/kpi-service';
+import { useEffect } from 'react';
+import { CheckCircle2, RefreshCcw } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { useUploadFlow } from '@/hooks/use-upload-flow';
-import FileValidationList from '@/components/dashboard/FileValidationList';
+import UploadZone from '@/components/dashboard/UploadZone';
 import ProcessingProgressBar from '@/components/dashboard/ProcessingProgressBar';
-import { LiveProcessingMonitor } from '@/components/dashboard/LiveProcessingMonitor';
-import AlertBanner from '@/components/dashboard/AlertBanner';
-import QuickActionsPanel from '@/components/dashboard/QuickActionsPanel';
-
-// Lazy charts (S5 PFX: dynamic import)
-const RevenueTrendChart = lazy(() => import('@/components/dashboard/charts/RevenueTrendChart'));
-const AgingBucketChart = lazy(() => import('@/components/dashboard/charts/AgingBucketChart'));
+import FileValidationList from '@/components/dashboard/FileValidationList';
 import UploadErrorPanel from '@/components/dashboard/UploadErrorPanel';
-
-// فعالیت اخیر اکنون از API با polling دریافت می‌شود
+import { LiveProcessingMonitor } from '@/components/dashboard/LiveProcessingMonitor';
 
 export default function DashboardPage() {
-  const { data: kpi, isLoading, isFetching } = useQuery({ queryKey: kpiQueryKey, queryFn: fetchKPI, staleTime: 60_000 });
-  const { data: recentActivity, isLoading: activityLoading } = useRecentActivity({ refetchInterval: 30000 });
-  const { selectFile, reset: resetUpload, phase, percent, issues, error, jobCode } = useUploadFlow();
+  const { toast } = useToast();
+  const { phase, percent, issues, error, jobCode, selectFile, reset, file } = useUploadFlow();
 
-  const cards = useMemo(() => ([
-    { title: 'مجموع فاکتورها', value: kpi?.totalInvoices?.toLocaleString('fa-IR') ?? '–', desc: 'کل ثبت شده', trend: undefined },
-    { title: 'پرداخت شده', value: kpi?.paidInvoices?.toLocaleString('fa-IR') ?? '–', desc: 'تسویه شده', trend: undefined },
-    { title: 'معوق', value: kpi?.overdueInvoices?.toLocaleString('fa-IR') ?? '–', desc: 'دارای تاخیر', trend: undefined },
-    { title: 'نرخ وصول', value: kpi ? kpi.collectionRate.toFixed(1) + '%' : '–', desc: 'قرائت فعلی', trend: undefined },
-  { title: 'رشد دوره‌ای', value: kpi ? kpi.periodGrowth.toFixed(1) + '%' : '–', desc: 'نسبت به دوره قبل', trend: kpi ? { value: kpi.periodGrowth, direction: (kpi.periodGrowth > 0 ? 'up' : kpi.periodGrowth < 0 ? 'down' : 'flat') as ('up'|'down'|'flat') } : undefined },
-  ]), [kpi]);
-  if (isLoading && !kpi) {
-    return <DashboardSkeleton />;
+  useEffect(() => {
+    if (phase === 'error' && error) {
+      toast({
+        title: 'خطای آپلود',
+        description: error,
+        variant: 'destructive',
+      });
+    }
+  }, [phase, error, toast]);
+
+  const showProgress = phase === 'validating' || phase === 'uploading';
+  const showSuccess = phase === 'success' || phase === 'processing';
+  const showError = phase === 'error';
+  const showValidationIssues = phase === 'validating' && issues.length > 0;
+  const showLiveMonitor = !!jobCode;
+  const isUploading = phase === 'uploading';
+
+  if (showLiveMonitor) {
+    return (
+      <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
+        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold text-gray-800">وضعیت پردازش زنده</h1>
+            <button onClick={reset} className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md flex items-center gap-1.5">
+              <RefreshCcw className="w-3 h-3" />
+              شروع مجدد
+            </button>
+          </div>
+          <LiveProcessingMonitor jobCode={jobCode} />
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="dashboard-grid space-y-6">
-      <header role="banner" className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight" role="heading" aria-level={1}>داشبورد</h1>
-          <p className="text-sm text-muted-foreground mt-1" aria-live="polite">نمای کلی عملکرد مالی و فعالیت اخیر سیستم</p>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
+      <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">پردازش فایل ریز جزئیات</h1>
+            <p className="text-sm text-gray-500 mt-1">فایل JSON حاوی ریز جزئیات را برای پردازش و اعتبارسنجی بارگذاری کنید.</p>
+          </div>
+          {(showProgress || showSuccess || showError) && (
+            <button onClick={reset} className="mt-2 sm:mt-0 text-xs px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md flex items-center gap-1.5">
+              <RefreshCcw className="w-3 h-3" />
+              شروع مجدد
+            </button>
+          )}
         </div>
-      </header>
 
-  {/* KPI Alerts */}
-  <AlertBanner kpi={kpi} loading={isLoading} />
-
-      {/* KPI Cards */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5" aria-label="شاخص‌های کلیدی مالی">
-        {cards.map(c => (
-          <StatCard
-            key={c.title}
-            title={c.title}
-            value={c.value}
-            description={c.desc}
-            loading={isLoading}
-            trend={c.trend}
-          />
-        ))}
-      </div>
-
-      <div className="grid gap-6 grid-cols-1 xl:grid-cols-12">
-        {/* Upload & Processing */}
-        <div className="xl:col-span-4 space-y-4">
-          <div className="rounded-lg border p-4 bg-card">
-            <h2 className="text-sm font-semibold mb-3">بارگذاری JSON</h2>
-            <UploadZone onFileAccepted={(f) => selectFile(f)} disabled={phase !== 'idle' && phase !== 'success' && phase !== 'error'} />
-            <div className="mt-4 space-y-3">
-              {issues.length > 0 && <FileValidationList issues={issues} />}
-              
-              {/* نمایش Live Monitor اگر jobCode موجود باشد */}
-              {jobCode && (phase === 'uploading' || phase === 'processing') && (
-                <LiveProcessingMonitor 
-                  jobCode={jobCode}
-                  onComplete={() => {
-                    console.log('✅ پردازش با موفقیت تکمیل شد');
-                    resetUpload(); // Reset بعد از تکمیل موفق
-                  }}
-                  onError={(err) => {
-                    console.error('❌ خطای پردازش:', err);
-                  }}
-                />
-              )}
-
-              {/* Fallback Progress Bar برای حالات قدیمی */}
-              {!jobCode && (phase === 'uploading' || phase === 'processing' || phase === 'success' || phase === 'partial') && (
-                <ProcessingProgressBar percent={percent} phase={phase} />
-              )}
-              
-              <UploadErrorPanel error={error} onReset={resetUpload} />
-              {phase === 'success' && (
-                <div className="text-sm text-green-600 bg-green-50 border border-green-200 rounded px-3 py-2">
-                  ✓ فایل با موفقیت پردازش شد
+        <div className="mt-6">
+          {phase === 'idle' || phase === 'selecting' ? (
+            <UploadZone onFileAccepted={selectFile} disabled={isUploading} />
+          ) : showSuccess ? (
+            <div className="text-center p-8 border-2 border-dashed border-green-200 bg-green-50 rounded-lg">
+              <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
+              <h3 className="font-semibold text-green-800">آپلود موفق</h3>
+              <p className="text-xs text-green-600 mt-1">فایل با موفقیت به سرور ارسال شد. پردازش در پس‌زمینه ادامه دارد...</p>
+            </div>
+          ) : showError ? (
+            <UploadErrorPanel error={error} onReset={reset} />
+          ) : (
+            <div>
+              <ProcessingProgressBar
+                phase={phase}
+                percent={percent}
+              />
+              {showValidationIssues && (
+                <div className="mt-4">
+                  <FileValidationList issues={issues} />
                 </div>
-              )}
-              {phase === 'partial' && (
-                <div className="text-sm text-yellow-600 bg-yellow-50 border border-yellow-200 rounded px-3 py-2">
-                  ⚠ فایل با موفقیت پردازش شد اما برخی موارد نادیده گرفته شدند
-                </div>
-              )}
-              {(phase === 'success' || phase === 'error' || phase === 'partial') && (
-                <button onClick={resetUpload} className="w-full mt-2 text-xs px-3 py-2 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 transition-colors">
-                  شروع مجدد
-                </button>
               )}
             </div>
-          </div>
-          <QuickActionsPanel role={'ADMIN'} />
-          <div className="rounded-lg border p-4 bg-card">
-            <h2 className="text-sm font-semibold mb-3">فعالیت اخیر</h2>
-            {activityLoading && <ActivityFeed items={[]} loading />}
-            {!activityLoading && (
-              <VirtualizedActivityFeed items={(recentActivity as ActivityItem[]) || []} height={300} />
-            )}
-          </div>
-        </div>
-        {/* Placeholder برای نمودارها */}
-        <div className="xl:col-span-8 space-y-4">
-          <div className="rounded-lg border p-4 h-72 bg-card flex flex-col">
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">بارگذاری ماژول نمودار درآمد...</div>}>
-              <RevenueTrendChart window="24h" />
-            </Suspense>
-          </div>
-          <div className="rounded-lg border p-4 h-72 bg-card flex flex-col">
-            <Suspense fallback={<div className="flex-1 flex items-center justify-center text-xs text-muted-foreground">بارگذاری ماژول نمودار سررسید...</div>}>
-              <AgingBucketChart />
-            </Suspense>
-          </div>
+          )}
         </div>
       </div>
     </div>

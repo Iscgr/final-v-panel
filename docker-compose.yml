@@ -1,5 +1,27 @@
 # Docker Compose configuration for MarFaNet
 services:
+  # Main Application
+  app:
+    image: final-v-panel-app
+    build: .
+    container_name: marfanet-app
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - marfanet-network
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/marfanet
+      - REDIS_URL=redis://redis:6379
+
   # PostgreSQL Database
   db:
     image: postgres:14

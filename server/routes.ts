@@ -807,9 +807,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({
         success: true,
         data: {
-        };
+        }
       });
-      res.json({ success: true, window: windowParam, data, generatedAt: new Date().toISOString() });
     } catch (e:any) {
       res.status(500).json({ success: false, error: 'failed_revenue_trend', details: e.message });
     }
@@ -1704,6 +1703,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create the payment initially as unallocated
+     
       const newPayment = await storage.createPayment({
         representativeId,
         amount,

@@ -53,7 +53,7 @@ export default function PortalContentManager() {
   const [originalTitle, setOriginalTitle] = useState('');
 
   // Announcements state
-  const [newAnn, setNewAnn] = useState({ title: '', content: '', priority: 0, type: 'info' });
+  const [newAnn, setNewAnn] = useState({ title: '', content: '', priority: 0, type: 'info', isActive: true, expiresAt: null as string | null });
   const annErrors = (() => {
     const errs: string[] = [];
     if(newAnn.title.trim().length < 3) errs.push('عنوان حداقل ۳ کاراکتر');
@@ -65,7 +65,7 @@ export default function PortalContentManager() {
   })();
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   // Downloads state
-  const [newDownload, setNewDownload] = useState({ title: '', downloadLink: '', description: '' });
+  const [newDownload, setNewDownload] = useState({ title: '', downloadLink: '', description: '', isActive: true, qrCodeUrl: null as string | null, videoUrl: null as string | null });
   const downloadErrors = (() => {
     const errs: string[] = [];
     if(newDownload.title.trim().length < 2) errs.push('عنوان دانلود حداقل ۲ کاراکتر');
@@ -87,7 +87,7 @@ export default function PortalContentManager() {
 
   // Mutation for save
   const saveMutation = useMutation({
-    mutationFn: async (payload: { blockKey: string; title: string; body: string }) => {
+    mutationFn: (payload: { blockKey: string; title: string; body: string }) => {
       return PortalContentService.blocks.update(payload.blockKey, { title: payload.title, body: payload.body });
     },
     onMutate: async (payload) => {
@@ -110,6 +110,7 @@ export default function PortalContentManager() {
       setOriginalTitle(editTitle);
     },
     onSettled: () => {
+      // این همیشه اجرا می‌شود و داده‌ها را تازه می‌کند
       queryClient.invalidateQueries({ queryKey: ['/api/admin/portal-content-blocks'] });
     }
   });
@@ -201,44 +202,82 @@ export default function PortalContentManager() {
 
   // Announcement mutations
   const createAnnMutation = useMutation({
-    mutationFn: async () => {
-      return PortalContentService.announcements.create({ ...newAnn, priority: Number(newAnn.priority) || 0 });
+    mutationFn: (payload: Omit<Announcement, 'id'>) => PortalContentService.announcements.create(payload),
+    onSuccess: () => {
+      toast({ title: 'اطلاعیه ایجاد شد' });
+      setNewAnn({ title: '', content: '', priority: 0, type: 'info', isActive: true, expiresAt: null });
     },
-    onSuccess: (r: any) => {
-      if (r.success) {
-        toast({ title: 'اطلاعیه ایجاد شد' });
-        setNewAnn({ title: '', content: '', priority: 0, type: 'info' });
-        refetchAnnouncements();
-      } else toast({ title: 'خطا', description: r.error, variant: 'destructive' });
+    onError: () => {
+      toast({ title: 'خطا در ایجاد', variant: 'destructive' });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/announcements'] });
     }
   });
   const updateAnnMutation = useMutation({
-    mutationFn: async (ann: Announcement) => {
-      return PortalContentService.announcements.update(ann.id, ann);
+    mutationFn: (ann: Announcement) => PortalContentService.announcements.update(ann.id, ann),
+    onSuccess: () => {
+      toast({ title: 'اطلاعیه ویرایش شد' });
+      setEditingAnnouncement(null);
     },
-    onSuccess: (r: any) => { if (r.success) { toast({ title: 'ویرایش اطلاعیه' }); setEditingAnnouncement(null); refetchAnnouncements(); } }
+    onError: () => {
+      toast({ title: 'خطا در ویرایش', variant: 'destructive' });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/announcements'] });
+    }
   });
   const deleteAnnMutation = useMutation({
-  mutationFn: async (id: number) => PortalContentService.announcements.delete(id),
-    onSuccess: (r: any) => { if (r.success) { toast({ title: 'حذف شد' }); refetchAnnouncements(); } }
+    mutationFn: (id: number) => PortalContentService.announcements.delete(id),
+    onSuccess: () => {
+      toast({ title: 'اطلاعیه حذف شد' });
+    },
+    onError: () => {
+      toast({ title: 'خطا در حذف', variant: 'destructive' });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/announcements'] });
+    }
   });
 
   // Download mutations
   const createDownloadMutation = useMutation({
-    mutationFn: async () => {
-      return PortalContentService.downloads.create({ ...newDownload });
+    mutationFn: (payload: Omit<AppDownload, 'id' | 'displayOrder'>) => PortalContentService.downloads.create(payload),
+    onSuccess: () => {
+      toast({ title: 'اپ افزوده شد' });
+      setNewDownload({ title: '', downloadLink: '', description: '', isActive: true, qrCodeUrl: null, videoUrl: null });
     },
-    onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ افزوده شد' }); setNewDownload({ title: '', downloadLink: '', description: '' }); refetchDownloads(); } }
+    onError: () => {
+      toast({ title: 'خطا در افزودن', variant: 'destructive' });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/app-downloads'] });
+    }
   });
   const updateDownloadMutation = useMutation({
-    mutationFn: async (d: AppDownload) => {
-      return PortalContentService.downloads.update(d.id, d);
+    mutationFn: (d: AppDownload) => PortalContentService.downloads.update(d.id, d),
+    onSuccess: () => {
+      toast({ title: 'اپ ویرایش شد' });
+      setEditingDownload(null);
     },
-    onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ ویرایش شد' }); setEditingDownload(null); refetchDownloads(); } }
+    onError: () => {
+      toast({ title: 'خطا در ویرایش', variant: 'destructive' });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/app-downloads'] });
+    }
   });
   const deleteDownloadMutation = useMutation({
-  mutationFn: async (id: number) => PortalContentService.downloads.delete(id),
-    onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ حذف شد' }); refetchDownloads(); } }
+    mutationFn: (id: number) => PortalContentService.downloads.delete(id),
+    onSuccess: () => {
+      toast({ title: 'اپ حذف شد' });
+    },
+    onError: () => {
+      toast({ title: 'خطا در حذف', variant: 'destructive' });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/app-downloads'] });
+    }
   });
 
   // Derived for editor
@@ -354,7 +393,7 @@ export default function PortalContentManager() {
                   </select>
                 </div>
                 {annErrors.length>0 && <ul className="text-red-600 text-[10px] list-disc pr-4 space-y-0.5">{annErrors.map(er=> <li key={er}>{er}</li>)}</ul>}
-                <button disabled={annErrors.length>0} onClick={() => createAnnMutation.mutate()} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-40"><Plus className="w-3 h-3" />افزودن</button>
+                <button disabled={annErrors.length>0 || createAnnMutation.isPending} onClick={() => createAnnMutation.mutate(newAnn)} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-40"><Plus className="w-3 h-3" />افزودن</button>
               </div>
               {/* List */}
               <div className="space-y-2 max-h-72 overflow-auto">
@@ -412,7 +451,7 @@ export default function PortalContentManager() {
                   <input value={newDownload.title} onChange={e => setNewDownload(d => ({ ...d, title: e.target.value }))} placeholder="عنوان" className="px-2 py-1 border rounded text-xs" />
                   <input value={newDownload.downloadLink} onChange={e => setNewDownload(d => ({ ...d, downloadLink: e.target.value }))} placeholder="لینک" className="px-2 py-1 border rounded text-xs col-span-2" />
                   <input value={newDownload.description} onChange={e => setNewDownload(d => ({ ...d, description: e.target.value }))} placeholder="توضیح" className="px-2 py-1 border rounded text-xs" />
-                  <button disabled={downloadErrors.length>0} onClick={() => createDownloadMutation.mutate()} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-40"><Plus className="w-3 h-3" />افزودن</button>
+                  <button disabled={downloadErrors.length>0 || createDownloadMutation.isPending} onClick={() => createDownloadMutation.mutate(newDownload)} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-40"><Plus className="w-3 h-3" />افزودن</button>
                 </div>
                 {downloadErrors.length>0 && <ul className="text-red-600 text-[10px] list-disc pr-4 space-y-0.5">{downloadErrors.map(er=> <li key={er}>{er}</li>)}</ul>}
               </div>

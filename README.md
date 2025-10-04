@@ -12,25 +12,48 @@
 
 ## 1. معرفی سریع
 MarFaNet یک سامانه مدیریت مالی و نمایندگان (Invoices, Payments, KPI, Portal) است که بر پایه:
-- Node.js 20 + Express (Backend + API)
+- Node.js 20+ (Backend + API)
 - React 18 + Vite (Frontend)
 - PostgreSQL 14+ (تنها پایگاه داده رسمی)
-- Redis (برای Session و کش آینده)
+- Redis (برای مدیریت Session و کش)
 - Docker / Docker Compose (محیط Production)
 
 خروجی نهایی: یک سرویس واحد روی پورت 3000 که API و UI را یکجا سرو می‌کند.
 
 ---
 
-## 4. نصب ابزارهای پایه (Ubuntu)
+## 4. نصب ابزارهای پایه (Ubuntu 22.04 / 24.04)
+توصیه می‌شود برای نصب Docker از **مخزن رسمی** استفاده کنید تا بروزرسانی‌ها به صورت پایدار مدیریت شوند. اسکریپت `get.docker.com` برای محیط‌های تستی مناسب است.
+
 ```bash
+# ۱. بروزرسانی سیستم و نصب ابزارهای پایه
 sudo apt update
 sudo apt install -y ca-certificates curl gnupg lsb-release ufw git unzip bash coreutils
-curl -fsSL https://get.docker.com | sudo bash
+
+# ۲. نصب Docker (روش رسمی و پیشنهادی)
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+# ۳. افزودن کاربر به گروه داکر (برای اجرای بدون sudo)
 sudo usermod -aG docker $USER
+# (برای اعمال تغییر، یکبار از سرور خارج و مجدد وارد شوید یا newgrp docker را اجرا کنید)
+
+# ۴. نصب Node.js 20
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
-sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw enable
+
+# ۵. تنظیم فایروال (UFW)
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
 ```
 
 ---
@@ -96,6 +119,8 @@ git reflog
 git checkout <PREV_COMMIT>
 docker compose build app && docker compose up -d app
 ```
+
+> **یادآوری مهم**: پیش از اجرای Compose مطمئن شوید هیچ فرآیند توسعه‌ای (`npm run dev` یا `tsx server/index.ts`) روی میزبان فعال نیست تا ساختار اجرا دوگانه نشود. برای درک کامل مسیرهای اجرای یکپارچه و روابط سرویس‌ها، سند مرجع `docs/system-architecture.md` را مطالعه کنید.
 
 ---
 ## 9. متغیرهای محیطی کلیدی
@@ -461,6 +486,10 @@ BASE_URL=http://localhost:3000 ts-node scripts/demo-import-job.ts
 
 ---
 
+<a id="deprecated-section"></a>
+<details>
+<summary>بخش ۲۱.۴ - مستندات منسوخ شده (جهت آرشیو)</summary>
+
 ## 21.4 مانیتور مرحله‌ای پردازش فایل‌ها (Import Jobs) [DEPRECATED - جایگزین شده]
 این فاز، قابلیت مشاهده پیشرفت Job های پردازش فایل JSON را با مراحل زیر فراهم می‌کند:
 pending → validating → ingesting → enriching → completed (یا failed)
@@ -497,7 +526,7 @@ BASE_URL=http://localhost:3000 ADMIN_COOKIE="$(cat cookie.txt 2>/dev/null)" ts-n
 3. افزودن websocket یا Server-Sent Events برای کاهش Polling.
 4. نگارش شاخص SLA (مدت validating، مدت ingesting و ...) برای تحلیل عملکرد.
 
----
+</details>
 
 ---
 ## 22. Cheat Sheet
