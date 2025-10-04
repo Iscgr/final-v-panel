@@ -15,7 +15,7 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { createClient, type RedisClientType } from 'redis';
+import { createClient } from 'redis';
 import { checkDatabaseHealth, getDatabaseStatus } from './database-manager.js';
 import errorManager, { ErrorSeverity, ErrorCategory } from './unified-error-manager.js';
 
@@ -23,11 +23,13 @@ import os from 'os';
 
 const execAsync = promisify(exec);
 
-let redisHealthClient: RedisClientType | null = null;
-let redisBootstrapErrorLogged = false;
-let redisHealthClientPromise: Promise<RedisClientType> | null = null;
+type RedisHealthClientType = ReturnType<typeof createClient>;
 
-async function getRedisHealthClient(redisUrl: string): Promise<RedisClientType> {
+let redisHealthClient: RedisHealthClientType | null = null;
+let redisBootstrapErrorLogged = false;
+let redisHealthClientPromise: Promise<RedisHealthClientType> | null = null;
+
+async function getRedisHealthClient(redisUrl: string): Promise<RedisHealthClientType> {
   if (redisHealthClient && redisHealthClient.isOpen) {
     return redisHealthClient;
   }
@@ -38,7 +40,8 @@ async function getRedisHealthClient(redisUrl: string): Promise<RedisClientType> 
         url: redisUrl,
         socket: {
           reconnectStrategy: (retries) => Math.min(retries * 100, 1000),
-          tls: redisUrl.startsWith('rediss://') ? {} : undefined
+          // فعال‌سازی TLS برای اتصال‌های rediss:// و پرهیز از ارسال آبجکت خالی که با نوع boolean ناسازگار است
+          tls: redisUrl.startsWith('rediss://') ? true : undefined
         }
       });
 
@@ -57,7 +60,7 @@ async function getRedisHealthClient(redisUrl: string): Promise<RedisClientType> 
     });
   }
 
-  return redisHealthClientPromise;
+  return redisHealthClientPromise!;
 }
 
 // 🏷️ Health Status Types

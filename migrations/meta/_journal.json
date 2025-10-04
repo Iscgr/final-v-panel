@@ -15,6 +15,13 @@
       "when": 1759438179994,
       "tag": "0001_nostalgic_phil_sheldon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762192800000,
+      "tag": "0002_portal_content_blocks",
+      "breakpoints": true
     }
   ]
 }
