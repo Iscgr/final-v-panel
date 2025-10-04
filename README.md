@@ -1,560 +1,325 @@
-﻿# MarFaNet – استقرار و راه‌اندازی یکپارچه (سند جامع واحد)
+﻿# MarFaNet – دفترچه عملیاتی ۲۰۲۵
 
+> این سند تنها منبع رسمی برای راه‌اندازی، بهره‌برداری، نگه‌داری و عیب‌یابی سامانه مالی «MarFaNet» است. متن به گونه‌ای نوشته شده که تیم فنی، عملیات و حتی مدیر محصول بتوانند بدون ارجاع به منبع دیگری به جواب برسند.
 
+## فهرست سریع
+- [معرفی اجمالی](#معرفی-اجمالی)
+- [اسکن سه‌بعدی سامانه](#اسکن-سه‌بعدی-سامانه)
+- [ساختار دایرکتوری‌ها](#ساختار-دایرکتوریها)
+- [بک‌اند (Node/Express)](#بکاند-nodeexpress)
+- [فرانت‌اند (React/Vite)](#فرانتاند-reactvite)
+- [سرویس پایتونی مکمل](#سرویس-پایتونی-مکمل)
+- [پیکربندی و متغیرهای محیطی](#پیکربندی-و-متغیرهای-محیطی)
+- [راه‌اندازی محلی](#راهاندازی-محلی)
+- [اجرای Docker و Compose](#اجرای-docker-و-compose)
+- [مهاجرت و مدیریت دیتابیس](#مهاجرت-و-مدیریت-دیتابیس)
+- [ویژگی‌های زیرساختی و Feature Flag](#ویژگیهای-زیرساختی-و-feature-flag)
+- [اسکریپت‌ها و اتوماسیون‌ها](#اسکریپتها-و-اتوماسیونها)
+- [تست، مانیتورینگ و سلامت](#تست-مانیتورینگ-و-سلامت)
+- [عیب‌یابی سریع](#عیبیابی-سریع)
+- [پشتیبان‌گیری و Disaster Recovery](#پشتیبانگیری-و-disaster-recovery)
+- [چرخه انتشار و نگه‌داری](#چرخه-انتشار-و-نگهداری)
+- [پیشنهادهای بعدی](#پیشنهادهای-بعدی)
 
-> این تنها سند رسمی پروژه است. هرآنچه برای نصب، اجرا، پشتیبان‌گیری، به‌روزرسانی، عیب‌یابی و بهره‌برداری نیاز دارید اینجاست. مناسب کاربری که حتی تجربه‌ی قبلی با Linux یا Docker ندارد.
+## معرفی اجمالی
+سامانه MarFaNet یک پلتفرم یکپارچه برای مدیریت مالی نمایندگان، پایش KPI، تولید و ارسال فاکتور، پورتال عمومی و زیرسیستم‌های مانیتورینگ است. مهم‌ترین فناوری‌ها:
 
+| لایه | فناوری/ابزار | توضیح |
+|------|---------------|-------|
+| Backend | Node.js 20 (TypeScript) + Express | API یکپارچه، احراز هویت، مدیریت Session، Feature Flags |
+| Frontend | React 18 + Vite + Tailwind/Radix UI | پنل مدیریتی، پورتال نمایندگان، روندهای Real-time |
+| Database | PostgreSQL 14 (Drizzle ORM) | ذخیره فاکتورها، پرداخت‌ها، outbox، محتوا |
+| Cache/Session | Redis (alpine) | نگه‌داری Session و کش‌های سبک |
+| Automation | Docker/Docker Compose + npm scripts | استقرار، build و عملیات مداوم |
+| خدمات تکمیلی | FastAPI (Python) | محاسبات Decimal و Drift Detection دقیق |
 
+خروجی نهایی روی پورت 3000 در دسترس است و API و UI را همزمان سرو می‌کند.
 
-------
+## اسکن سه‌بعدی سامانه
+این بخش دید ۳۶۰ درجه‌ای از ارتباط لایه‌ها، داده‌ها و جریان عملیات ارائه می‌کند.
 
+### دید معماری
+```mermaid
+graph TD
+    subgraph Client
+        A[React Admin Panel]
+        B[Public Portal]
+    end
+    subgraph Server
+        C[Express API]
+        D[Unified Auth]
+        E[Outbox Worker]
+        F[Feature Flag Manager]
+    end
+    subgraph Data
+        G[(PostgreSQL)]
+        H[(Redis)]
+        I[(Uploads)]
+    end
+    subgraph Services
+        J[Python Drift Engine]
+        K[Telegram Bot]
+    end
 
-
-## 1. معرفی سریع
-MarFaNet یک سامانه مدیریت مالی و نمایندگان (Invoices, Payments, KPI, Portal) است که بر پایه:
-- Node.js 20+ (Backend + API)
-- React 18 + Vite (Frontend)
-- PostgreSQL 14+ (تنها پایگاه داده رسمی)
-- Redis (برای مدیریت Session و کش)
-- Docker / Docker Compose (محیط Production)
-
-خروجی نهایی: یک سرویس واحد روی پورت 3000 که API و UI را یکجا سرو می‌کند.
-
----
-
-## 4. نصب ابزارهای پایه (Ubuntu 22.04 / 24.04)
-توصیه می‌شود برای نصب Docker از **مخزن رسمی** استفاده کنید تا بروزرسانی‌ها به صورت پایدار مدیریت شوند. اسکریپت `get.docker.com` برای محیط‌های تستی مناسب است.
-
-```bash
-# ۱. بروزرسانی سیستم و نصب ابزارهای پایه
-sudo apt update
-sudo apt install -y ca-certificates curl gnupg lsb-release ufw git unzip bash coreutils
-
-# ۲. نصب Docker (روش رسمی و پیشنهادی)
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# ۳. افزودن کاربر به گروه داکر (برای اجرای بدون sudo)
-sudo usermod -aG docker $USER
-# (برای اعمال تغییر، یکبار از سرور خارج و مجدد وارد شوید یا newgrp docker را اجرا کنید)
-
-# ۴. نصب Node.js 20
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# ۵. تنظیم فایروال (UFW)
-sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw enable
+    A -->|REST/JSON| C
+    B -->|REST/JSON| C
+    C -->|Sessions| H
+    C -->|ORM| G
+    C -->|File Links| I
+    C -->|Enqueue| E
+    E -->|Status Updates| G
+    J -->|Read/Write| G
+    E -->|Send| K
+    F --> C
+    D --> C
 ```
 
----
-## 5. کلون مخزن و آماده‌سازی
-```bash
-cd /opt
-sudo git clone https://github.com/Iscgr/final-v-panel.git marfanet
-cd marfanet
-sudo chown -R $USER:$USER .
-cp .env.example .env 2>/dev/null || true
+### لایه‌ها و مسئولیت‌ها
+- **لایه نمایشی**: کامپوننت‌های React با React Query، مدیریت وضعیت احراز هویت، طراحی واکنش‌گرای موبایل.
+- **لایه خدمات HTTP**: Express با middlewareهای امنیتی (Headers، Session)، ثبت وقایع ساختاریافته، مدیریت فایل‌های بارگذاری‌شده.
+- **لایه داده**: PostgreSQL (schema در `shared/schema.ts`) با Drizzle برای migrations، Redis برای session و کش موقت.
+- **لایه یکپارچگی**: Outbox، Drift Job، Feature Flags چندمرحله‌ای، Portal bootstrap.
+- **لایه محاسبات دقیق**: سرویس FastAPI برای عملیات Decimal و مقایسه ledger در سناریوهای drift.
+
+### جریان کلیدی «بارگذاری فاکتور تا ارسال تلگرام»
+1. کاربر فایل JSON را در UI بارگذاری می‌کند (`client/src/components/invoice-upload.tsx`).
+2. API `/api/invoices/generate-standard` فایل را در `uploads/` ذخیره و درون دیتابیس می‌نویسد.
+3. رویداد ثبت‌شده وارد outbox می‌شود؛ Outbox Worker طبق Feature Flag فعال شده یا خیر.
+4. پیام تلگرام از طریق Outbox Worker و سرویس ارسال (REST) به نماینده ارسال و در `telegram_send_history` ثبت می‌شود.
+5. داشبورد لحظه‌ای وضعیت job و ارسال را با APIهای Import Jobs / Outbox رصد می‌کند.
+
+## ساختار دایرکتوری‌ها
 ```
-مقادیر ضروری در `.env`:
-```env
-DATABASE_URL=postgresql://postgres:postgres@db:5432/marfanet
-SESSION_SECRET=$(openssl rand -hex 32)
-PORT=3000
-LOG_DIRECTORY=./logs
+├── client/             # فرانت‌اند React + Vite
+│   ├── src/
+│   │   ├── pages/      # صفحات داشبورد و پورتال
+│   │   ├── components/ # UI، فرم‌ها، نمودارها
+│   │   ├── contexts/   # Auth، Sidebar، Theme
+│   │   ├── services/   # لایه ارتباط با API (fetch/query)
+│   │   └── hooks/      # Hookهای سفارشی مانند polling
+├── server/             # بک‌اند Express + TypeScript
+│   ├── routes/         # فایل‌های Route تفکیک‌شده بر اساس دامنه
+│   ├── services/       # Outbox، Drift، Feature Flags، Portal
+│   ├── middleware/     # Performance، Unified Auth
+│   ├── bootstrap/      # Seed اولیه محتوا و تنظیمات پورتال
+│   └── tests/          # تست‌های واحد (مثلاً outbox.spec.ts)
+├── shared/             # اسکیمای Drizzle ORM و انواع مشترک
+├── scripts/            # اسکریپت‌های TypeScript عملیاتی
+├── python-service/     # سرویس FastAPI برای محاسبات Decimal
+├── uploads/            # مسیر فایل‌های بارگذاری‌شده (ویدیو، QR، JSON)
+├── docker-compose.yml  # استقرار چند سرویسه (App + Postgres + Redis)
+├── Dockerfile          # build چندمرحله‌ای (builder + production)
+└── .env.example        # مثال پیکربندی محیط
 ```
 
----
-## 6. توسعه محلی (بدون Docker)
-```bash
-npm install
-npm run db:push
-npm run dev
-```
-آدرس: http://localhost:3000
+## بک‌اند (Node/Express)
+- فایل ورودی: `server/index.ts`
+  - بارگذاری خودکار `.env`
+  - تنظیم CORS و هدرهای امنیتی متفاوت برای پورتال عمومی و پنل ادمین
+  - مدیریت Session با `connect-pg-simple` (جدول `session` در PostgreSQL)
+  - سرو فایل‌های `uploads/` با کنترل نوع محتوا (تصاویر، ویدیو)
+  - آمار عملکرد و لاگ‌های ساختاریافته بر اساس مسیرهای `API/ AUTH`
+  - ثبت و راه‌اندازی سرویس‌های پس‌زمینه (OutboxWorker، OutboxMonitor، DriftJobService)
+  - مسیریابی سلامت (`/health`، `/ready`) و مدیریت خطا
+  - در حالت توسعه Vite Dev server را تزریق می‌کند؛ در production دارایی‌های build شده را سرو می‌کند.
 
----
-## 7. اجرای سریع با Docker محلی
+- **مسیرها (Routes)** مهم:
+  - `standardized-invoice-routes.ts`: بارگذاری و تولید فاکتور استاندارد از فایل JSON
+  - `portal-content-routes.ts` + `admin-resources-routes.ts`: مدیریت محتوای پورتال عمومی
+  - `feature-flag-routes.ts` و `multistage-flag-routes.ts`: مدیریت فلگ‌ها در حالت چندمرحله‌ای (off/shadow/on)
+  - `outbox-routes.ts`: مانیتورینگ و کنترل صف پیام‌های تلگرام (E-C1)
+  - `kpi-metrics-routes.ts`, `guard-metrics-routes.ts`: گزارش‌های عملیاتی و SLA
+
+- **سرویس‌ها (Services)**
+  - `feature-flag-manager.ts`: ذخیره وضعیت فلگ‌ها (حالت چند مرحله‌ای)، API برای خواندن/نوشتن، پشتیبانی default fallback
+  - `outbox.ts`, `outbox-worker.ts`, `outbox-monitor.ts`: الگوی Outbox با retry و متریک‌های لغزش
+  - `drift-job-service.ts`: اجرای دوره‌ای آشتی داده و هماهنگی با سرویس پایتون برای محاسبه دقیق
+  - `portal-content.ts`: bootstrap اولیه محتوا و fallback برای پورتال
+
+- **مدیریت دیتابیس**
+  - اتصال با `pg` و Drizzle ORM (`db.ts`, `database-manager.ts`)
+  - `shared/schema.ts` حاوی تمامی جداول (invoices, payments, representatives, outbox, ...)
+  - مایگریشن‌ها در `migrations/` و `server/migrations/`
+
+## فرانت‌اند (React/Vite)
+- نقطه ورود: `client/src/main.tsx` → `App.tsx`
+- Routing با `wouter`، مدیریت Auth یکپارچه از طریق `UnifiedAuthProvider`
+- React Query (`queryClient`) برای cache داده و polling هوشمند
+- UI بر پایه Radix UI + Tailwind + Shadcn الگوهای ترکیبی (components/ui)
+- صفحات کلیدی:
+  - `pages/dashboard.tsx`: داشبورد جامع با KPI و نمودارها
+  - `pages/invoices.tsx` و `pages/InvoiceManagement.tsx`: مدیریت فاکتور، بارگذاری و پیشرفت
+  - `pages/portal.tsx`: نمایش محتوای عمومی برای نمایندگان با دسترسی publicId
+  - `pages/admin/DebugActionsPanel.tsx`: عملیات مهندسی (Retry outbox، پاک‌سازی cache و ...)
+  - `pages/admin/PortalContentManager.tsx`: UI چهار تبه برای مدیریت محتوا، اطلاعیه‌ها، دانلودها و پیش‌نمایش
+- Components مهم:
+  - `components/invoice-upload.tsx`: بارگذاری JSON، ساخت FormData، کنترل خطاها و تعامل با API
+  - `components/dashboard/LiveProcessingMonitor.tsx`: پایش real-time پردازش فایل و import jobs
+  - `components/system/ErrorBoundary.tsx`: مدیریت خطاهای React و نمایش fallback بومی برای فارسی
+- Contexts:
+  - `unified-auth-context`, `sidebar-context`, `theme` (در صورت نیاز) برای مدیریت وضعیت جهانی UI
+- تست‌ها: فولدر `client/src/tests/` برای تست‌های React Testing Library (محیط آماده است، نیازمند گسترش بیشتر)
+
+## سرویس پایتونی مکمل
+- مسیر: `python-service/`
+- فناوری: FastAPI + Psycopg2 + Decimal با دقت ۲۸ رقم
+- کاربرد:
+  - `/calculate/bulk-debt`: محاسبه سریع مجموع بدهی نمایندگان به صورت batched و بدون خطای شناور
+  - `/reconcile/drift-detection`: مقایسه Legacy Debt، Ledger Allocation و Cache برای یافتن Drift و ارائه متادیتا
+  - `/reconcile/drift-detection-legacy`: سازگاری با نسخه‌های قبلی
+- اجرای محلی: `uvicorn main:app --host 0.0.0.0 --port 8001`
+- اتصال به PostgreSQL با متغیرهای محیطی مستقل (`DB_HOST`, `DB_NAME`, ...)
+- در Compose پیش‌فرض فعال نشده؛ می‌توان برای استقرارهای پیشرفته به `docker-compose.yml` افزود.
+
+## پیکربندی و متغیرهای محیطی
+مقداردهی از `.env` (نمونه در `.env.example`). مهم‌ترین متغیرها:
+
+| متغیر | توضیح | وضعیت |
+|--------|-------|--------|
+| `DATABASE_URL` | URL اتصال PostgreSQL | الزامی (در Compose نیز override شده) |
+| `SESSION_SECRET` | کلید رمزنگاری Session | الزامی (در production حتماً تصادفی) |
+| `PORT` | پورت سرویس Node | پیش‌فرض 3000 |
+| `APP_URL` | آدرس عمومی سرویس | برای لینک‌سازی پورتال |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | کاربر اولیه پنل | برای bootstrap و seed |
+| `TELEGRAM_BOT_TOKEN` | ارسال پیام تلگرام | ضروری برای Outbox Worker |
+| `OPENAI_API_KEY`, `GOOGLE_GEMINI_API_KEY` | قابلیت‌های هوش مصنوعی | اختیاری؛ در صورت عدم تنظیم، API مربوط خاموش است |
+| `SMTP_*` | ارسال ایمیل‌های اطلاع‌رسانی | اختیاری |
+| `WEBHOOK_URL` | اعلان رویدادها | اختیاری |
+| `LOG_LEVEL`, `ENABLE_PERFORMANCE_MONITORING` | کنترل لاگ | گزینه‌های عیب‌یابی |
+
+> در Docker Compose مقدار `DATABASE_URL` و `REDIS_URL` مستقیماً داخل سرویس `app` override می‌شوند.
+
+## راه‌اندازی محلی
+۱. پیش‌نیازها: Node.js 20، PostgreSQL، Redis.
+۲. نصب وابستگی‌ها: `npm install`
+۳. اعمال اسکیمای دیتابیس: `npm run db:push`
+۴. اجرای سرور توسعه: `npm run dev`
+   - API و UI در http://localhost:3000
+   - Vite Hot Reload فعال است.
+۵. اجرای تنها فرانت‌اند (برای توسعه UI): `npm run dev:client`
+   - سرور در پورتی که Vite تعیین می‌کند بالا می‌آید (معمولاً 5173)، نیازمند پراکسی یا تنظیم CORS است.
+
+## اجرای Docker و Compose
+### ساخت تصویر تولیدی (Dockerfile چند مرحله‌ای)
+- Stage `builder`: نصب کامل وابستگی‌ها، build سرور (`tsc`) و فرانت (`vite`)، پاک‌سازی devDependencies.
+- Stage `production`: تصویر node:20-alpine با کاربر غیر ریشه (`marfanet`)، کپی `dist/` و `node_modules`، آماده اجرا با `start-server.cjs`.
+
+### اجرای تک‌سرویسی
 ```bash
 docker build -t marfanet:local .
 docker run --rm -p 3000:3000 --name marfanet \
-	-e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/marfanet \
-	-e SESSION_SECRET=$(openssl rand -hex 32) \
-	-v $(pwd)/logs:/app/logs \
-	marfanet:local
-```
-Linux:
-```bash
---add-host=host.docker.internal:host-gateway
+  -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/marfanet \
+  -e SESSION_SECRET=$(openssl rand -hex 32) \
+  -v $(pwd)/logs:/app/logs \
+  --add-host=host.docker.internal:host-gateway \
+  marfanet:local
 ```
 
----
-## 8. استقرار Production (Compose)
+### Docker Compose (توصیه‌شده برای Production)
+`docker-compose.yml` سه سرویس را بالا می‌آورد:
+- `app`: تصویر ساخته‌شده از همین مخزن، وابسته به `db` و `redis`
+- `db`: PostgreSQL 14 با healthcheck `pg_isready`
+- `redis`: Redis Alpine با healthcheck `redis-cli ping`
+
+دستورات کلیدی:
 ```bash
 docker compose build
 docker compose up -d
+docker compose logs -f app
 ```
-بررسی:
-```bash
-docker compose ps
-curl -fsSL http://localhost/health
-```
-بروزرسانی:
+به‌روزرسانی بدون downtime:
 ```bash
 git pull
-docker compose build --no-cache app && docker compose up -d app
+docker compose build --no-cache app
+docker compose up -d app
 ```
-Rollback:
+Rollback سریع:
 ```bash
-git reflog
-git checkout <PREV_COMMIT>
+git checkout <PREVIOUS_COMMIT>
 docker compose build app && docker compose up -d app
 ```
 
-> **یادآوری مهم**: پیش از اجرای Compose مطمئن شوید هیچ فرآیند توسعه‌ای (`npm run dev` یا `tsx server/index.ts`) روی میزبان فعال نیست تا ساختار اجرا دوگانه نشود. برای درک کامل مسیرهای اجرای یکپارچه و روابط سرویس‌ها، سند مرجع `docs/system-architecture.md` را مطالعه کنید.
+## مهاجرت و مدیریت دیتابیس
+- ORM اصلی: Drizzle
+- فایل پیکربندی: `drizzle.config.ts`
+- پوشه مایگریشن‌ها: `migrations/` (اصلی) و `server/migrations/` (ویژه سرویس)
+- دستورات متداول:
+  - `npm run db:push`: اعمال مایگریشن به دیتابیس فعلی
+  - `npm run check`: اطمینان از سالم بودن TypeScript
+  - اسکریپت‌های تخصصی (مانند `scripts/drift-shadow.ts`) وضعیت داده را تحلیل و گزارش می‌کنند.
 
----
-## 9. متغیرهای محیطی کلیدی
-| نام | توضیح | نمونه |
-|-----|-------|-------|
-| DATABASE_URL | اتصال PostgreSQL | postgresql://postgres:postgres@db:5432/marfanet |
-| SESSION_SECRET | رمز سشن | خروجی openssl |
-| PORT | پورت سرویس | 3000 |
-| LOG_DIRECTORY | مسیر لاگ | ./logs |
-| TELEGRAM_BOT_TOKEN | اختیاری | - |
-| TELEGRAM_CHAT_ID | اختیاری | - |
+### جداول حیاتی
+- `representatives`, `invoices`, `payments`, `payment_allocations`, `invoice_balance_cache`
+- `outbox`, `guard_metrics_events`, `reconciliation_runs`
+- `portal_content_blocks`, `announcements`, `app_downloads`
 
----
-## 10. سلامت
-| مسیر | هدف |
-|------|-----|
-| /health | زنده بودن |
-| /ready | اتصال پایگاه داده |
+## ویژگی‌های زیرساختی و Feature Flag
+- مدیریت فلگ چندمرحله‌ای (off → shadow → on) در `featureFlagManager`
+- فلگ‌های نمونه:
+  - `outbox_enabled`: فعال‌سازی ارسال تلگرام و مانیتور
+  - `guard_metrics_alerts`: روشن کردن مانیتور SLA و هشدارها
+  - `portal_content_read_switch`: سوئیچ تدریجی از تنظیمات legacy به بلوک‌های جدید محتوا
+- API مدیریت فلگ: `/api/feature-flags/multi-stage/update`
+  - Payload نمونه: `{ "feature": "portal_content_read_switch", "state": "shadow" }`
 
----
-## 11. لاگ‌ها
-```bash
-tail -f logs/server.log
-```
+## اسکریپت‌ها و اتوماسیون‌ها
+| فایل | هدف |
+|------|------|
+| `scripts/seed-portal-settings.ts` | مقداردهی اولیه بلوک محتوا، اطلاعیه‌ها و لینک‌های دانلود |
+| `scripts/portal-content-regression.ts` | تست رگرسیونی محتوای پورتال پس از تغییرات |
+| `scripts/drift-shadow.ts` | اجرای حالت سایه‌ای Drift و گزارش تفاوت‌ها |
+| `scripts/backfill-dry-run.ts` | اجرای Dry-run برای Backfill بدون تغییر داده |
+| `scripts/payments-cast-shadow.ts` | بررسی تخصیص پرداخت‌ها و سازگاری Decimal |
+| `scripts/ingest-real-sample.ts` | تزریق فایل نمونه واقع‌گرایانه برای تست پذیرش |
+| `scripts/test-telegram-template-validation.ts` | بررسی قالب پیام تلگرام قبل از انتشار |
 
----
-## 12. مهاجرت دیتابیس
-```bash
-npm run db:push
-npm run db:generate
-npm run db:migrate
-```
+## تست، مانیتورینگ و سلامت
+- تست واحد Outbox: `npm run test:outbox`
+  - اسکریپت `server/tests/outbox.spec.ts` enqueue، retry و متریک‌های Outbox را پوشش می‌دهد.
+- مسیرهای پایش:
+  - `GET /health`: وضعیت کلی، حافظه، uptime و اتصال دیتابیس
+  - `GET /ready`: آمادگی سرویس برای Load Balancer
+  - `GET /api/outbox/metrics`: نرخ شکست و جزئیات صف (در صورت فعال بودن فلگ)
+- لاگ‌ها:
+  - مسیر پیش‌فرض: `logs/server.log` (Mount شده در Docker)
+  - لاگ‌های ساختاریافته با پیشوند `STRUCT_LOG`
 
----
-## 13. پشتیبان‌گیری
-```bash
-mkdir -p backups
-docker compose exec -T db pg_dump -U postgres marfanet > backups/$(date +%F-%H%M).sql
-```
-بازیابی:
-```bash
-cat backups/FILE.sql | docker compose exec -T db psql -U postgres -d marfanet
-```
+## عیب‌یابی سریع
+| سناریو | بررسی سریع | راه‌حل پیشنهادی |
+|--------|-------------|------------------|
+| خطای «can’t access lexical declaration» هنگام بارگذاری JSON | نسخه build شده فرانت‌اند را بررسی کنید (متغیرهای تعریف‌نشده) | `client/src/components/invoice-upload.tsx` باید قبل از استفاده متغیر `jobCode` را تعریف کند → build مجدد |
+| عدم ارسال پیام تلگرام | وضعیت فلگ `outbox_enabled` و مقدار `TELEGRAM_BOT_TOKEN` | فعال‌سازی فلگ → بررسی جدول `outbox` برای خطاها |
+| Timeout در پورتال | بررسی هدرهای Android-specific در `server/index.ts` | آزادسازی cache و اطمینان از تنظیم هدرها |
+| اختلاف آمار بدهی | اجرای `/reconcile/drift-detection` در سرویس پایتونی | مقایسه sums و ثبت anomalies |
+| session منقضی سریع | بررسی تنظیمات cookie در `server/index.ts` | تغییر `maxAge` یا فعال کردن HTTPS/secure cookie |
 
----
-## 14. بروزرسانی نسخه
-```bash
-git pull
-docker compose build --no-cache app && docker compose up -d app
-```
+## پشتیبان‌گیری و Disaster Recovery
+- ایجاد بکاپ کامل دیتابیس:
+  ```bash
+  mkdir -p backups
+  docker compose exec -T db pg_dump -U postgres marfanet > backups/$(date +%F-%H%M).sql
+  ```
+- بازیابی:
+  ```bash
+  cat backups/FILE.sql | docker compose exec -T db psql -U postgres -d marfanet
+  ```
+- پاک‌سازی لاگ‌ها جهت جلوگیری از پر شدن دیسک: `find logs -type f -mtime +15 -delete`
+- برای نگه‌داری Session پس از بازیابی، از جدول `session` نسخه پشتیبان بگیرید (اختیاری).
 
----
-## 15. امنیت پایه
-1. UFW فعال (22,80,443)
-2. SESSION_SECRET قوی
-3. Backup روزانه
-4. عدم اشتراک گذاری `.env`
-5. محدود کردن اجرا در `uploads`
+## چرخه انتشار و نگه‌داری
+1. ایجاد شاخه جدید و اعمال تغییرات.
+2. اجرای محلی `npm run check` و تست‌های موردنیاز.
+3. build تصویر جدید: `docker compose build app`
+4. استقرار: `docker compose up -d app`
+5. پایش لاگ‌ها حداقل ۱۵ دقیقه.
+6. در صورت مشاهده خطا: بازگشت به نسخه قبل با checkout commit قبلی.
 
----
-## 16. Feature Flags
-فعال/غیرفعال کردن زیرسیستم‌ها (مثل Outbox Worker). افزودن فلگ جدید: ویرایش ماژول featureFlagManager.
-
----
-## 17. ساختار پروژه
-```
-client/  server/  shared/  scripts/  uploads/  docker-compose.yml  Dockerfile
-```
-
----
-## 18. اسکریپت‌های مهم
-| فایل | کار |
-|------|-----|
-| seed-portal-settings.ts | Seed اولیه |
-| alloc-validation.ts | اعتبارسنجی تخصیص |
-| drift-shadow.ts | تحلیل drift |
-
----
-## 19. بازیابی بحران
-| رویداد | اقدام |
-|--------|-------|
-| حذف DB | Restore آخرین بکاپ |
-| نشت SESSION_SECRET | Rotate + Restart |
-| پر شدن دیسک | حذف لاگ قدیمی |
-
----
-## 20. FAQ
-| سوال | پاسخ |
-|------|-------|
-| چرا یک پورت؟ | سادگی و ادغام UI+API |
-| چرا فقط PostgreSQL؟ | یکپارچگی و ثبات |
-
----
-## 21. API های نمونه
-| متد | مسیر | توضیح |
-|-----|------|-------|
-| GET | /health | وضعیت |
-| GET | /ready | آمادگی |
-| GET | /api/invoices | لیست فاکتورها |
-
----
-## 21.1 مدیریت محتوای پرتال (Phase 1 و 2 ادغام شده - بهبود یافته)
-این بخش امکان مدیریت کامل محتوای پرتال عمومی را فراهم می‌کند:
-
-### معماری کلی
-- **صفحه مدیریت**: `/admin/portal-content` (UI یکپارچه با 4 تب)
-- **Backend API**: ماژولار و جداسازی شده در `server/routes/`
-- **Frontend Service**: `client/src/services/portal-content.ts`
-
-### تب‌های موجود
-
-#### 1. بلوک‌های محتوایی (Blocks)
-مدیریت بلوک‌های متنی استاندارد پرتال:
-- `guidance`: راهنمایی و توصیه‌ها
-- `contact_info`: اطلاعات تماس
-- `downloads_intro`: مقدمه دانلود اپلیکیشن‌ها
-- `support_hours`: ساعات پشتیبانی
-- `announcements_title`: عنوان بخش اعلانات
-
-**ویژگی‌ها**:
-- ذخیره تک‌تک یا دسته‌جمعی (Save / Save All)
-- ردیابی تغییرات با dirty state
-- Optimistic UI updates
-- میانبر کیبورد: `Ctrl+S` / `Cmd+S`
-
-#### 2. اطلاعیه‌ها (Announcements)
-- CRUD کامل (ایجاد، خواندن، ویرایش، حذف)
-- فیلدها: عنوان، محتوا، اولویت، نوع (info/warning/success/error), فعال/غیرفعال، تاریخ انقضا
-- اعتبارسنجی فرم (طول عنوان، محتوا، اولویت)
-- مرتب‌سازی بر اساس اولویت
-
-#### 3. لینک‌های دانلود اپلیکیشن (Downloads)
-- CRUD کامل
-- **Drag & Drop Reorder**: تغییر ترتیب نمایش با کشیدن
-- دکمه "ذخیره ترتیب": POST به `/api/admin/app-downloads/reorder`
-- فیلدها: عنوان، لینک، توضیحات، QR Code, Video, displayOrder, isActive
-
-#### 4. پیش‌نمایش (Preview)
-- نمایش ترکیبی read-only از تمام محتوای پرتال
-- شامل: بلوک‌ها + اطلاعیه‌های فعال + اپلیکیشن‌ها
-- Endpoint: `GET /api/admin/portal-content-blocks/full`
-
-### API های Backend
-
-**بلوک‌های محتوایی** (`/api/admin/portal-content-blocks`):
-| متد | مسیر | توضیح |
-|-----|------|-------|
-| GET | `/` | لیست همه بلوک‌ها (guaranteed keys با fallback) |
-| PUT | `/:blockKey` | بروزرسانی/ایجاد یک بلوک |
-| GET | `/full` | محتوای کامل (بلوک‌ها + اطلاعیه‌ها + دانلودها) |
-| PUT | `/settings` | بروزرسانی دسته‌جمعی بلوک‌ها |
-
-**اطلاعیه‌ها** (`/api/admin/announcements`):
-| متد | مسیر | توضیح |
-|-----|------|-------|
-| GET | `/` | لیست همه اطلاعیه‌ها |
-| POST | `/` | ایجاد اطلاعیه جدید |
-| PUT | `/:id` | ویرایش اطلاعیه |
-| DELETE | `/:id` | حذف اطلاعیه |
-
-**لینک‌های دانلود** (`/api/admin/app-downloads`):
-| متد | مسیر | توضیح |
-|-----|------|-------|
-| GET | `/` | لیست همه اپلیکیشن‌ها |
-| POST | `/` | ایجاد اپلیکیشن جدید |
-| PUT | `/:id` | ویرایش اپلیکیشن |
-| DELETE | `/:id` | حذف اپلیکیشن |
-| PATCH | `/reorder` | ذخیره ترتیب جدید (payload: `{items: [{id, displayOrder}]}`) |
-
-### تست API (نمونه)
-```bash
-# لیست بلوک‌ها
-curl -s http://localhost:3000/api/admin/portal-content-blocks -b cookie.txt
-
-# بروزرسانی یک بلوک
-curl -X PUT http://localhost:3000/api/admin/portal-content-blocks/guidance \
-  -H "Content-Type: application/json" \
-  -d '{"title":"راهنمایی","body":"متن جدید راهنما"}' \
-  -b cookie.txt
-
-# محتوای کامل
-curl -s http://localhost:3000/api/admin/portal-content-blocks/full -b cookie.txt
-```
-
-### Migration & Rollback
-- **جداول**: `portal_content_blocks`, `announcements`, `app_downloads` (migrations موجود)
-- **Rollback**: ساختار legacy `settings` هنوز حفظ شده (برای بازگشت سریع)
+## پیشنهادهای بعدی
+- تکمیل پوشش تست کلاینت (React Testing Library) و API (Jest/TSX).
+- افزودن سرویس پایتونی به Compose با healthcheck جهت پایش مداوم drift.
+- پیاده‌سازی داشبورد Grafana سبک با استفاده از لاگ‌های `STRUCT_LOG` برای مانیتورینگ real-time.
+- مستندسازی API با ابزارهای خودکار (مانند `ts-rest` یا `openapi-generator`).
 
 ---
 
-## 21.2 مهاجرت خواندن محتوای پرتال (Feature Flag)
-فلگ چندمرحله‌ای جدید: portal_content_read_switch
-
-حالات:
-| حالت | توضیح |
-|------|-------|
-| off | رفتار legacy (خواندن از settings) |
-| shadow | خواندن موازی از portal_content_blocks + لاگ تفاوت‌ها (بدون تغییر خروجی) |
-| full | جایگزینی کامل فیلدهای متنی پرتال با بلوک‌های جدید |
-
-فعال‌سازی (نمونه API):
-```
-curl -X POST -H 'Content-Type: application/json' \
-	-d '{"feature":"portal_content_read_switch","state":"shadow"}' \
-	http://localhost:3000/api/feature-flags/multi-stage/update -b cookie.txt -c cookie.txt
-```
-
-لاگ Shadow: سطرهایی با برچسب 🌓 portal_content_read_switch shadow diffs در server.log که اختلاف طول محتوای legacy و بلوک جدید را نشان می‌دهد.
-
-Switch به full پس از بررسی تفاوت‌ها:
-```
-curl -X POST -H 'Content-Type: application/json' \
-	-d '{"feature":"portal_content_read_switch","state":"full"}' \
-	http://localhost:3000/api/feature-flags/multi-stage/update -b cookie.txt -c cookie.txt
-```
-
-Rollback: برگرداندن به off (ساختار legacy هنوز حفظ شده است)
-```
-curl -X POST -H 'Content-Type: application/json' \
-	-d '{"feature":"portal_content_read_switch","state":"off"}' \
-	http://localhost:3000/api/feature-flags/multi-stage/update -b cookie.txt -c cookie.txt
-```
-
-Deprecated Tabs: در صفحه Settings تب‌های Portal و Invoice Template حذف نشده‌اند بلکه با برچسب Deprecated و هشدار هدایت به صفحه جدید (/admin/portal-content) نشانه‌گذاری شده‌اند (اصل "حذف نه، ارتقا").
-
-Regression Script:
-```
-BASE_URL=http://localhost:3000 ts-node scripts/portal-content-regression.ts
-```
-
----
-
-## 21.3 پردازش فایل JSON و مانیتورینگ Real-Time (بهبود یافته)
-سیستم پردازش فایل‌های JSON ریز جزئیات با نمایش گرافیکی پیشرفته و پیگیری real-time.
-
-### معماری سیستم
-
-#### Frontend Components
-1. **`LiveProcessingMonitor`** (`client/src/components/dashboard/LiveProcessingMonitor.tsx`)
-   - نمایش زنده پیشرفت بر اساس Import Jobs API
-   - Polling هوشمند (متوقف می‌شود در صورت completed/failed)
-   - نمایش آمار: کل رکوردها، پردازش شده، خطاها
-   - Status badges برای وضعیت‌های مختلف
-
-2. **`ProcessingProgressBar`** (`client/src/components/dashboard/ProcessingProgressBar.tsx`)
-   - Progress bar با انیمیشن shimmer
-   - آیکون‌های متحرک بر اساس فاز (Upload, Validating, Processing)
-   - تم رنگی بر اساس وضعیت (blue, green, yellow, red)
-   - نمایش مراحل پردازش
-
-3. **`JobProgress`** (`client/src/components/JobProgress.tsx`)
-   - Timeline نمایش مراحل: pending → validating → ingesting → enriching → completed
-   - Progress bar چندمرحله‌ای
-   - نمایش خطاها
-
-#### Backend Infrastructure
-1. **Import Jobs Table** (migration `011_import_jobs.sql`)
-   ```sql
-   CREATE TABLE import_jobs (
-     id SERIAL PRIMARY KEY,
-     job_code VARCHAR(100) UNIQUE NOT NULL,
-     source_file_name VARCHAR(255),
-     status VARCHAR(50) DEFAULT 'pending',
-     total_records INTEGER DEFAULT 0,
-     processed_records INTEGER DEFAULT 0,
-     error_count INTEGER DEFAULT 0,
-     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-     finished_at TIMESTAMP,
-     last_error TEXT
-   );
-   ```
-
-2. **API Endpoints** (`/api/admin/import-jobs`)
-   | متد | مسیر | توضیح |
-   |-----|------|-------|
-   | GET | `/` | لیست آخرین 50 job |
-   | POST | `/` | ایجاد job جدید |
-   | PATCH | `/:jobCode` | بروزرسانی وضعیت/شمارنده‌ها |
-   | POST | `/:jobCode/start` | شروع خودکار progression |
-
-3. **Services** (`client/src/services/import-jobs.ts`)
-   - `createImportJob()`: ایجاد job در سرور
-   - `updateImportJob()`: بروزرسانی پیشرفت
-   - `useImportJobPolling()`: Hook polling برای یک job خاص
-   - `useImportJobs()`: Hook polling برای لیست jobs
-   - `calculateProgress()`: محاسبه درصد بر اساس stage + records
-
-### جریان کامل پردازش (Workflow)
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Dashboard
-    participant UploadFlow
-    participant API
-    participant Worker
-
-    User->>Dashboard: انتخاب فایل JSON
-    Dashboard->>UploadFlow: selectFile(file)
-    UploadFlow->>UploadFlow: اعتبارسنجی محلی
-    UploadFlow->>API: createImportJob(jobCode, fileName, totalRecords)
-    API-->>UploadFlow: {success, jobCode}
-    UploadFlow->>API: POST /api/admin/upload-json
-    API->>Worker: شروع پردازش background
-    Worker->>API: PATCH /import-jobs/:jobCode {status: 'validating'}
-    API-->>Dashboard: polling data
-    Dashboard->>User: LiveProcessingMonitor نمایش پیشرفت
-    Worker->>API: PATCH {status: 'ingesting', processedRecords: X}
-    Worker->>API: PATCH {status: 'enriching'}
-    Worker->>API: PATCH {status: 'completed'}
-    Dashboard->>User: نمایش موفقیت
-```
-
-### مراحل Processing
-1. **pending**: Job ایجاد شده، منتظر شروع
-2. **validating**: اعتبارسنجی ساختار JSON
-3. **ingesting**: وارد کردن رکوردها به دیتابیس
-4. **enriching**: غنی‌سازی داده‌ها (محاسبه فاکتورها، نمایندگان)
-5. **completed** / **failed**: پایان موفق یا با خطا
-
-### محاسبه Progress
-```typescript
-const stageIndex = STATUS_ORDER.indexOf(job.status);
-const stageWeight = stageIndex / (STATUS_ORDER.length - 2);
-const recordProgress = job.processedRecords / job.totalRecords;
-const totalProgress = Math.min(stageWeight * 40 + recordProgress * 60, 99);
-```
-
-### صفحات مرتبط
-- **داشبورد**: `/` - نمایش آپلود و پیشرفت live
-- **مانیتور Jobs**: `/admin/import-jobs` - لیست تمام jobs و وضعیت آن‌ها
-- **Debug Actions**: `/admin/debug-actions` - نمایش jobs فعال + feature flags
-
-### تست و Debugging
-```bash
-# ایجاد یک job تستی
-curl -X POST http://localhost:3000/api/admin/import-jobs \
-  -H "Content-Type: application/json" \
-  -d '{"jobCode":"test-123","sourceFileName":"test.json","totalRecords":1000}' \
-  -b cookie.txt
-
-# بروزرسانی پیشرفت
-curl -X PATCH http://localhost:3000/api/admin/import-jobs/test-123 \
-  -H "Content-Type: application/json" \
-  -d '{"status":"ingesting","processedRecords":500}' \
-  -b cookie.txt
-
-# دریافت وضعیت
-curl http://localhost:3000/api/admin/import-jobs -b cookie.txt | jq
-```
-
-### اسکریپت Demo
-```bash
-BASE_URL=http://localhost:3000 ts-node scripts/demo-import-job.ts
-```
-
-### بهبودهای آتی (Roadmap)
-- [ ] اتصال خودکار Job به آپلود واقعی فایل
-- [ ] WebSocket / SSE برای کاهش polling
-- [ ] پشتیبانی از pause/resume
-- [ ] نمایش preview رکوردهای invalid
-- [ ] Export گزارش خطاها به CSV
-
----
-
-<a id="deprecated-section"></a>
-<details>
-<summary>بخش ۲۱.۴ - مستندات منسوخ شده (جهت آرشیو)</summary>
-
-## 21.4 مانیتور مرحله‌ای پردازش فایل‌ها (Import Jobs) [DEPRECATED - جایگزین شده]
-این فاز، قابلیت مشاهده پیشرفت Job های پردازش فایل JSON را با مراحل زیر فراهم می‌کند:
-pending → validating → ingesting → enriching → completed (یا failed)
-
-جداول / API:
-| متد | مسیر | توضیح |
-|-----|------|-------|
-| GET | /api/admin/import-jobs | لیست آخرین Job ها (حداکثر ۵۰ مورد) |
-| POST | /api/admin/import-jobs | ایجاد Job اولیه (status=pending) |
-| PATCH | /api/admin/import-jobs/:jobCode | به‌روزرسانی status / شمارنده‌ها |
-| GET | /api/admin/active-actions | تجمیع import jobs فعال + فلگ‌های multi-stage فعال |
-
-UI جدید:
-| مسیر | توضیح |
-|------|-------|
-| /admin/import-jobs | Progress Bar مرحله‌ای + Polling خودکار (۴ ثانیه) |
-| /admin/debug-actions | نمایش ترکیبی Jobs فعال + فلگ‌های فعال |
-
-اسکریپت دمو:
-```
-BASE_URL=http://localhost:3000 ADMIN_COOKIE="$(cat cookie.txt 2>/dev/null)" ts-node scripts/demo-import-job.ts
-```
-نمایش Job در مسیر /admin/import-jobs.
-
-ملاحظات:
-1. Migration 011 ایجاد جدول import_jobs (افزودنی ایمن).
-2. هنوز اتصال خودکار به جریان واقعی آپلود JSON انجام نشده (Phase بعد: hook در file-upload-routes + ایجاد job در شروع پردازش).
-3. endpoint /api/admin/active-actions برای داشبورد دیباگ سبک وزن.
-4. ساختار فعلی status قابل توسعه به زیرمرحله (subStage) یا درصد واقعی ingestion.
-
-گام‌های بعد پیشنهادی:
-1. اتصال خودکار: ایجاد job با POST هنگام آپلود فایل.
-2. ثبت خطا در job.lastError هنگام exception در pipeline.
-3. افزودن websocket یا Server-Sent Events برای کاهش Polling.
-4. نگارش شاخص SLA (مدت validating، مدت ingesting و ...) برای تحلیل عملکرد.
-
-</details>
-
----
-## 22. Cheat Sheet
-```bash
-npm run dev
-npm run build && npm start
-docker compose up -d
-curl -s localhost/health
-```
-
----
-پایان سند.
-
-## 📄 لایسنس
-
-این پروژه تحت لایسنس MIT منتشر شده است.
-
----
-
-## 🆘 پشتیبانی
-در صورت مواجهه با مشکل:
-1. مسیرهای سلامت را بررسی کنید (`/health`, `/ready`)
-2. لاگ‌ها را ببینید: `tail -n 200 logs/server.log`
-3. صحت متغیرهای `.env` (خصوصا DATABASE_URL و SESSION_SECRET) را تأیید کنید
-4. در صورت نیاز Issue در مخزن GitHub ثبت کنید
-2. لاگ‌های سیستم را بررسی کنید: `docker-compose logs -f`
-3. Issue جدیدی در GitHub ایجاد کنید
-
----
-
-**نکته مهم:** این پروژه **فقط از PostgreSQL** استفاده می‌کند. هیچ‌گونه پشتیبانی از SQLite وجود ندارد.
+**آخرین به‌روزرسانی:** {{ تاریخ انتشار این نسخه را قبل از انتشار رسمی تکمیل کنید }}. در صورت تغییر معماری یا افزودن سرویس جدید، این README باید به‌روزرسانی شود.
