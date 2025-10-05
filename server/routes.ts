@@ -47,7 +47,7 @@ import systemRoutes from "./routes/system-routes.js";
 // Phase 1: Portal Content Management (NEW modular content blocks)
 import portalContentRoutes from "./routes/portal-content-routes.js";
 import salesPartnersRoutes from "./routes/sales-partners-routes.js";
-// (Phase A) Import Jobs instrumentation routes (scaffold)
+import importJobsRoutes from "./routes/import-jobs-routes.js";
 
 // Import services
 import { unifiedFinancialEngine } from "./services/unified-financial-engine.js";
@@ -144,7 +144,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Log but don't crash for promise rejections
     console.error('⚠️ Continuing execution despite unhandled rejection');
   });
-
   // Add memory monitoring
   setInterval(() => {
     const memUsage = process.memoryUsage();
@@ -271,13 +270,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/system', authMiddleware, systemRoutes);
   console.log('✅ System routes registered (backup/restore)');
 
-  // (Import Jobs scaffold removed intentionally – will be reintroduced with proper schema in future phase)
+  app.use('/api/admin/import-jobs', importJobsRoutes);
+  console.log('✅ Import jobs routes registered');
 
   // 📤 NEW: Upload JSON file and create Import Job with processing
   app.post('/api/admin/upload-json', authMiddleware, upload.single('file'), async (req: MulterRequest, res) => {
     try {
       const file = req.file;
       const jobCode = req.body.jobCode;
+      const uploader = req.session?.user?.username ?? 'system';
 
       if (!file) {
         return res.status(400).json({ success: false, error: 'no_file_uploaded' });
@@ -289,6 +290,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`📤 Upload JSON: ${file.originalname} (${file.size} bytes) - JobCode: ${jobCode}`);
 
+      await storage.upsertImportJob({
+        jobCode,
+        sourceFileName: file.originalname,
+        status: 'validating',
+        totalRecords: 0,
+        processedRecords: 0,
+        errorCount: 0,
+        metadata: {
+          stage: 'upload_received',
+          fileSize: file.size,
+          uploader
+        }
+      });
+
       // Parse JSON content
       let jsonData: any;
       try {
@@ -296,10 +311,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         jsonData = JSON.parse(fileContent);
       } catch (parseError) {
         console.error('❌ JSON parse error:', parseError);
-        return res.status(400).json({ 
-          success: false, 
-          error: 'invalid_json', 
-          message: 'فایل JSON نامعتبر است' 
+        await storage.updateImportJob(jobCode, {
+          status: 'failed',
+          totalRecords: 0,
+          processedRecords: 0,
+          errorIncrement: 1,
+          finishedAt: new Date(),
+          lastError: 'invalid_json',
+          metadata: {
+            stage: 'parse_failed',
+            uploader,
+            fileSize: file.size,
+            error: parseError instanceof Error ? parseError.message : 'unknown_parse_error'
+          }
+        });
+        return res.status(400).json({
+          success: false,
+          error: 'invalid_json',
+          message: 'فایل JSON نامعتبر است'
         });
       }
 
@@ -309,19 +338,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`📊 JSON parsed: ${totalRecords} records`);
 
-      res.json({ 
-        success: true, 
+      await storage.updateImportJob(jobCode, {
+        status: totalRecords > 0 ? 'ingesting' : 'validating',
+        totalRecords,
+        processedRecords: 0,
+        errorCount: 0,
+        lastError: null,
+        finishedAt: null,
+        metadata: {
+          stage: 'parsed',
+          uploader,
+          fileSize: file.size,
+          totalRecords
+        }
+      });
+
+      const job = await storage.getImportJobByCode(jobCode);
+
+      res.json({
+        success: true,
         jobCode,
         totalRecords,
+        job,
         message: 'فایل آپلود و پردازش آغاز شد'
       });
 
     } catch (error) {
       console.error('❌ Upload error:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'upload_failed', 
-        message: (error as Error).message 
+      const jobCode = typeof req.body?.jobCode === 'string' ? req.body.jobCode : null;
+      if (jobCode) {
+        await storage.updateImportJob(jobCode, {
+          status: 'failed',
+          errorIncrement: 1,
+          finishedAt: new Date(),
+          lastError: error instanceof Error ? error.message : 'upload_error',
+          metadata: {
+            stage: 'upload_failed',
+            uploader: req.session?.user?.username ?? 'system',
+            reason: error instanceof Error ? error.message : 'unknown'
+          }
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        error: 'upload_failed',
+        message: 'خطا در پردازش فایل آپلود شده'
       });
     }
   });
@@ -329,7 +391,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Aggregated active actions: import jobs (not completed/failed) + active multi-stage flags
   app.get('/api/admin/active-actions', authMiddleware, async (req, res) => {
     try {
-      const activeJobs: any[] = [];
+      const jobs = await storage.getImportJobs();
+      const activeJobs = jobs
+        .filter((job) => job.status !== 'completed' && job.status !== 'failed')
+        .map((job) => ({
+          jobCode: job.jobCode,
+          status: job.status,
+          totalRecords: job.totalRecords,
+          processedRecords: job.processedRecords,
+          errorCount: job.errorCount,
+          startedAt: job.startedAt,
+          finishedAt: job.finishedAt,
+          lastError: job.lastError
+        }));
+
       const flagsStatus = featureFlagManager.getStatus();
       const multiStageActive = Object.entries(flagsStatus)
         .filter(([k,v]: any) => v.state && v.state !== 'off')

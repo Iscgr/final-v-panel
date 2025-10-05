@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, decimal, json } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, json, jsonb } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -112,6 +112,20 @@ export const invoiceBatches = pgTable("invoice_batches", {
   uploadedFileName: text("uploaded_file_name"),
   createdAt: timestamp("created_at").defaultNow(),
   completedAt: timestamp("completed_at")
+});
+
+export const importJobs = pgTable("import_jobs", {
+  id: serial("id").primaryKey(),
+  jobCode: text("job_code").notNull().unique(),
+  sourceFileName: text("source_file_name"),
+  status: text("status").notNull().default("pending"),
+  totalRecords: integer("total_records").default(0),
+  processedRecords: integer("processed_records").default(0),
+  errorCount: integer("error_count").default(0),
+  startedAt: timestamp("started_at").defaultNow(),
+  finishedAt: timestamp("finished_at"),
+  lastError: text("last_error"),
+  metadata: jsonb("metadata").default({})
 });
 
 // Invoices (فاکتورها) - بهبود یافته با پشتیبانی دوره‌ای
@@ -796,6 +810,9 @@ export type InsertAdminUser = z.infer<typeof insertAdminUserSchema>;
 // فاز ۱: Types برای مدیریت دوره‌ای فاکتورها
 export type InvoiceBatch = typeof invoiceBatches.$inferSelect;
 export type InsertInvoiceBatch = z.infer<typeof insertInvoiceBatchSchema>;
+
+export type ImportJob = typeof importJobs.$inferSelect;
+export type InsertImportJob = typeof importJobs.$inferInsert;
 
 export type Representative = typeof representatives.$inferSelect;
 export type InsertRepresentative = z.infer<typeof insertRepresentativeSchema>;

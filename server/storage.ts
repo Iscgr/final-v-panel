@@ -1,7 +1,7 @@
 import { InvoiceEditRecord, TransactionRecord, ConfigRecord } from './storage-interfaces.js';
 import {
   representatives, salesPartners, partnerCommissionPayments, invoices, payments, activityLogs, settings, adminUsers, invoiceEdits,
-  financialTransactions, dataIntegrityConstraints, invoiceBatches, telegramSendHistory,
+  financialTransactions, dataIntegrityConstraints, invoiceBatches, importJobs, telegramSendHistory,
   type Representative, type InsertRepresentative,
   type SalesPartner, type InsertSalesPartner, type SalesPartnerWithCount,
   type PartnerCommissionPayment, type InsertPartnerCommissionPayment,
@@ -15,6 +15,7 @@ import {
   type DataIntegrityConstraint, type InsertDataIntegrityConstraint,
   // فاز ۱: Import برای مدیریت دوره‌ای فاکتورها
   type InvoiceBatch, type InsertInvoiceBatch,
+  type ImportJob, type InsertImportJob,
   // Telegram Send History Import
   type TelegramSendHistory, type InsertTelegramSendHistory
 } from "@shared/schema";
@@ -22,6 +23,12 @@ import { db, checkDatabaseHealth, executeWithRetry } from "./database-manager.js
 import { eq, desc, sql, and, or, ilike, inArray, gte, lte } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from "bcryptjs";
+
+type ImportJobUpdateInput = Partial<Omit<ImportJob, "id" | "jobCode" | "metadata">> & {
+  metadata?: ImportJob["metadata"];
+  errorIncrement?: number;
+  processedRecordsIncrement?: number;
+};
 
 export interface IStorage {
   // Representatives
@@ -65,6 +72,12 @@ export interface IStorage {
   completeBatch(batchId: number): Promise<void>;
   getBatchInvoices(batchId: number): Promise<Invoice[]>;
   generateBatchCode(periodStart: string): Promise<string>;
+
+  // Import Jobs Monitoring
+  getImportJobs(): Promise<ImportJob[]>;
+  getImportJobByCode(jobCode: string): Promise<ImportJob | undefined>;
+  upsertImportJob(job: InsertImportJob): Promise<ImportJob>;
+  updateImportJob(jobCode: string, updates: ImportJobUpdateInput): Promise<ImportJob | undefined>;
 
   // Invoices - بهبود یافته با پشتیبانی دوره‌ای و مدیریت دستی
   getInvoices(): Promise<Invoice[]>;
@@ -856,6 +869,124 @@ export class DatabaseStorage implements IStorage {
     const persianDate = periodStart.replace(/\//g, '-');
     const timestamp = Date.now().toString().slice(-4);
     return `BATCH-${persianDate}-${timestamp}`;
+  }
+
+  async getImportJobs(): Promise<ImportJob[]> {
+    return executeWithRetry(
+      () => db.select().from(importJobs).orderBy(desc(importJobs.startedAt), desc(importJobs.id)),
+      'getImportJobs'
+    );
+  }
+
+  async getImportJobByCode(jobCode: string): Promise<ImportJob | undefined> {
+    return executeWithRetry(
+      async () => {
+        const [job] = await db.select().from(importJobs).where(eq(importJobs.jobCode, jobCode));
+        return job || undefined;
+      },
+      'getImportJobByCode'
+    );
+  }
+
+  async upsertImportJob(job: InsertImportJob): Promise<ImportJob> {
+    const now = new Date();
+    const insertValues: InsertImportJob = {
+      jobCode: job.jobCode,
+      sourceFileName: job.sourceFileName ?? null,
+      status: job.status ?? 'pending',
+      totalRecords: job.totalRecords ?? 0,
+      processedRecords: job.processedRecords ?? 0,
+      errorCount: job.errorCount ?? 0,
+      startedAt: job.startedAt ?? now,
+      finishedAt: job.finishedAt ?? null,
+      lastError: job.lastError ?? null,
+      metadata: job.metadata ?? {}
+    };
+
+    const updateValues = {
+      sourceFileName: insertValues.sourceFileName,
+      status: insertValues.status,
+      totalRecords: insertValues.totalRecords,
+      processedRecords: insertValues.processedRecords,
+      errorCount: insertValues.errorCount,
+      startedAt: now,
+      finishedAt: insertValues.finishedAt,
+      lastError: insertValues.lastError,
+      metadata: insertValues.metadata
+    };
+
+    return executeWithRetry(
+      async () => {
+        const [record] = await db
+          .insert(importJobs)
+          .values(insertValues)
+          .onConflictDoUpdate({
+            target: importJobs.jobCode,
+            set: updateValues
+          })
+          .returning();
+
+        return record;
+      },
+      'upsertImportJob'
+    );
+  }
+
+  async updateImportJob(jobCode: string, updates: ImportJobUpdateInput): Promise<ImportJob | undefined> {
+    return executeWithRetry(
+      async () => {
+        const updateData: Record<string, any> = {};
+
+        if (updates.status !== undefined) {
+          updateData.status = updates.status;
+        }
+        if (updates.totalRecords !== undefined) {
+          updateData.totalRecords = updates.totalRecords;
+        }
+        if (updates.processedRecords !== undefined) {
+          updateData.processedRecords = updates.processedRecords;
+        }
+        if (updates.processedRecordsIncrement !== undefined) {
+          updateData.processedRecords = sql`${importJobs.processedRecords} + ${updates.processedRecordsIncrement}`;
+        }
+        if (updates.errorCount !== undefined) {
+          updateData.errorCount = updates.errorCount;
+        }
+        if (updates.errorIncrement !== undefined && updates.errorIncrement !== 0) {
+          updateData.errorCount = sql`${importJobs.errorCount} + ${updates.errorIncrement}`;
+        }
+        if (updates.startedAt !== undefined) {
+          updateData.startedAt = updates.startedAt;
+        }
+        if (updates.finishedAt !== undefined) {
+          updateData.finishedAt = updates.finishedAt;
+        }
+        if (updates.lastError !== undefined) {
+          updateData.lastError = updates.lastError;
+        }
+        if (updates.metadata !== undefined) {
+          updateData.metadata = updates.metadata;
+        }
+
+        if (Object.keys(updateData).length === 0) {
+          const [existing] = await db
+            .select()
+            .from(importJobs)
+            .where(eq(importJobs.jobCode, jobCode))
+            .limit(1);
+          return existing || undefined;
+        }
+
+        const [record] = await db
+          .update(importJobs)
+          .set(updateData)
+          .where(eq(importJobs.jobCode, jobCode))
+          .returning();
+
+        return record || undefined;
+      },
+      'updateImportJob'
+    );
   }
 
   async getInvoicesByBatch(batchId: number): Promise<Invoice[]> {
