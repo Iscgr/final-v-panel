@@ -20,11 +20,7 @@ services:
       - ./backups:/app/backups
     networks:
       - marfanet-network
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/marfanet
-      - REDIS_URL=redis://redis:6379
-      - NODE_ENV=production
-    command: ["npm","run","start:prod"]
+    command: ["node", "dist/server/index.js"]
 
   # PostgreSQL Database
   db:
@@ -32,7 +28,7 @@ services:
     container_name: marfanet-db
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: marfanet
     ports:
       - "5432:5432"

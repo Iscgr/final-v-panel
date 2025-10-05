@@ -163,7 +163,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Initialize default admin user
   try {
-    await storage.initializeDefaultAdminUser("mgr", "8679");
+    const adminUsername = process.env.ADMIN_USERNAME ?? "mgr";
+    const adminPassword = process.env.ADMIN_PASSWORD ?? "8679";
+
+    await storage.initializeDefaultAdminUser(adminUsername, adminPassword);
   } catch (error) {
     console.error("Failed to initialize default admin user:", error);
   }

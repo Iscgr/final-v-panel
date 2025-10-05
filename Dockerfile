@@ -42,32 +42,18 @@ RUN npm run build \
 # ==============================================================================
 FROM node:20-alpine AS production
 
-# Install required system dependencies
 RUN apk add --no-cache postgresql-client curl
 
-# Explicit environment to ensure server/index.ts تشخیص محیط را production در نظر بگیرد
 ENV NODE_ENV=production
 
-# Create a non-root user and necessary directories first
-RUN addgroup -S nodejs && adduser -S marfanet -G nodejs && \
-    mkdir -p /app/logs && \
-    chown -R marfanet:nodejs /app/logs && \
-    mkdir -p /app/uploads && \
-    chown -R marfanet:nodejs /app/uploads
+RUN addgroup -S nodejs && adduser -S marfanet -G nodejs
 
-# Switch to the non-root user
-USER marfanet
 WORKDIR /app
 
-# Copy artifacts from the builder stage
-COPY --from=builder --chown=marfanet:nodejs /app/dist ./dist
-# Client assets already reside inside dist/public (vite.config.ts)
-COPY --from=builder --chown=marfanet:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=marfanet:nodejs /app/package.json .
-COPY --from=builder --chown=marfanet:nodejs /app/start-server.cjs .
+COPY --from=builder --chown=marfanet:nodejs /app .
 
-# Expose the application port
+USER marfanet
+
 EXPOSE 3000
 
-# Set the command to run the application
 CMD ["npm", "run", "start:prod"]
