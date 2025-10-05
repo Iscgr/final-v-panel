@@ -29,29 +29,59 @@ interface RepresentativesResponse {
   pageSize: number;
 }
 
-// API fetch function
+const PAGE_SIZE = 200;
+const MAX_PAGES = 25; // سقف محافظتی برای جلوگیری از حلقه بی‌نهایت (۵۰۰۰ رکورد)
+
+// API fetch function (جمع‌آوری همه صفحات بدون سقف ۱۰۰ تایی)
 const fetchRepresentatives = async (
   search: string = "",
   sortBy: string = "name",
   sortOrder: string = "asc"
 ): Promise<RepresentativesResponse> => {
-  const params = new URLSearchParams({
-    search,
-    sortBy,
-    sortOrder,
-    page: "1",
-    pageSize: "100"
-  });
+  let currentPage = 1;
+  let accumulated: RepresentativeRow[] = [];
+  let reportedTotal = 0;
 
-  const response = await fetch(`/api/representatives?${params}`, {
-    credentials: 'include',
-  });
+  while (currentPage <= MAX_PAGES) {
+    const params = new URLSearchParams({
+      search,
+      sortBy,
+      sortOrder,
+      page: currentPage.toString(),
+      pageSize: PAGE_SIZE.toString()
+    });
 
-  if (!response.ok) {
-    throw new Error('خطا در دریافت اطلاعات نمایندگان');
+    const response = await fetch(`/api/representatives?${params}`, {
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error('خطا در دریافت اطلاعات نمایندگان');
+    }
+
+    const payload: RepresentativesResponse = await response.json();
+
+    if (currentPage === 1) {
+      reportedTotal = payload.total;
+    }
+
+    accumulated = accumulated.concat(payload.representatives);
+
+    const fetchedAll = accumulated.length >= reportedTotal || payload.representatives.length < PAGE_SIZE;
+
+    if (fetchedAll) {
+      break;
+    }
+
+    currentPage += 1;
   }
 
-  return response.json();
+  return {
+    representatives: accumulated,
+    total: reportedTotal || accumulated.length,
+    page: 1,
+    pageSize: accumulated.length,
+  };
 };
 
 export default function RepresentativesPage() {

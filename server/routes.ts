@@ -1224,54 +1224,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         announcementsTitle: announcementsTitle?.value || '📢 اعلانات و اطلاعیه‌ها'
       };
 
-      // ⚙️ PORTAL_CONTENT_READ_SWITCH ارتقاء یافته: meta + version + diff در shadow
+      // ⚙️ PORTAL_CONTENT_READ_SWITCH: فقط حالت FULL پشتیبانی می‌شود
       let portalConfigVersion = 0;
-      let portalContentSource: 'legacy' | 'shadow' | 'full' = 'legacy';
-      let contentDiff: Array<{ field: string; blockKey: string; legacyLen: number; newLen: number }> | undefined;
       try {
         const portalContentFlag = featureFlagManager.getMultiStageFlagState('portal_content_read_switch');
-        if (portalContentFlag === 'shadow' || portalContentFlag === 'full') {
-          const { portalContentBlocks, portalContentPublicationState } = await import('../shared/schema.js');
-          const blocks = await db.select().from(portalContentBlocks);
-          const map: Record<string, string> = {};
-          for (const b of blocks) map[b.blockKey] = b.body || '';
-          // نسخه منتشر شده
-          try {
-            const pubRows = await db.select().from(portalContentPublicationState).limit(1);
-            if (pubRows.length) portalConfigVersion = pubRows[0].contentVersion || 0;
-          } catch {}
-          const compare: [keyof typeof portalConfig, string, string][] = [
-            ['downloadsIntro','downloads_intro', portalConfig.downloadsIntro],
-            ['guidanceText','guidance', portalConfig.guidanceText],
-            ['contactPhone','contact_info', portalConfig.contactPhone],
-            ['supportHours','support_hours', portalConfig.supportHours],
-            ['announcementsTitle','announcements_title', portalConfig.announcementsTitle]
-          ];
-          const diffs: typeof contentDiff = [];
-          for (const [cfgKey, blockKey, legacyVal] of compare) {
-            const newVal = map[blockKey];
-            if (newVal && newVal !== legacyVal) {
-              diffs.push({ field: cfgKey as string, blockKey, legacyLen: legacyVal?.length || 0, newLen: newVal.length });
-            }
-          }
-          if (portalContentFlag === 'shadow') {
-            portalContentSource = 'shadow';
-            if (diffs.length) {
-              contentDiff = diffs.slice(0, 20);
-              console.log('🌓 portal_content_read_switch shadow diffs:', diffs);
-            }
-          } else if (portalContentFlag === 'full') {
-            portalContentSource = 'full';
-            if (map['downloads_intro']) portalConfig.downloadsIntro = map['downloads_intro'];
-            if (map['guidance']) portalConfig.guidanceText = map['guidance'];
-            if (map['contact_info']) portalConfig.contactPhone = map['contact_info'];
-            if (map['support_hours']) portalConfig.supportHours = map['support_hours'];
-            if (map['announcements_title']) portalConfig.announcementsTitle = map['announcements_title'];
-            console.log('✅ portal_content_read_switch FULL applied (version=' + portalConfigVersion + ')');
-          }
+        if (portalContentFlag !== 'full') {
+          console.warn(`WARN: portal_content_read_switch در حالت ${portalContentFlag} گزارش شد؛ اجبار به FULL.`);
         }
+
+        const { portalContentBlocks, portalContentPublicationState } = await import('../shared/schema.js');
+        const blocks = await db.select().from(portalContentBlocks);
+        const map: Record<string, string> = {};
+        for (const b of blocks) map[b.blockKey] = b.body || '';
+
+        try {
+          const pubRows = await db.select().from(portalContentPublicationState).limit(1);
+          if (pubRows.length) portalConfigVersion = pubRows[0].contentVersion || 0;
+        } catch {}
+
+        if (map['downloads_intro']) portalConfig.downloadsIntro = map['downloads_intro'];
+        if (map['guidance']) portalConfig.guidanceText = map['guidance'];
+        if (map['contact_info']) portalConfig.contactPhone = map['contact_info'];
+        if (map['support_hours']) portalConfig.supportHours = map['support_hours'];
+        if (map['announcements_title']) portalConfig.announcementsTitle = map['announcements_title'];
+
+        console.log('✅ Unified portal content applied (FULL mode, version=' + portalConfigVersion + ')');
       } catch (e) {
-        console.warn('WARN: portal_content_read_switch handling error:', (e as Error).message);
+        console.warn('⚠️ Unified portal content unavailable, falling back to legacy settings:', (e as Error).message);
       }
 
       // SHERLOCK v11.5: Sort invoices by FIFO principle (oldest first)
@@ -1340,9 +1319,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // ✅ استفاده از داده‌های محاسبه شده از Unified Financial Engine
       res.json({
         ...publicData,
-        portalConfigVersion,
-        portalContentSource,
-        contentDiff
+        portalConfigVersion
       });
     } catch (error) {
       console.error('Portal API error:', error);

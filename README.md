@@ -55,7 +55,7 @@
 | `REDIS_URL` | اتصال Redis | در Compose تنظیم شده |
 | `APP_URL` / `PUBLIC_PORTAL_BASE_URL` | نشانی عمومی پنل و پورتال | برای لینک‌سازی ایمیل و Portal |
 | `LOG_DIRECTORY` | مسیر لاگ ساختاریافته | در Docker روی `/app/logs` پیکربندی شود |
-| `PORTAL_CONTENT_FLAG_BOOT` | مقدار اولیه فلگ محتوای پرتال | اختیاری: off|shadow|full (پیش‌فرض off) |
+| `PORTAL_CONTENT_FLAG_BOOT` | مقدار اولیه فلگ محتوای پرتال | مقدار ثابت `full` (در صورت عدم تعیین، سیستم آن را به `full` ارتقا می‌دهد) |
 | `KPI_METRICS_WINDOW_DEFAULT` | پنجره پیش‌فرض KPI | مثلا 24h؛ اختیاری |
 
 کلیدهای اختیاری: `OPENAI_API_KEY`, `SMTP_*`, `WEBHOOK_URL`, `ENABLE_PERFORMANCE_MONITORING` و Feature Flagهای فعال‌سازی سرویس‌ها.
@@ -137,14 +137,12 @@
 ### چرخه حیات
 1. Draft ویرایش در پنل: مسیر `/api/admin/portal-content-unified/draft` (GET/PUT)
 2. انتشار: `/api/admin/portal-content-unified/publish` → محاسبه diff و به‌روزرسانی `publishedJson`
-3. Public Read: `/api/portal/:publicId/resources` فقط اگر فلگ `portal_content_read_switch=full` باشد unified را برمی‌گرداند؛ در `shadow` صرفاً لاگ سایز و خروجی legacy.
+3. Public Read: `/api/portal/:publicId/resources` همواره با فلگ `portal_content_read_switch=full` اجرا می‌شود و محتوای یکپارچه را بازمی‌گرداند؛ در صورت نبود داده منتشرشده، مسیر legacy به‌صورت خودکار fallback می‌شود.
 
 ### Feature Flag Migration Stages
 | حالت | رفتار | توضیح |
 |------|-------|-------|
-| off | فقط legacy (announcements + appDownloads) | مسیر unified نادیده گرفته می‌شود |
-| shadow | unified واکشی و لاگ، خروجی هنوز legacy | برای مقایسه بی‌خطر |
-| full | ارائه کامل unified | نقطه برش نهایی |
+| full | ارائه کامل unified | پرچم به صورت دائمی در این وضعیت قفل شده است؛ در صورت نبود داده منتشرشده مسیر legacy به‌صورت خودکار fallback می‌شود |
 
 ### اسکریپت‌های مرتبط
 | اسکریپت | کاربرد |
@@ -251,7 +249,7 @@ Pipeline پیشنهادی: Unit → Integration → E2E + Accessibility؛ گزا
 ## Feature Flagهای کلیدی
 | فلگ | هدف | حالت‌ها | توضیحات |
 |------|-----|---------|----------|
-| `portal_content_read_switch` | کنترل ارائه unified portal | `off` / `shadow` / `full` | فقط در full محتوای یکپارچه به کاربر نمایش داده می‌شود |
+| `portal_content_read_switch` | کنترل ارائه unified portal | `full` | محتوای یکپارچه همیشه فعال است؛ fallback legacy صرفاً در صورت نبود داده منتشرشده رخ می‌دهد |
 | `guard_metrics_persistence` | ذخیره رویداد‌های Guard Metrics | `off` / `on` | پیش‌نیاز KPI metrics |
 | `guard_metrics_alerts` | هشدار SLA Outbox/Latency | `off` / `on` | وابسته به persistence |
 | `outbox_enabled` | پردازش صف پیام | `off` / `shadow` / `active` | shadow: مانیتور بدون ارسال واقعی (در صورت پیاده‌سازی) |

@@ -26,42 +26,31 @@ router.get('/:publicId/resources', async (req: Request, res: Response) => {
 
     console.log(`📦 درخواست منابع برای نماینده: ${publicId}`);
 
-    // کنترل feature flag چندمرحله‌ای
+    // کنترل feature flag چندمرحله‌ای (حالت ثابت FULL)
     const flagState = featureFlagManager.getMultiStageFlagState('portal_content_read_switch');
+    if (flagState !== 'full') {
+      console.warn(`WARN: portal_content_read_switch در حالت ${flagState} گزارش شد؛ اجبار به FULL.`);
+    }
 
-    // فقط در حالت full مجاز به ارائه unified هستیم؛ در shadow صرفاً diff/مشاهده خاموش (اینجا ساده log)
     let unified: any = null;
-    if (flagState === 'full' || flagState === 'shadow') {
-      const cached = getUnifiedPublishedCached();
-      if (cached) {
-        unified = cached.doc;
-      } else {
-        try {
-          const unifiedRows = await db.select().from(portalContentDocuments).where(eq(portalContentDocuments.docKey, 'portal_main'));
-          if (unifiedRows.length && unifiedRows[0].publishedJson) {
-            unified = unifiedRows[0].publishedJson;
-            setUnifiedPublishedCache(unified, unifiedRows[0].publishedVersion || 0);
-          }
-        } catch (e) {
-          console.warn('⚠️ unified portal content fetch failed (will fallback to legacy):', (e as Error).message);
+    const cached = getUnifiedPublishedCached();
+    if (cached) {
+      unified = cached.doc;
+    } else {
+      try {
+        const unifiedRows = await db.select().from(portalContentDocuments).where(eq(portalContentDocuments.docKey, 'portal_main'));
+        if (unifiedRows.length && unifiedRows[0].publishedJson) {
+          unified = unifiedRows[0].publishedJson;
+          setUnifiedPublishedCache(unified, unifiedRows[0].publishedVersion || 0);
         }
+      } catch (e) {
+        console.warn('⚠️ unified portal content fetch failed (will fallback to legacy):', (e as Error).message);
       }
     }
 
-    if (flagState === 'full' && unified) {
+    if (unified) {
       console.log('✅ Unified portal content served (FULL mode)');
-      return res.json({ success: true, data: { unified, source: 'unified', mode: flagState } });
-    }
-
-    if (flagState === 'shadow' && unified) {
-      // در حالت shadow خروجی public را هنوز legacy نگه می‌داریم ولی اختلاف اندازه (ساده) را لاگ می‌کنیم
-      try {
-        const sectionCount = Array.isArray(unified.sections) ? unified.sections.length : 0;
-        const annCount = Array.isArray(unified.announcements) ? unified.announcements.length : 0;
-        const dlCount = Array.isArray(unified.downloads) ? unified.downloads.length : 0;
-        console.log(`🌓 portal_content_read_switch shadow: unified(draft) sizes sections=${sectionCount} announcements=${annCount} downloads=${dlCount}`);
-      } catch {}
-      // ادامه مسیر legacy
+      return res.json({ success: true, data: { unified, source: 'unified', mode: 'full' } });
     }
 
     // Fallback legacy path (announcements + downloads) برای سازگاری موقت
@@ -85,10 +74,9 @@ router.get('/:publicId/resources', async (req: Request, res: Response) => {
         )
       )
       .orderBy(announcements.priority, announcements.createdAt);
+    console.warn(`⚠️ Unified portal content missing; serving legacy fallback (downloads=${activeDownloads.length}, announcements=${activeAnnouncements.length})`);
 
-  console.log(`✅ Legacy resources served: ${activeDownloads.length} downloads, ${activeAnnouncements.length} announcements (mode=${flagState})`);
-
-  res.json({ success: true, data: { appDownloads: activeDownloads, announcements: activeAnnouncements, source: 'legacy', mode: flagState } });
+    res.json({ success: true, data: { appDownloads: activeDownloads, announcements: activeAnnouncements, source: 'legacy-fallback', mode: 'full' } });
   } catch (error) {
     console.error('❌ خطا در دریافت منابع پرتال:', error);
     res.status(500).json({
