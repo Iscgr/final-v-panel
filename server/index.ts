@@ -295,14 +295,22 @@ app.use((req, res, next) => {
     }
   });
 
-  app.get('/ready', (req, res) => {
-    res.status(200).json({ 
-      status: 'ready', 
-      timestamp: Date.now(),
-      environment: app.get("env"),
-      version: '16.2',
-      uptime: process.uptime()
-    });
+  app.get('/ready', async (req, res) => {
+    try {
+      const dbHealthy = await checkDatabaseHealth();
+      if (!dbHealthy) {
+        return res.status(503).json({ status: 'not-ready', reason: 'db' });
+      }
+      res.status(200).json({ 
+        status: 'ready', 
+        timestamp: Date.now(),
+        environment: app.get("env"),
+        version: '16.2',
+        uptime: process.uptime()
+      });
+    } catch (e:any) {
+      res.status(503).json({ status: 'not-ready', error: e.message });
+    }
   });
 
   // Enhanced error handling middleware with logging

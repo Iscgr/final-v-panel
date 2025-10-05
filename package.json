@@ -11,6 +11,8 @@
     "build:server": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json && bash fix-imports.sh",
     "build:client": "NODE_ENV=production vite build",
     "start": "NODE_ENV=production node start-server.cjs",
+    "start:prod": "npm run migrate:prod && NODE_ENV=production node start-server.cjs",
+    "migrate:prod": "DATABASE_URL=$DATABASE_URL drizzle-kit push",
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "dev:old": "NODE_ENV=development tsx server/index.ts",
@@ -24,6 +26,7 @@
     "test:outbox": "NODE_ENV=test tsx server/tests/outbox.spec.ts"
   },
   "dependencies": {
+    "drizzle-kit": "^0.30.4",
     "@google/genai": "^1.10.0",
     "@hookform/resolvers": "^3.10.0",
     "@jridgewell/trace-mapping": "^0.3.25",
@@ -127,7 +130,6 @@
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",
-    "drizzle-kit": "^0.30.4",
     "esbuild": "^0.25.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.17",

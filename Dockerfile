@@ -70,4 +70,4 @@ COPY --from=builder --chown=marfanet:nodejs /app/start-server.cjs .
 EXPOSE 3000
 
 # Set the command to run the application
-CMD ["node", "start-server.cjs"]
+CMD ["npm", "run", "start:prod"]
