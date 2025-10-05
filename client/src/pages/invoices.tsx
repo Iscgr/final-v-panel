@@ -3,140 +3,255 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   FileText, 
   Search, 
-        <CardContent className="p-0">
-          <div className="table-scroll-wrapper">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">انتخاب</TableHead>
-                  <TableHead>شماره فاکتور</TableHead>
-                  <TableHead>نماینده</TableHead>
-                  <TableHead>مبلغ</TableHead>
-                  <TableHead>تاریخ صدور</TableHead>
-                  <TableHead>سررسید</TableHead>
-                  <TableHead>وضعیت</TableHead>
-                  <TableHead>تلگرام</TableHead>
-                  <TableHead>عملیات</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedInvoices.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                      {searchTerm || statusFilter !== 'all' || telegramFilter !== 'all' 
-                        ? 'هیچ فاکتوری با این فیلترها یافت نشد' 
-                        : 'هیچ فاکتوری یافت نشد'
-                      }
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedInvoices.map((invoice: Invoice) => (
-                    <TableRow key={invoice.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedInvoices.includes(invoice.id)}
-                          onCheckedChange={(checked) => 
-                            handleInvoiceSelect(invoice.id, checked as boolean)
-                          }
-                        />
-                      </TableCell>
+  Filter, 
+  Send, 
+  Download, 
+  Eye, 
+  Clock,
+  CheckCircle,
+  AlertTriangle,
+  DollarSign,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { formatCurrency, toPersianDigits, isOverdue } from "@/lib/persian-date";
+import { Skeleton } from "@/components/ui/skeleton";
 
-                      <TableCell className="font-medium whitespace-nowrap">
-                        {invoice.invoiceNumber}
-                      </TableCell>
+interface Invoice {
+  id: number;
+  invoiceNumber: string;
+  representativeId: number;
+  amount: string;
+  issueDate: string;
+  dueDate: string;
+  status: string;
+  sentToTelegram: boolean;
+  telegramSentAt: string | null;
+  telegramSendCount?: number;
+  createdAt: string;
+  // Additional fields from join
+  representativeName?: string;
+  representativeCode?: string;
+  panelUsername?: string;
+}
 
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="font-medium text-gray-900 dark:text-white">
-                            {invoice.representativeName || 'نامشخص'}
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {invoice.representativeCode}
-                          </div>
-                          {invoice.panelUsername && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                              {invoice.panelUsername}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
+interface TotalInvoiceStats {
+  totalInvoices: number;
+  unpaidCount: number;
+  paidCount: number;
+  partialCount: number;
+  overdueCount: number;
+  totalAmount: number;
+  sentToTelegramCount?: number;
+  unsentToTelegramCount?: number;
+}
 
-                      <TableCell className="font-medium whitespace-nowrap">
-                        {formatCurrency(invoice.amount)} تومان
-                      </TableCell>
+export default function Invoices() {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [telegramFilter, setTelegramFilter] = useState<string>("all");
+  const [selectedInvoices, setSelectedInvoices] = useState<number[]>([]);
+  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
 
-                      <TableCell>
-                        <div className="flex items-center text-sm whitespace-nowrap">
-                          <Calendar className="w-4 h-4 ml-1 text-gray-400" />
-                          {invoice.issueDate}
-                        </div>
-                      </TableCell>
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(30);
 
-                      <TableCell>
-                        {invoice.dueDate ? (
-                          <div className={`text-sm ${
-                            isOverdue(invoice.dueDate) 
-                              ? 'text-red-600 dark:text-red-400 font-medium' 
-                              : 'text-gray-900 dark:text-white'
-                          }`}>
-                            {invoice.dueDate}
-                          </div>
-                        ) : (
-                          "-"
-                        )}
-                      </TableCell>
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-                      <TableCell>
-                        {getInvoiceStatusBadge(invoice)}
-                      </TableCell>
+  const { data: invoicesResponse, isLoading, error } = useQuery({
+    queryKey: ["/api/invoices/with-batch-info", { 
+      page: currentPage, 
+      limit: pageSize, 
+      status: statusFilter !== 'all' ? statusFilter : undefined,
+      search: searchTerm || undefined,
+      telegram: telegramFilter !== 'all' ? telegramFilter : undefined
+    }],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      params.append('page', currentPage.toString());
+      params.append('limit', pageSize.toString());
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (searchTerm) params.append('search', searchTerm);
+      if (telegramFilter !== 'all') params.append('telegram', telegramFilter);
+      
+      return apiRequest(`/api/invoices/with-batch-info?${params.toString()}`);
+    },
+    select: (data: any) => {
+      console.log('SHERLOCK v12.1 DEBUG: Raw data from API:', data);
+      // Handle both array response and paginated response
+      if (Array.isArray(data)) {
+        return { data: data, pagination: null };
+      }
+      return data;
+    },
+    retry: 3,
+    retryDelay: 1000
+  });
 
-                      <TableCell>
-                        <div className="flex flex-col space-y-1">
-                          <Badge variant={invoice.sentToTelegram ? "default" : "secondary"}>
-                            {invoice.sentToTelegram 
-                              ? `ارسال شده ${invoice.telegramSendCount ? `(${toPersianDigits(invoice.telegramSendCount.toString())} بار)` : ''}`
-                              : "ارسال نشده"
-                            }
-                          </Badge>
-                          {invoice.telegramSentAt && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap">
-                              آخرین ارسال: {new Date(invoice.telegramSentAt).toLocaleString('fa-IR')}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
+  const invoices = invoicesResponse?.data || [];
+  const pagination = invoicesResponse?.pagination;
 
-                      <TableCell>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button size="sm" variant="ghost">
-                            <Eye className="w-4 h-4" />
-                          </Button>
+  console.log('SHERLOCK v12.1 DEBUG: Final invoices count:', invoices?.length || 0);
+  console.log('SHERLOCK v12.1 DEBUG: isLoading:', isLoading);
+  console.log('SHERLOCK v12.1 DEBUG: error:', error);
+  console.log('SHERLOCK v12.1 DEBUG: pagination:', pagination);
 
-                          <Button
-                            size="sm"
-                            variant={invoice.sentToTelegram ? "secondary" : "outline"}
-                            onClick={() => handleSingleInvoiceSend(invoice.id)}
-                            disabled={sendToTelegramMutation.isPending}
-                            className={`flex items-center gap-1 ${invoice.sentToTelegram ? 
-                              'border-orange-200 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-950' : 
-                              ''
-                            }`}
-                          >
-                            <Send className="w-4 h-4" />
-                            {invoice.sentToTelegram ? "ارسال مجدد" : "ارسال"}
-                          </Button>
+  const { data: representatives } = useQuery({
+    queryKey: ["/api/representatives"]
+  });
 
-                          <Button size="sm" variant="ghost">
-                            <Download className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+  const sendToTelegramMutation = useMutation({
+    mutationFn: async (invoiceIds: number[]) => {
+      // ✅ ODIN v5.0 FIX: Remove test message - let backend handle validation
+      // Backend will validate Telegram config and send REAL invoices with template
+      const response = await apiRequest('/api/invoices/send-telegram', {
+        method: 'POST',
+        data: { invoiceIds }
+      });
+      return response;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "ارسال به تلگرام",
+        description: `${toPersianDigits(data.success.toString())} فاکتور با موفقیت ارسال شد`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices/with-batch-info'] });
+      setSelectedInvoices([]);
+      setIsSendDialogOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "خطا در ارسال",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  });
+
+  // SHERLOCK v12.1: Backend handles all filtering and pagination now
+  const filteredInvoices = invoices || [];
+  const paginatedInvoices = filteredInvoices;
+
+  // Use backend pagination info
+  const totalPages = pagination?.totalPages || Math.ceil(filteredInvoices.length / pageSize);
+  const totalCount = pagination?.totalCount || filteredInvoices.length;
+
+  // SHERLOCK v12.2: Fetch total statistics for widgets (not just current page)
+  const { data: totalStats } = useQuery<TotalInvoiceStats | undefined>({
+    queryKey: ["/api/invoices/statistics"],
+    enabled: true
+  });
+
+  // Reset to first page when filters change and invalidate cache
+  useEffect(() => {
+    setCurrentPage(1);
+    setSelectedInvoices([]);
+    // Invalidate queries to force new data fetch with updated filters
+    queryClient.invalidateQueries({
+      queryKey: ["/api/invoices/with-batch-info"]
+    });
+  }, [searchTerm, statusFilter, telegramFilter, queryClient]);
+
+  const handleSelectAll = () => {
+    const currentPageInvoiceIds = paginatedInvoices.map((inv: Invoice) => inv.id);
+
+    if (currentPageInvoiceIds.every((id: number) => selectedInvoices.includes(id))) {
+      setSelectedInvoices(prev => prev.filter((id: number) => !currentPageInvoiceIds.includes(id)));
+    } else {
+      setSelectedInvoices(prev => Array.from(new Set([...prev, ...currentPageInvoiceIds])));
+    }
+  };
+
+  const handleInvoiceSelect = (invoiceId: number, isSelected: boolean) => {
+    if (isSelected) {
+      setSelectedInvoices(prev => [...prev, invoiceId]);
+    } else {
+      setSelectedInvoices(prev => prev.filter(id => id !== invoiceId));
+    }
+  };
+
+  const handleSendToTelegram = () => {
+    if (selectedInvoices.length === 0) {
+      toast({
+        title: "هیچ فاکتوری انتخاب نشده",
+        description: "لطفاً حداقل یک فاکتور برای ارسال انتخاب کنید",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsSendDialogOpen(true);
+  };
+
+  const handleSingleInvoiceSend = (invoiceId: number) => {
+    sendToTelegramMutation.mutate([invoiceId]);
+  };
+
+  const handleSendAllUnsent = () => {
+    const unsentInvoices = filteredInvoices
+      .filter((inv: Invoice) => !inv.sentToTelegram)
+      .map((inv: Invoice) => inv.id);
+
+    if (unsentInvoices.length > 0) {
+      sendToTelegramMutation.mutate(unsentInvoices);
+      setSelectedInvoices([]);
+    } else {
+      toast({
+        title: "هیچ فاکتور ارسال نشده‌ای وجود ندارد",
+        description: "تمام فاکتورها قبلاً به تلگرام ارسال شده‌اند",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // SHERLOCK v11.5: Enhanced status badge with partial payment support
+  const getInvoiceStatusBadge = (invoice: Invoice) => {
+    if (invoice.status === 'paid') {
+      return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">پرداخت شده</Badge>;
+    }
+    if (invoice.status === 'partial') {
+      return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">تسویه جزئی</Badge>;
+    }
+    if (invoice.status === 'overdue' || (invoice.dueDate && isOverdue(invoice.dueDate))) {
+      return <Badge variant="destructive">سررسید گذشته</Badge>;
+    }
+    return <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">پرداخت نشده</Badge>;
+  };
+
   // SHERLOCK v12.2: Use total statistics for widgets, not just current page  
   const stats = totalStats ? {
     total: totalStats?.totalInvoices ?? 0,
@@ -210,28 +325,28 @@ import {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="stack-responsive">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">فاکتورها</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">فاکتورها</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
             مدیریت فاکتورها (نمایش: جدیدترین ابتدا، پرداخت: FIFO) و ارسال به تلگرام
           </p>
         </div>
 
-        <div className="action-group justify-end">
+        <div className="flex items-center space-x-4 space-x-reverse">
           <Button 
             onClick={handleSendToTelegram}
             disabled={selectedInvoices.length === 0 || sendToTelegramMutation.isPending}
-            className="bg-primary text-white hover:bg-primary/90 w-full sm:w-auto"
+            className="bg-primary text-white hover:bg-primary/90"
           >
-            <Send className="w-4 h-4 ml-2" />
+            <Send className="w-4 h-4 mr-2" />
             ارسال {toPersianDigits(selectedInvoices.length.toString())} فاکتور به تلگرام
           </Button>
         </div>
       </div>
 
       {/* Stats Cards - SHERLOCK v11.5: Enhanced with partial payment tracking */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -319,9 +434,9 @@ import {
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4 space-y-4">
-          <div className="filters-responsive">
-            <div className="relative flex-1 w-full">
+        <CardContent className="p-4">
+          <div className="flex items-center space-x-4 space-x-reverse">
+            <div className="relative flex-1">
               <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
                 placeholder="جستجو بر اساس شماره فاکتور، نماینده..."
@@ -334,37 +449,35 @@ import {
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-              <Select value={statusFilter} onValueChange={(value) => {
-                setStatusFilter(value);
-                setCurrentPage(1);
-              }}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="وضعیت فاکتور" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">همه وضعیت‌ها</SelectItem>
-                  <SelectItem value="unpaid">پرداخت نشده</SelectItem>
-                  <SelectItem value="paid">پرداخت شده</SelectItem>
-                  <SelectItem value="partial">تسویه جزئی</SelectItem>
-                  <SelectItem value="overdue">سررسید گذشته</SelectItem>
-                </SelectContent>
-              </Select>
+            <Select value={statusFilter} onValueChange={(value) => {
+              setStatusFilter(value);
+              setCurrentPage(1);
+            }}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="وضعیت فاکتور" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">همه وضعیت‌ها</SelectItem>
+                <SelectItem value="unpaid">پرداخت نشده</SelectItem>
+                <SelectItem value="paid">پرداخت شده</SelectItem>
+                <SelectItem value="partial">تسویه جزئی</SelectItem>
+                <SelectItem value="overdue">سررسید گذشته</SelectItem>
+              </SelectContent>
+            </Select>
 
-              <Select value={telegramFilter} onValueChange={(value) => {
-                setTelegramFilter(value);
-                setCurrentPage(1);
-              }}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="وضعیت تلگرام" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">همه</SelectItem>
-                  <SelectItem value="sent">ارسال شده</SelectItem>
-                  <SelectItem value="unsent">ارسال نشده</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={telegramFilter} onValueChange={(value) => {
+              setTelegramFilter(value);
+              setCurrentPage(1);
+            }}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="وضعیت تلگرام" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">همه</SelectItem>
+                <SelectItem value="sent">ارسال شده</SelectItem>
+                <SelectItem value="unsent">ارسال نشده</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -372,13 +485,13 @@ import {
       {/* Invoices Table */}
       <Card>
         <CardHeader>
-          <div className="stack-responsive">
+          <div className="flex items-center justify-between">
             <CardTitle className="flex items-center">
               <FileText className="w-5 h-5 ml-2" />
               فاکتورها ({toPersianDigits(filteredInvoices.length.toString())} - صفحه {toPersianDigits(currentPage.toString())} از {toPersianDigits(totalPages.toString())})
             </CardTitle>
-            <div className="action-group">
-              <div className="flex items-center gap-2 justify-between sm:justify-start">
+            <div className="flex items-center space-x-4 space-x-reverse">
+              <div className="flex items-center space-x-2 space-x-reverse">
                 <Checkbox
                   checked={
                     filteredInvoices.length > 0 &&
@@ -392,7 +505,7 @@ import {
               </div>
 
               {selectedInvoices.length > 0 && (
-                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <div className="flex items-center space-x-2 space-x-reverse">
                   <Button
                     size="sm"
                     onClick={() => setIsSendDialogOpen(true)}
@@ -417,10 +530,9 @@ import {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
-          <div className="table-scroll-wrapper">
-            <Table>
-              <TableHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
               <TableRow>
                 <TableHead className="w-12">انتخاب</TableHead>
                 <TableHead>شماره فاکتور</TableHead>
@@ -548,125 +660,8 @@ import {
                 </TableRow>
                 ))
               )}
-              </TableHeader>
-              <TableBody>
-                {paginatedInvoices.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-gray-500">
-                      {searchTerm || statusFilter !== 'all' || telegramFilter !== 'all' 
-                        ? 'هیچ فاکتوری با این فیلترها یافت نشد' 
-                        : 'هیچ فاکتوری یافت نشد'
-                      }
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedInvoices.map((invoice: Invoice) => (
-                  <TableRow key={invoice.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedInvoices.includes(invoice.id)}
-                        onCheckedChange={(checked) => 
-                          handleInvoiceSelect(invoice.id, checked as boolean)
-                        }
-                      />
-                    </TableCell>
-
-                    <TableCell className="font-medium">
-                      {invoice.invoiceNumber}
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="space-y-0.5">
-                        <div className="font-medium text-gray-900 dark:text-white">
-                          {invoice.representativeName || 'نامشخص'}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {invoice.representativeCode}
-                        </div>
-                        {invoice.panelUsername && (
-                          <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                            {invoice.panelUsername}
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    <TableCell className="font-medium whitespace-nowrap">
-                      {formatCurrency(invoice.amount)} تومان
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="flex items-center text-sm whitespace-nowrap">
-                        <Calendar className="w-4 h-4 ml-1 text-gray-400" />
-                        {invoice.issueDate}
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      {invoice.dueDate ? (
-                        <div className={`text-sm ${
-                          isOverdue(invoice.dueDate) 
-                            ? 'text-red-600 dark:text-red-400 font-medium' 
-                            : 'text-gray-900 dark:text-white'
-                        }`}>
-                          {invoice.dueDate}
-                        </div>
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-
-                    <TableCell>
-                      {getInvoiceStatusBadge(invoice)}
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="flex flex-col space-y-1">
-                        <Badge variant={invoice.sentToTelegram ? "default" : "secondary"}>
-                          {invoice.sentToTelegram 
-                            ? `ارسال شده ${invoice.telegramSendCount ? `(${toPersianDigits(invoice.telegramSendCount.toString())} بار)` : ''}`
-                            : "ارسال نشده"
-                          }
-                        </Badge>
-                        {invoice.telegramSentAt && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap">
-                            آخرین ارسال: {new Date(invoice.telegramSentAt).toLocaleString('fa-IR')}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Button size="sm" variant="ghost">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-
-                        <Button
-                          size="sm"
-                          variant={invoice.sentToTelegram ? "secondary" : "outline"}
-                          onClick={() => handleSingleInvoiceSend(invoice.id)}
-                          disabled={sendToTelegramMutation.isPending}
-                          className={`flex items-center gap-1 ${invoice.sentToTelegram ? 
-                            "border-orange-200 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-950" : 
-                            ''
-                          }`}
-                        >
-                          <Send className="w-4 h-4" />
-                          {invoice.sentToTelegram ? "ارسال مجدد" : "ارسال"}
-                        </Button>
-
-                        <Button size="sm" variant="ghost">
-                          <Download className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+            </TableBody>
+          </Table>
 
           {/* Pagination Controls with Statistics */}
           {totalPages > 1 && (
