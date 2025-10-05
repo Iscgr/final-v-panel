@@ -253,6 +253,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // 🔷 Phase 1: Portal Content Blocks (Modular public portal textual blocks - additive, not yet consumed by portal UI)
   app.use('/api/admin/portal-content-blocks', authMiddleware, portalContentRoutes);
   console.log('✅ Phase 1: Portal content blocks routes registered');
+  // Unified portal content document (Phase 2)
+  const unifiedPortalContentRoutes = (await import('./routes/portal-content-unified-routes.js')).default;
+  app.use('/api/admin/portal-content-unified', authMiddleware, unifiedPortalContentRoutes);
+  console.log('✅ Unified portal content document routes registered');
   // Multi-stage portal content flag management
   const portalContentFlagRoutes = (await import('./routes/portal-content-flag-routes.js')).default;
   app.use('/api/admin/portal-content-flag', authMiddleware, portalContentFlagRoutes);
