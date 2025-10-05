@@ -121,6 +121,11 @@ function AuthenticatedRouter() {
             <Route path="/invoices" component={Invoices} />
             <Route path="/invoice-management" component={InvoiceManagement} />
             <Route path="/sales-partners" component={SalesPartners} />
+            {/**
+             * FIX: مسیر /settings در سایدبار وجود داشت ولی در Switch تعریف نشده بود و منجر به صفحه خالی می‌شد.
+             * با افزودن این Route، محتوای صفحه تنظیمات (pages/settings.tsx) اکنون رندر می‌شود.
+             */}
+            <Route path="/settings" component={Settings} />
             <Route path="/admin/app-downloads" component={AppDownloadsManager} />
             <Route path="/admin/announcements" component={AnnouncementsManager} />
             <Route path="/admin/portal-content" component={PortalContentManager} />
@@ -169,8 +174,11 @@ function App() {
           <SidebarProvider>
             <Router>
               <div className={`min-h-screen bg-background ${isMobile ? 'mobile-optimized' : ''}`}>
+                <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:right-2 bg-blue-600 text-white px-3 py-2 rounded z-50">پرش به محتوای اصلی</a>
                 <ErrorBoundary>
-                  <AuthenticatedRouter />
+                  <div id="main-content" role="main" aria-label="محتوای اصلی پنل" className="focus:outline-none">
+                    <AuthenticatedRouter />
+                  </div>
                 </ErrorBoundary>
                 <Toaster />
               </div>

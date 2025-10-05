@@ -90,7 +90,7 @@ export default function RepresentativeProfile() {
     panelUsername: z.string().trim().min(3,'حداقل ۳ نویسه').max(64,'حداکثر ۶۴ نویسه'),
     phone: z.string().trim().regex(/^\+?[\d\s-]{5,18}$/,'شماره تماس نامعتبر است').optional().or(z.literal('')).transform(v => v === '' ? undefined : v),
     telegramHandle: z.string().trim().regex(/^@?[A-Za-z0-9_]{5,32}$/,'آیدی تلگرام نامعتبر است').optional().or(z.literal('')).transform(v => v === '' ? undefined : (v.startsWith('@') ? v : '@'+v)),
-    salesPartnerId: z.string().optional().or(z.literal('')).transform(v => v === '' ? undefined : Number(v))
+    salesPartnerId: z.string().optional().or(z.literal('')).or(z.literal('__none')).transform(v => (v === '' || v === '__none') ? undefined : v)
   });
   type EditProfileFormValues = z.infer<typeof editProfileSchema>;
   const editProfileForm = useForm<EditProfileFormValues>({
@@ -137,7 +137,7 @@ export default function RepresentativeProfile() {
       if (values.panelUsername) payload.panelUsername = values.panelUsername;
       if (values.phone !== undefined) payload.phone = values.phone;
       if (values.telegramHandle !== undefined) payload.telegramHandle = values.telegramHandle;
-      if (values.salesPartnerId !== undefined) payload.salesPartnerId = values.salesPartnerId;
+      if (values.salesPartnerId !== undefined) payload.salesPartnerId = Number(values.salesPartnerId);
       return apiRequest(`/representatives/${representative.id}/profile`, { method: 'PUT', data: payload });
     },
     onSuccess: () => {
@@ -752,10 +752,13 @@ export default function RepresentativeProfile() {
                   <FormItem>
                     <FormLabel>همکار فروش معرف</FormLabel>
                     <FormControl>
-                      <Select value={field.value ? String(field.value) : ''} onValueChange={(val) => field.onChange(val)}>
+                      <Select
+                        value={field.value ? String(field.value) : '__none'}
+                        onValueChange={(val) => field.onChange(val === '__none' ? '' : val)}
+                      >
                         <SelectTrigger><SelectValue placeholder="انتخاب همکار" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">بدون همکار</SelectItem>
+                          <SelectItem value="__none">بدون همکار</SelectItem>
                           {/* Sales partners dynamically */}
                           {/* این لیست بعداً با کوئری React Query ادغام خواهد شد */}
                         </SelectContent>
@@ -770,7 +773,7 @@ export default function RepresentativeProfile() {
                   <p className="font-semibold">راهنما:</p>
                   <p><strong>آیدی تلگرام:</strong> فقط حروف لاتین، عدد و _ . مثال معتبر: @My_Shop123</p>
                   <p><strong>شماره تماس:</strong> می‌توانید با پیش‌شماره کشور شروع کنید. + اختیاری است.</p>
-                  <p><strong>همکار فروش:</strong> در صورت انتخاب، کمیسیون به آن همکار نسبت داده می‌شود.</p>
+                  <p><strong>همکار فروش:</strong> در صورت انتخاب, کمیسیون به آن همکار نسبت داده می‌شود.</p>
                 </div>
                 <Button type="button" variant="outline" onClick={() => setIsEditProfileOpen(false)}>انصراف</Button>
                 <Button type="submit" disabled={updateProfileMutation.isPending}>{updateProfileMutation.isPending ? 'در حال ذخیره...' : 'ذخیره تغییرات'}</Button>

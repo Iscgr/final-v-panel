@@ -50,7 +50,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getQueryFn } from "@/lib/queryClient";
 import { toPersianDigits } from "@/lib/persian-date";
 // ماژول‌های Financial Integrity, BatchRollback, MultiGroupConfiguration حذف شدند طبق پاکسازی ایمن
 // import { FinancialIntegrityDashboard } from '../components/financial-integrity-dashboard';
@@ -134,57 +134,69 @@ export default function Settings() {
   const queryClient = useQueryClient();
 
   // Fetch current settings
+  // هر کوئری اکنون دارای queryFn صریح است تا خطای React Query رفع شود
   const { data: telegramBotToken } = useQuery({
-    queryKey: ["/api/settings/telegram_bot_token"]
+    queryKey: ["/api/settings/telegram_bot_token"],
+    queryFn: getQueryFn("/api/settings/telegram_bot_token")
   });
 
   const { data: telegramChatId } = useQuery({
-    queryKey: ["/api/settings/telegram_chat_id"]
+    queryKey: ["/api/settings/telegram_chat_id"],
+    queryFn: getQueryFn("/api/settings/telegram_chat_id")
   });
 
   const { data: telegramTemplate } = useQuery({
-    queryKey: ["/api/settings/telegram_template"]
+    queryKey: ["/api/settings/telegram_template"],
+    queryFn: getQueryFn("/api/settings/telegram_template")
   });
 
 
 
   // Fetch invoice template settings
   const { data: showUsageDetails } = useQuery({
-    queryKey: ["/api/settings/invoice_show_usage_details"]
+    queryKey: ["/api/settings/invoice_show_usage_details"],
+    queryFn: getQueryFn("/api/settings/invoice_show_usage_details")
   });
 
   const { data: showEventTimestamp } = useQuery({
-    queryKey: ["/api/settings/invoice_show_event_timestamp"]
+    queryKey: ["/api/settings/invoice_show_event_timestamp"],
+    queryFn: getQueryFn("/api/settings/invoice_show_event_timestamp")
   });
 
   const { data: showEventType } = useQuery({
-    queryKey: ["/api/settings/invoice_show_event_type"]
+    queryKey: ["/api/settings/invoice_show_event_type"],
+    queryFn: getQueryFn("/api/settings/invoice_show_event_type")
   });
 
   const { data: showDescription } = useQuery({
-    queryKey: ["/api/settings/invoice_show_description"]
+    queryKey: ["/api/settings/invoice_show_description"],
+    queryFn: getQueryFn("/api/settings/invoice_show_description")
   });
 
   const { data: showAdminUsername } = useQuery({
-    queryKey: ["/api/settings/invoice_show_admin_username"]
+    queryKey: ["/api/settings/invoice_show_admin_username"],
+    queryFn: getQueryFn("/api/settings/invoice_show_admin_username")
   });
 
   // Fetch portal settings
   const { data: portalTitle } = useQuery({
-    queryKey: ["/api/settings/portal_title"]
-  // Portal settings queries removed (deprecated)
+    queryKey: ["/api/settings/portal_title"],
+    queryFn: getQueryFn("/api/settings/portal_title")
   });
 
   const { data: portalDescription } = useQuery({
-    queryKey: ["/api/settings/portal_description"]
+    queryKey: ["/api/settings/portal_description"],
+    queryFn: getQueryFn("/api/settings/portal_description")
   });
 
   const { data: showOwnerName } = useQuery({
-    queryKey: ["/api/settings/portal_show_owner_name"]
+    queryKey: ["/api/settings/portal_show_owner_name"],
+    queryFn: getQueryFn("/api/settings/portal_show_owner_name")
   });
 
   const { data: showDetailedUsage } = useQuery({
-    queryKey: ["/api/settings/portal_show_detailed_usage"]
+    queryKey: ["/api/settings/portal_show_detailed_usage"],
+    queryFn: getQueryFn("/api/settings/portal_show_detailed_usage")
   });
 
   // Forms

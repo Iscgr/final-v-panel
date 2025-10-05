@@ -224,6 +224,13 @@ export class UnifiedFinancialEngine {
       return cached.data;
     }
 
+    // 👇 لایه کش بسیار سبک (TTL کوتاه ۵ ثانیه) برای کاهش طوفان کوئری در رفرش‌های متوالی
+    // اگر قبلاً نتیجه‌ای جدیدتر از ۵ ثانیه داریم ولی TTL بالاتر اصلی آن را منقضی کرده، مجدداً از همان استفاده می‌کنیم.
+    const SOFT_TTL = 5000; // 5s
+    if (cached && (now - cached.timestamp) < SOFT_TTL) {
+      return cached.data;
+    }
+
     // Clear from invalidation queue if present
     UnifiedFinancialEngine.invalidationQueue.delete(cacheKey);
 

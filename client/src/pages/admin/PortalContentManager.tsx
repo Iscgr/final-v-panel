@@ -109,7 +109,14 @@ export default function PortalContentManager() {
       setOriginalBody(editBody);
       setOriginalTitle(editTitle);
     },
-    onSettled: () => { invalidatePortalContent(queryClient, { blocks: true, full: true }); }
+    // قبلاً full: true باعث رفرش همه تب‌ها می‌شد (هزینه بالا). اکنون فقط بلوک‌ها را invalidate می‌کنیم
+    // و اگر کاربر در تب preview باشد، full را هم تازه می‌کنیم تا سازگاری حفظ شود.
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { blocks: true });
+      if (activeTab === 'preview') {
+        invalidatePortalContent(queryClient, { full: true });
+      }
+    }
   });
 
   const startEdit = (b: PortalContentBlock) => {
@@ -120,11 +127,14 @@ export default function PortalContentManager() {
     setOriginalTitle(b.title || '');
   };
 
+  const isDirty = selectedKey && (editBody !== originalBody || editTitle !== originalTitle);
+  const isSaving = saveMutation.isPending;
+
   const handleSave = useCallback(() => {
     if (!selectedKey) return;
     if (!isDirty) return;
     saveMutation.mutate({ blockKey: selectedKey, title: editTitle.trim(), body: editBody });
-  }, [selectedKey, editTitle, editBody, saveMutation, editBody, editTitle]);
+  }, [selectedKey, editTitle, editBody, isDirty, saveMutation]);
 
   // Auto-select first block once loaded
   useEffect(() => {
@@ -145,8 +155,6 @@ export default function PortalContentManager() {
     return () => window.removeEventListener('keydown', handler);
   }, [handleSave]);
 
-  const isDirty = selectedKey && (editBody !== originalBody || editTitle !== originalTitle);
-  const isSaving = saveMutation.isPending;
   const [dirtyMap, setDirtyMap] = useState<Record<string, { title: string; body: string }>>({});
 
   // Track dirty changes per block for future batch save
@@ -242,7 +250,10 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در ایجاد', variant: 'destructive' });
     },
-    onSettled: () => { invalidatePortalContent(queryClient, { announcements: true, full: true }); }
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { announcements: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
+    }
   });
   const updateAnnMutation = useMutation({
     mutationFn: (ann: Announcement) => PortalContentService.announcements.update(ann.id, ann),
@@ -253,7 +264,10 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در ویرایش', variant: 'destructive' });
     },
-    onSettled: () => { invalidatePortalContent(queryClient, { announcements: true, full: true }); }
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { announcements: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
+    }
   });
   const deleteAnnMutation = useMutation({
     mutationFn: (id: number) => PortalContentService.announcements.delete(id),
@@ -263,7 +277,10 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در حذف', variant: 'destructive' });
     },
-    onSettled: () => { invalidatePortalContent(queryClient, { announcements: true, full: true }); }
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { announcements: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
+    }
   });
   const bulkDeleteAnnouncements = async () => {
     if(!selectedAnnouncements.length) return;
@@ -288,7 +305,10 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در افزودن', variant: 'destructive' });
     },
-    onSettled: () => { invalidatePortalContent(queryClient, { downloads: true, full: true }); }
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { downloads: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
+    }
   });
   const updateDownloadMutation = useMutation({
     mutationFn: (d: AppDownload) => PortalContentService.downloads.update(d.id, d),
@@ -299,7 +319,10 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در ویرایش', variant: 'destructive' });
     },
-    onSettled: () => { invalidatePortalContent(queryClient, { downloads: true, full: true }); }
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { downloads: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
+    }
   });
   const deleteDownloadMutation = useMutation({
     mutationFn: (id: number) => PortalContentService.downloads.delete(id),
@@ -309,7 +332,10 @@ export default function PortalContentManager() {
     onError: () => {
       toast({ title: 'خطا در حذف', variant: 'destructive' });
     },
-    onSettled: () => { invalidatePortalContent(queryClient, { downloads: true, full: true }); }
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { downloads: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
+    }
   });
   const bulkDeleteDownloads = async () => {
     if(!selectedDownloads.length) return;
@@ -380,7 +406,7 @@ export default function PortalContentManager() {
           </div>
 
           {/* Editor */}
-          <div className="md:col-span-3 bg-white rounded-lg shadow p-4 md:p-6 border border-gray-200 min-h-[400px]">
+          <div className="md:col-span-3 bg-white rounded-lg shadow p-4 md:p-6 border border-gray-200 min-h-[400px]" role="region" aria-label="ویرایش بلوک محتوایی">
             {!currentBlock && <div className="text-center text-gray-500 text-sm">یک بلوک را از لیست انتخاب کنید</div>}
             {currentBlock && (
               <div className="space-y-4">
@@ -411,7 +437,7 @@ export default function PortalContentManager() {
                   <label className="block text-xs font-medium text-gray-700 mb-1">محتوا (Markdown ساده یا متن)</label>
                   <textarea value={editBody} onChange={e => setEditBody(e.target.value)} className="w-full px-3 py-2 border rounded-lg font-mono text-xs leading-relaxed" rows={14} />
                 </div>
-                <div className="flex items-center gap-4 pt-2 text-[11px]">
+                <div className="flex items-center gap-4 pt-2 text-[11px]" aria-live="polite">
                   {isDirty && !isSaving && <span className="text-amber-600">تغییرات ذخیره نشده</span>}
                   {isSaving && <span className="text-blue-600 animate-pulse">در حال ذخیره...</span>}
                   {!isDirty && !isSaving && selectedKey && <span className="text-green-600">همه تغییرات ذخیره شده‌اند</span>}
