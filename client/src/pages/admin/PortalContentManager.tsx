@@ -72,7 +72,13 @@ export default function PortalContentManager() {
   const updateDownload = (id:string, patch: Partial<UnifiedDownload>) => updateDraftField('downloads', (localDraft?.downloads||[]).map(d=> d.id===id? {...d, ...patch}:d));
   const removeDownload = (id:string) => updateDraftField('downloads', (localDraft?.downloads||[]).filter(d=> d.id!==id));
   const reorderDownload = (sourceId:string, targetId:string) => {
-    const arr=[...(localDraft?.downloads||[])]; const si=arr.findIndex(d=>d.id===sourceId); const ti=arr.findIndex(d=>d.id===targetId); if(si===-1||ti===-1) return; const [mv]=arr.splice(si,1); arr.splice(ti,0,mv); updateDraftField('downloads', arr.map((d,i)=>({...d, displayOrder:i*10})));
+    const arr = [ ...(localDraft?.downloads || []) ];
+    const si = arr.findIndex(d => d.id === sourceId);
+    const ti = arr.findIndex(d => d.id === targetId);
+    if (si === -1 || ti === -1) return;
+    const [mv] = arr.splice(si, 1);
+    arr.splice(ti, 0, mv);
+    updateDraftField('downloads', arr.map((d, i) => ({ ...d, displayOrder: i * 10 })));
   };
 
   const handleSave = () => { if(!isDirty || saveMutation.isPending) return; saveMutation.mutate(); };
