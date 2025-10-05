@@ -345,18 +345,20 @@ export function InvoiceManualForm({ onSuccess, editInvoice }: InvoiceManualFormP
             />
 
             {/* دکمه‌های عملیات */}
-            <div className="flex gap-3 justify-end">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => form.reset()}
                 disabled={isSubmitting}
+                className="w-full sm:w-auto"
               >
                 ریست فرم
               </Button>
               <Button
                 type="submit"
                 disabled={isSubmitting || repsLoading}
+                className="w-full sm:w-auto"
               >
                 {isSubmitting ? "در حال پردازش..." : 
                  editInvoice ? "ویرایش فاکتور" : "ایجاد فاکتور"}

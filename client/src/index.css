@@ -1017,6 +1017,27 @@
   .portal-warning {
     @apply text-yellow-400;
   }
+
+  /* Reusable responsive helpers */
+  .stack-responsive {
+    @apply flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between;
+  }
+
+  .filters-responsive {
+    @apply flex flex-col gap-4 lg:flex-row lg:items-center;
+  }
+
+  .action-group {
+    @apply flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:items-center;
+  }
+
+  .card-grid-responsive {
+    @apply grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4;
+  }
+
+  .table-scroll-wrapper {
+    @apply -mx-4 overflow-x-auto sm:mx-0;
+  }
 }
 
 /* Custom scrollbar for RTL */
@@ -1139,6 +1160,28 @@
   .portal-card {
     backdrop-filter: none !important;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    font-size: 15px;
+  }
+
+  [data-radix-dialog-content] {
+    width: calc(100vw - 2rem) !important;
+    max-width: calc(100vw - 2rem) !important;
+    padding: 1.5rem !important;
+    border-radius: 1rem !important;
+  }
+
+  .upload-area {
+    padding: 1.5rem;
+  }
+
+  .table-scroll-wrapper {
+    margin-left: -1rem;
+    margin-right: -1rem;
   }
 }
 
