@@ -43,37 +43,49 @@ function generateTimeBuckets(windowMinutes: number, bucketCount: number = 24): s
   return buckets;
 }
 
+// Helper: پاکسازی amount متنی به decimal (در صورت موجود نبودن amount_dec)
+// استفاده در چند کوئری برای جلوگیری از تکرار regexp_replace
+const toDecimal = (col: string) => `CASE WHEN ${col}_dec IS NOT NULL THEN ${col}_dec ELSE NULLIF(regexp_replace(${col}, '[^0-9.-]', '', 'g'), '')::DECIMAL END`;
+
 // Calculate debt drift PPM for representatives
-// K-01 Fix: Real query implementation using invoice_balance_cache and payment_allocations
+// K-01 Optimization: محدودسازی window بر اساس updated_at کش و created_at پرداخت/فاکتور برای کاهش اسکن
 async function calculateDebtDriftPpm(windowMinutes: number) {
   try {
-    // Calculate drift by comparing cached balance with real-time calculation
+    const since = sql`NOW() - INTERVAL '${windowMinutes} minutes'`;
+    // Strategy: debt واقعی را با cache (remaining_amount) مقایسه نکنیم؛ remaining_amount خود فاصله را منعکس می‌کند؟
+    // برای حفظ semantics قبلی، همچنان اختلاف debt محاسبه‌شده و cache را حساب می‌کنیم؛ اما دامنه داده را محدود می‌کنیم.
+    const startT = performance.now();
     const driftQuery = await db.execute(sql`
-      WITH real_time_debt AS (
+      WITH recent_invoices AS (
+        SELECT id, representative_id, amount
+        FROM invoices
+        WHERE created_at >= ${since}
+      ),
+      recent_payments AS (
+        SELECT id, representative_id, amount, amount_dec, is_allocated
+        FROM payments
+        WHERE created_at >= ${since}
+      ),
+      real_time_debt AS (
         SELECT 
           r.id as representative_id,
-          COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) as total_invoices,
-          COALESCE(SUM(CASE WHEN p.is_allocated THEN 
-            CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
-            ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
-          ELSE 0 END), 0) as total_allocated,
+          COALESCE(SUM(CAST(ri.amount AS DECIMAL)), 0) as total_invoices,
+          COALESCE(SUM(CASE WHEN rp.is_allocated THEN ${sql.raw(toDecimal('rp.amount'))} ELSE 0 END), 0) as total_allocated,
           GREATEST(0, 
-            COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) - 
-            COALESCE(SUM(CASE WHEN p.is_allocated THEN 
-              CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
-              ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
-            ELSE 0 END), 0)
+            COALESCE(SUM(CAST(ri.amount AS DECIMAL)), 0) - 
+            COALESCE(SUM(CASE WHEN rp.is_allocated THEN ${sql.raw(toDecimal('rp.amount'))} ELSE 0 END), 0)
           ) as calculated_debt
         FROM representatives r
-        LEFT JOIN invoices i ON r.id = i.representative_id
-        LEFT JOIN payments p ON r.id = p.representative_id
+        LEFT JOIN recent_invoices ri ON r.id = ri.representative_id
+        LEFT JOIN recent_payments rp ON r.id = rp.representative_id
         GROUP BY r.id
       ),
       cached_debt AS (
-        SELECT 
-          representative_id,
-          COALESCE(CAST(cached_balance AS DECIMAL), 0) as cached_balance
-        FROM invoice_balance_cache
+        SELECT i.representative_id, SUM(ibc.remaining_amount) as cached_balance
+        FROM invoice_balance_cache ibc
+        JOIN invoices i ON i.id = ibc.invoice_id
+        WHERE ibc.updated_at >= ${since}
+        GROUP BY i.representative_id
       ),
       drift_analysis AS (
         SELECT 
@@ -91,8 +103,9 @@ async function calculateDebtDriftPpm(windowMinutes: number) {
         COALESCE(AVG(absolute_drift), 0) as avg_drift,
         COALESCE(MAX(absolute_drift), 0) as max_drift,
         COUNT(CASE WHEN absolute_drift > 100 THEN 1 END) as drifted_representatives
-      FROM drift_analysis
+      FROM drift_analysis;
     `);
+    const queryMs = Math.round(performance.now() - startT);
     
     const driftData = (driftQuery as any).rows?.[0];
     const totalDrift = parseFloat(driftData?.total_drift || 0);
@@ -253,31 +266,36 @@ async function calculatePartialAllocationRatio(windowMinutes: number) {
 // K-01 Fix: Real query using representatives.total_sales and total_debt
 async function calculateOverpaymentBuffer(windowMinutes: number) {
   try {
-    // Query representatives with credit/overpayment
+    const since = sql`NOW() - INTERVAL '${windowMinutes} minutes'`;
+    // محدودسازی داده با window برای پرداخت و فاکتور جدید جهت کاهش هزینه
     const bufferQuery = await db.execute(sql`
-      WITH representative_balances AS (
+      WITH recent_payments AS (
+        SELECT representative_id, ${sql.raw(toDecimal('amount'))} as amount
+        FROM payments
+        WHERE created_at >= ${since}
+      ),
+      recent_invoices AS (
+        SELECT representative_id, CAST(amount AS DECIMAL) as amount
+        FROM invoices
+        WHERE created_at >= ${since}
+      ),
+      representative_balances AS (
         SELECT 
           r.id,
-          r.name,
-          COALESCE(CAST(r.total_sales AS DECIMAL), 0) as total_sales,
-          COALESCE(CAST(r.total_debt AS DECIMAL), 0) as total_debt,
-          COALESCE(SUM(CASE WHEN p.is_allocated THEN 
-            CASE WHEN p.amount_dec IS NOT NULL THEN p.amount_dec 
-            ELSE NULLIF(regexp_replace(p.amount, '[^0-9.-]', '', 'g'), '')::DECIMAL END 
-          ELSE 0 END), 0) as total_paid,
-          COALESCE(SUM(CAST(i.amount AS DECIMAL)), 0) as total_invoiced
+          COALESCE(SUM(rp.amount), 0) as total_paid,
+          COALESCE(SUM(ri.amount), 0) as total_invoiced
         FROM representatives r
-        LEFT JOIN payments p ON r.id = p.representative_id
-        LEFT JOIN invoices i ON r.id = i.representative_id
+        LEFT JOIN recent_payments rp ON r.id = rp.representative_id
+        LEFT JOIN recent_invoices ri ON r.id = ri.representative_id
         WHERE r.is_active = true
-        GROUP BY r.id, r.name, r.total_sales, r.total_debt
+        GROUP BY r.id
       )
       SELECT 
         COUNT(CASE WHEN total_paid > total_invoiced AND (total_paid - total_invoiced) > 0 THEN 1 END) as representatives_with_buffer,
         COALESCE(SUM(CASE WHEN total_paid > total_invoiced THEN total_paid - total_invoiced ELSE 0 END), 0) as total_buffer,
         COALESCE(AVG(CASE WHEN total_paid > total_invoiced THEN total_paid - total_invoiced ELSE 0 END), 0) as avg_buffer,
         COALESCE(MAX(CASE WHEN total_paid > total_invoiced THEN total_paid - total_invoiced ELSE 0 END), 0) as max_buffer
-      FROM representative_balances
+      FROM representative_balances;
     `);
     
     const bufferData = (bufferQuery as any).rows?.[0];
@@ -329,6 +347,11 @@ router.get('/kpi-metrics', async (req, res) => {
     }
     
     // Parallel execution for better performance
+    const perfMarks: Record<string, number> = {};
+    const wrap = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
+      const t0 = performance.now();
+      try { return await fn(); } finally { perfMarks[label] = Math.round(performance.now() - t0); }
+    };
     const [
       debtDriftPpm,
       allocationLatency,
@@ -336,11 +359,11 @@ router.get('/kpi-metrics', async (req, res) => {
       overpaymentBuffer,
       guardMetricsLastHour
     ] = await Promise.all([
-      calculateDebtDriftPpm(windowMinutes),
-      calculateAllocationLatency(windowMinutes),
-      calculatePartialAllocationRatio(windowMinutes),
-      calculateOverpaymentBuffer(windowMinutes),
-      GuardMetricsPersistenceService.getSummary(60) // Last hour guard metrics
+      wrap('debtDriftMs', () => calculateDebtDriftPpm(windowMinutes)),
+      wrap('allocLatencyMs', () => calculateAllocationLatency(windowMinutes)),
+      wrap('partialRatioMs', () => calculatePartialAllocationRatio(windowMinutes)),
+      wrap('overpaymentBufferMs', () => calculateOverpaymentBuffer(windowMinutes)),
+      wrap('guardMetricsMs', () => GuardMetricsPersistenceService.getSummary(60))
     ]);
     
     // Count critical events
@@ -371,7 +394,8 @@ router.get('/kpi-metrics', async (req, res) => {
         window,
         windowMinutes,
         generatedAt: new Date().toISOString(),
-        source: 'E-B5 Stage 3 KPI API'
+        source: 'E-B5 Stage 3 KPI API',
+        perf: perfMarks
       }
     });
     

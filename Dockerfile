@@ -45,6 +45,9 @@ FROM node:20-alpine AS production
 # Install required system dependencies
 RUN apk add --no-cache postgresql-client curl
 
+# Explicit environment to ensure server/index.ts تشخیص محیط را production در نظر بگیرد
+ENV NODE_ENV=production
+
 # Create a non-root user and necessary directories first
 RUN addgroup -S nodejs && adduser -S marfanet -G nodejs && \
     mkdir -p /app/logs && \
@@ -67,4 +70,4 @@ COPY --from=builder --chown=marfanet:nodejs /app/start-server.cjs .
 EXPOSE 3000
 
 # Set the command to run the application
-CMD ["node", "start-server.cjs"]
+CMD ["npm", "run", "start:prod"]

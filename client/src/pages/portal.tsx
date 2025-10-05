@@ -16,6 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import React, { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import PortalResources from "@/components/PortalResources";
+import { useMobileDetection } from "@/hooks/use-mobile-detection";
 
 // Lucide Icons
 import { 
@@ -112,7 +113,7 @@ interface PortalData {
 
 // ==================== INVOICE CARD COMPONENT ====================
 
-function InvoiceCard({ invoice, config }: { invoice: Invoice; config?: PortalData['portalConfig']; }) {
+function InvoiceCard({ invoice, config, isMobile }: { invoice: Invoice; config?: PortalData['portalConfig']; isMobile: boolean; }) {
   const [showDetails, setShowDetails] = useState(false);
   const usageSectionEnabled = config?.showDetailedUsage !== false && config?.showUsageDetails !== false;
   const showEventTimestamp = config?.showEventTimestamp !== false;
@@ -162,8 +163,8 @@ function InvoiceCard({ invoice, config }: { invoice: Invoice; config?: PortalDat
   return (
     <div style={{ 
       background: 'linear-gradient(135deg, #475569, #64748b)', 
-      padding: '20px', 
-      borderRadius: '12px',
+      padding: isMobile ? '16px' : '20px', 
+      borderRadius: isMobile ? '10px' : '12px',
       border: '2px solid #94a3b8',
       boxShadow: '0 4px 6px rgba(0,0,0,0.2)'
     }}>
@@ -171,37 +172,37 @@ function InvoiceCard({ invoice, config }: { invoice: Invoice; config?: PortalDat
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
-        alignItems: 'flex-start',
+        alignItems: isMobile ? 'stretch' : 'flex-start',
         marginBottom: '15px',
         flexWrap: 'wrap',
-        gap: '15px'
+        gap: isMobile ? '12px' : '15px'
       }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
             <FileText size={20} color="#3b82f6" />
-            <p style={{ fontSize: '20px', fontWeight: 'bold', color: 'white' }}>
+            <p style={{ fontSize: isMobile ? '18px' : '20px', fontWeight: 'bold', color: 'white' }}>
               {invoice.invoiceNumber}
             </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', opacity: 0.9 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: isMobile ? '12px' : '14px', opacity: 0.9 }}>
             <Calendar size={14} />
             <span>تاریخ: {invoice.issueDate}</span>
           </div>
           {invoice.dueDate && (
-            <div style={{ fontSize: '13px', opacity: 0.8, marginTop: '4px' }}>
+            <div style={{ fontSize: isMobile ? '12px' : '13px', opacity: 0.8, marginTop: '4px' }}>
               سررسید: {invoice.dueDate}
             </div>
           )}
         </div>
         
-        <div style={{ textAlign: 'left' }}>
-          <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981', marginBottom: '8px' }}>
-            {parseFloat(String(invoice.amount || '0')).toLocaleString('fa-IR')} <span style={{ fontSize: '16px' }}>تومان</span>
+        <div style={{ textAlign: isMobile ? 'right' : 'left' }}>
+          <p style={{ fontSize: isMobile ? '20px' : '24px', fontWeight: 'bold', color: '#10b981', marginBottom: '8px' }}>
+            {parseFloat(String(invoice.amount || '0')).toLocaleString('fa-IR')} <span style={{ fontSize: isMobile ? '14px' : '16px' }}>تومان</span>
           </p>
           {getStatusBadge(invoice.status)}
           {invoice.remainingAmount && parseFloat(invoice.remainingAmount) > 0 && (
             <div style={{ 
-              fontSize: '12px', 
+              fontSize: isMobile ? '11px' : '12px', 
               marginTop: '8px', 
               padding: '4px 8px', 
               background: 'rgba(239, 68, 68, 0.2)',
@@ -227,9 +228,9 @@ function InvoiceCard({ invoice, config }: { invoice: Invoice; config?: PortalDat
             background: showDetails ? 'linear-gradient(135deg, #7c3aed, #6d28d9)' : 'linear-gradient(135deg, #1e40af, #3730a3)',
             color: 'white',
             border: 'none',
-            padding: '10px 16px',
+            padding: isMobile ? '10px 14px' : '10px 16px',
             borderRadius: '8px',
-            fontSize: '14px',
+            fontSize: isMobile ? '13px' : '14px',
             fontWeight: 'bold',
             cursor: 'pointer',
             transition: 'all 0.2s'
@@ -245,15 +246,15 @@ function InvoiceCard({ invoice, config }: { invoice: Invoice; config?: PortalDat
   {showDetails && usageSectionEnabled && invoice.usageData && (
         <div style={{
           marginTop: '15px',
-          padding: '15px',
+          padding: isMobile ? '12px' : '15px',
           background: 'rgba(15, 23, 42, 0.5)',
-          borderRadius: '8px',
+          borderRadius: isMobile ? '8px' : '10px',
           border: '1px solid rgba(148, 163, 184, 0.3)'
         }}>
           {invoice.usageData.records && (
             <>
               <h5 style={{ 
-                fontSize: '15px', 
+                fontSize: isMobile ? '14px' : '15px', 
                 fontWeight: 'bold', 
                 marginBottom: '12px',
                 color: '#93c5fd',
@@ -269,15 +270,15 @@ function InvoiceCard({ invoice, config }: { invoice: Invoice; config?: PortalDat
                 {invoice.usageData.records.map((record: any, idx: number) => (
                   <div key={idx} style={{
                     background: 'rgba(51, 65, 85, 0.6)',
-                    padding: '12px',
+                    padding: isMobile ? '10px' : '12px',
                     borderRadius: '6px',
                     border: '1px solid rgba(100, 116, 139, 0.4)'
                   }}>
                     <div style={{ 
                       display: 'grid', 
-                      gridTemplateColumns: '1fr 1fr', 
+                      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', 
                       gap: '12px', 
-                      fontSize: '13px' 
+                      fontSize: isMobile ? '12px' : '13px' 
                     }}>
                       <div>
                         {showEventType && (
@@ -325,7 +326,7 @@ function InvoiceCard({ invoice, config }: { invoice: Invoice; config?: PortalDat
           {invoice.usageData.type === 'manual' && (
             <>
               <h5 style={{ 
-                fontSize: '15px', 
+                fontSize: isMobile ? '14px' : '15px', 
                 fontWeight: 'bold', 
                 marginBottom: '12px',
                 color: '#fbbf24',
@@ -339,7 +340,7 @@ function InvoiceCard({ invoice, config }: { invoice: Invoice; config?: PortalDat
               
               <div style={{
                 background: 'rgba(217, 119, 6, 0.1)',
-                padding: '12px',
+                padding: isMobile ? '10px' : '12px',
                 borderRadius: '6px',
                 border: '1px solid rgba(251, 191, 36, 0.3)'
               }}>
@@ -383,6 +384,30 @@ export default function PublicPortal() {
   });
 
   const customCss = data?.portalConfig?.customCss?.trim();
+
+  const { isMobile, screenSize } = useMobileDetection();
+  const isSmallHandset = screenSize === 'xs';
+  const layout = {
+    pagePadding: isMobile ? 16 : 20,
+    headerPadding: isMobile ? 20 : 30,
+    containerWidth: isMobile ? '100%' : '1400px',
+    headerRadius: isMobile ? 14 : 16,
+    cardPadding: isMobile ? 16 : 24,
+    cardRadius: isMobile ? 12 : 16,
+    sectionGap: isMobile ? 24 : 32,
+    sectionMargin: isMobile ? 28 : 40,
+    titleSize: isMobile ? 26 : 32,
+    sectionTitle: isMobile ? 20 : 24,
+    statValue: isMobile ? 32 : 36,
+    gridMin: isMobile ? 180 : 250,
+    cardGap: isMobile ? 16 : 20,
+    headerGridGap: isMobile ? 12 : 20,
+    headerInfoPadding: isMobile ? 12 : 16,
+    headerInfoRadius: isMobile ? 10 : 12,
+    bannerPadding: isMobile ? 12 : 16,
+    bannerRadius: isMobile ? 8 : 10,
+    paymentGridMin: isMobile ? 200 : 280,
+  };
 
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -510,38 +535,44 @@ export default function PublicPortal() {
       minHeight: '100vh', 
       background: 'linear-gradient(135deg, #0f172a, #1e293b, #334155)', 
       color: 'white', 
-      padding: '20px',
+      padding: layout.pagePadding,
       fontFamily: 'Tahoma, sans-serif',
       direction: 'rtl'
     }}>
-      <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      {process.env.NODE_ENV !== 'production' && (
+        <div style={{position:'fixed', top:10, left:10, zIndex:9999, background:'#1e293b', border:'1px solid #475569', borderRadius:8, padding:'8px 12px', fontSize:12, fontFamily:'monospace', opacity:0.9}}>
+          <div>Source: {(data as any)?.portalContentSource || 'legacy'}</div>
+          <div>Version: {(data as any)?.portalConfigVersion ?? 0}</div>
+        </div>
+      )}
+      <div style={{ maxWidth: layout.containerWidth, margin: '0 auto' }}>
         
         {/* ===== 1. HEADER - اطلاعات هویتی ===== */}
         <div style={{ 
           background: 'linear-gradient(135deg, #1e40af, #1d4ed8, #2563eb)', 
-          padding: '30px', 
-          borderRadius: '16px',
-          marginBottom: '30px',
+          padding: layout.headerPadding, 
+          borderRadius: layout.headerRadius,
+          marginBottom: layout.sectionMargin,
           border: '2px solid #3b82f6',
           boxShadow: '0 8px 16px rgba(0,0,0,0.3)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '15px' }}>
             <User size={32} color="#dbeafe" />
-            <h1 style={{ fontSize: '32px', fontWeight: 'bold', margin: 0 }}>
+            <h1 style={{ fontSize: layout.titleSize, fontWeight: 'bold', margin: 0 }}>
               پورتال عمومی نماینده
             </h1>
           </div>
           
           <div style={{ 
             display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
-            gap: '15px',
-            marginTop: '20px'
+            gridTemplateColumns: `repeat(auto-fit, minmax(${layout.gridMin}px, 1fr))`, 
+            gap: layout.headerGridGap,
+            marginTop: layout.sectionGap
           }}>
             <div style={{ 
               background: 'rgba(255, 255, 255, 0.1)', 
-              padding: '15px', 
-              borderRadius: '10px',
+              padding: layout.headerInfoPadding, 
+              borderRadius: layout.headerInfoRadius,
               border: '1px solid rgba(219, 234, 254, 0.3)'
             }}>
               <p style={{ fontSize: '13px', color: '#bfdbfe', marginBottom: '6px' }}>نام فروشگاه</p>
@@ -551,8 +582,8 @@ export default function PublicPortal() {
             {showOwnerCard && (
               <div style={{ 
                 background: 'rgba(255, 255, 255, 0.1)', 
-                padding: '15px', 
-                borderRadius: '10px',
+                padding: layout.headerInfoPadding, 
+                borderRadius: layout.headerInfoRadius,
                 border: '1px solid rgba(219, 234, 254, 0.3)'
               }}>
                 <p style={{ fontSize: '13px', color: '#bfdbfe', marginBottom: '6px' }}>نام مالک</p>
@@ -563,8 +594,8 @@ export default function PublicPortal() {
             {/* ✅ NEW: پیام راهنمای دانلود (جایگزین code و panelUsername) */}
             <div style={{ 
               background: 'rgba(16, 185, 129, 0.15)', 
-              padding: '15px', 
-              borderRadius: '10px',
+              padding: layout.bannerPadding, 
+              borderRadius: layout.bannerRadius,
               border: '1px solid rgba(52, 211, 153, 0.4)',
               gridColumn: showOwnerCard ? 'auto' : 'span 2'
             }}>
@@ -576,10 +607,10 @@ export default function PublicPortal() {
 
           {data.financialMeta?.accuracyGuaranteed && (
             <div style={{ 
-              marginTop: '20px', 
-              padding: '12px 16px', 
+              marginTop: layout.sectionGap, 
+              padding: isMobile ? '10px 14px' : '12px 16px', 
               background: 'rgba(16, 185, 129, 0.15)',
-              borderRadius: '8px',
+              borderRadius: layout.bannerRadius,
               border: '1px solid rgba(52, 211, 153, 0.3)',
               display: 'inline-block'
             }}>
@@ -597,11 +628,11 @@ export default function PublicPortal() {
         </div>
 
         {/* ===== 2. FINANCIAL SUMMARY - خلاصه مالی ===== */}
-        <div style={{ marginBottom: '40px' }}>
+        <div style={{ marginBottom: layout.sectionMargin }}>
           <h3 style={{ 
-            fontSize: '24px', 
+            fontSize: layout.sectionTitle, 
             fontWeight: 'bold', 
-            marginBottom: '20px',
+            marginBottom: isMobile ? 16 : 20,
             display: 'flex',
             alignItems: 'center',
             gap: '10px'
@@ -612,14 +643,14 @@ export default function PublicPortal() {
           
           <div style={{ 
             display: 'grid', 
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', 
-            gap: '20px' 
+            gridTemplateColumns: `repeat(auto-fit, minmax(${isMobile ? 220 : 280}px, 1fr))`, 
+            gap: layout.cardGap 
           }}>
             {/* Total Debt */}
             <div style={{ 
               background: 'linear-gradient(135deg, #dc2626, #b91c1c)', 
-              padding: '24px', 
-              borderRadius: '12px',
+              padding: layout.cardPadding, 
+              borderRadius: layout.cardRadius,
               border: '2px solid #ef4444',
               boxShadow: '0 4px 6px rgba(220, 38, 38, 0.3)',
               position: 'relative',
@@ -629,7 +660,7 @@ export default function PublicPortal() {
                 <TrendingDown size={60} />
               </div>
               <p style={{ fontSize: '15px', marginBottom: '12px', opacity: 0.9 }}>بدهی کل</p>
-              <p style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '8px', zIndex: 1, position: 'relative' }}>
+              <p style={{ fontSize: layout.statValue, fontWeight: 'bold', marginBottom: '8px', zIndex: 1, position: 'relative' }}>
                 {totalDebt.toLocaleString('fa-IR')}
               </p>
               <p style={{ fontSize: '14px', opacity: 0.8 }}>تومان</p>
@@ -638,8 +669,8 @@ export default function PublicPortal() {
             {/* Total Sales */}
             <div style={{ 
               background: 'linear-gradient(135deg, #2563eb, #1d4ed8)', 
-              padding: '24px', 
-              borderRadius: '12px',
+              padding: layout.cardPadding, 
+              borderRadius: layout.cardRadius,
               border: '2px solid #3b82f6',
               boxShadow: '0 4px 6px rgba(37, 99, 235, 0.3)',
               position: 'relative',
@@ -649,7 +680,7 @@ export default function PublicPortal() {
                 <TrendingUp size={60} />
               </div>
               <p style={{ fontSize: '15px', marginBottom: '12px', opacity: 0.9 }}>فروش کل</p>
-              <p style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '8px', zIndex: 1, position: 'relative' }}>
+              <p style={{ fontSize: layout.statValue, fontWeight: 'bold', marginBottom: '8px', zIndex: 1, position: 'relative' }}>
                 {totalSales.toLocaleString('fa-IR')}
               </p>
               <p style={{ fontSize: '14px', opacity: 0.8 }}>تومان</p>
@@ -659,8 +690,8 @@ export default function PublicPortal() {
             {credit > 0 && (
               <div style={{ 
                 background: 'linear-gradient(135deg, #059669, #047857)', 
-                padding: '24px', 
-                borderRadius: '12px',
+                padding: layout.cardPadding, 
+                borderRadius: layout.cardRadius,
                 border: '2px solid #10b981',
                 boxShadow: '0 4px 6px rgba(5, 150, 105, 0.3)',
                 position: 'relative',
@@ -670,7 +701,7 @@ export default function PublicPortal() {
                   <CreditCard size={60} />
                 </div>
                 <p style={{ fontSize: '15px', marginBottom: '12px', opacity: 0.9 }}>اعتبار</p>
-                <p style={{ fontSize: '36px', fontWeight: 'bold', marginBottom: '8px', zIndex: 1, position: 'relative' }}>
+                <p style={{ fontSize: layout.statValue, fontWeight: 'bold', marginBottom: '8px', zIndex: 1, position: 'relative' }}>
                   {credit.toLocaleString('fa-IR')}
                 </p>
                 <p style={{ fontSize: '14px', opacity: 0.8 }}>تومان</p>
@@ -680,11 +711,11 @@ export default function PublicPortal() {
         </div>
 
         {/* ===== 3. INVOICES - فاکتورها FIFO ===== */}
-        <div style={{ marginBottom: '40px' }}>
+        <div style={{ marginBottom: layout.sectionMargin }}>
           <h3 style={{ 
-            fontSize: '24px', 
+            fontSize: layout.sectionTitle, 
             fontWeight: 'bold', 
-            marginBottom: '20px',
+            marginBottom: isMobile ? 16 : 20,
             display: 'flex',
             alignItems: 'center',
             gap: '10px'
@@ -695,14 +726,14 @@ export default function PublicPortal() {
           
           <div style={{ 
             background: 'rgba(51, 65, 85, 0.4)', 
-            padding: '24px', 
-            borderRadius: '12px',
+            padding: layout.cardPadding, 
+            borderRadius: layout.cardRadius,
             border: '2px solid #475569'
           }}>
             {data.invoices && data.invoices.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: layout.cardGap }}>
                 {data.invoices.map((invoice: Invoice) => (
-                  <InvoiceCard key={invoice.id} invoice={invoice} config={data.portalConfig} />
+                  <InvoiceCard key={invoice.id} invoice={invoice} config={data.portalConfig} isMobile={isMobile} />
                 ))}
               </div>
             ) : (
@@ -715,11 +746,11 @@ export default function PublicPortal() {
         </div>
 
         {/* ===== 4. PAYMENTS - تاریخچه پرداخت‌ها ===== */}
-        <div style={{ marginBottom: '40px' }}>
+        <div style={{ marginBottom: layout.sectionMargin }}>
           <h3 style={{ 
-            fontSize: '24px', 
+            fontSize: layout.sectionTitle, 
             fontWeight: 'bold', 
-            marginBottom: '20px',
+            marginBottom: isMobile ? 16 : 20,
             display: 'flex',
             alignItems: 'center',
             gap: '10px'
@@ -730,21 +761,21 @@ export default function PublicPortal() {
           
           <div style={{ 
             background: 'rgba(51, 65, 85, 0.4)', 
-            padding: '24px', 
-            borderRadius: '12px',
+            padding: layout.cardPadding, 
+            borderRadius: layout.cardRadius,
             border: '2px solid #475569'
           }}>
             {data.payments && data.payments.length > 0 ? (
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                gap: '15px' 
+                gridTemplateColumns: `repeat(auto-fill, minmax(${layout.paymentGridMin}px, 1fr))`,
+                gap: layout.cardGap 
               }}>
                 {data.payments.map((payment: Payment, index: number) => (
                   <div key={index} style={{ 
                     background: 'linear-gradient(135deg, #059669, #047857)', 
-                    padding: '18px', 
-                    borderRadius: '10px',
+                    padding: isMobile ? 16 : 20, 
+                    borderRadius: layout.cardRadius,
                     border: '2px solid #10b981',
                     boxShadow: '0 4px 6px rgba(5, 150, 105, 0.2)'
                   }}>
@@ -777,11 +808,11 @@ export default function PublicPortal() {
 
         {/* ===== 5. DOWNLOADS & ANNOUNCEMENTS - دانلود اپ‌ها و اعلانات ===== */}
         {publicId && (
-          <div style={{ marginBottom: '40px' }}>
+          <div style={{ marginBottom: layout.sectionMargin }}>
             <h3 style={{ 
-              fontSize: '24px', 
+              fontSize: layout.sectionTitle, 
               fontWeight: 'bold', 
-              marginBottom: '20px',
+              marginBottom: isMobile ? 16 : 20,
               display: 'flex',
               alignItems: 'center',
               gap: '10px'
@@ -796,14 +827,14 @@ export default function PublicPortal() {
         {/* ===== 6. HELP & GUIDANCE - راهنمایی ===== */}
         <div style={{ 
           background: 'linear-gradient(135deg, #0f766e, #0d9488)', 
-          padding: '24px', 
-          borderRadius: '12px',
+          padding: layout.cardPadding, 
+          borderRadius: layout.cardRadius,
           border: '2px solid #14b8a6',
-          marginBottom: '40px'
+          marginBottom: layout.sectionMargin
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
             <HelpCircle size={28} />
-            <h3 style={{ fontSize: '22px', fontWeight: 'bold', margin: 0 }}>راهنمایی و توصیه‌ها</h3>
+            <h3 style={{ fontSize: isMobile ? 18 : 22, fontWeight: 'bold', margin: 0 }}>راهنمایی و توصیه‌ها</h3>
           </div>
           
           <div style={{ fontSize: '15px', lineHeight: '1.8', opacity: 0.95, whiteSpace: 'pre-line' }}>
@@ -817,18 +848,18 @@ export default function PublicPortal() {
         {/* ===== 7. FOOTER - اطلاعات تماس ===== */}
         <div style={{ 
           background: 'rgba(15, 23, 42, 0.6)', 
-          padding: '24px', 
-          borderRadius: '12px',
+          padding: layout.cardPadding, 
+          borderRadius: layout.cardRadius,
           border: '1px solid rgba(71, 85, 105, 0.5)',
           textAlign: 'center'
         }}>
-          <h4 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: 'bold' }}>اطلاعات تماس و پشتیبانی</h4>
+          <h4 style={{ fontSize: isMobile ? 16 : 18, marginBottom: isMobile ? 12 : 16, fontWeight: 'bold' }}>اطلاعات تماس و پشتیبانی</h4>
           
           <div style={{ 
             display: 'flex', 
             justifyContent: 'center', 
             flexWrap: 'wrap',
-            gap: '24px',
+            gap: layout.cardGap,
             fontSize: '14px',
             opacity: 0.9
           }}>

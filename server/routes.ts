@@ -246,13 +246,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/representatives', authMiddleware, representativesRoutes);
   console.log('✅ Representatives routes registered with authentication');
 
-  // 🔷 Admin Resources Routes - App Downloads & Announcements Management (Admin Panel Only)
-  app.use('/api/admin', authMiddleware, adminResourcesRoutes);
-  console.log('✅ Admin resources routes registered (app-downloads, announcements)');
+  // مسیرهای legacy مدیریت App Downloads و Announcements حذف شد (جایگزین: سند یکپارچه + announcements مستقل)
 
   // 🔷 Phase 1: Portal Content Blocks (Modular public portal textual blocks - additive, not yet consumed by portal UI)
   app.use('/api/admin/portal-content-blocks', authMiddleware, portalContentRoutes);
   console.log('✅ Phase 1: Portal content blocks routes registered');
+  // Unified portal content document (Phase 2)
+  const unifiedPortalContentRoutes = (await import('./routes/portal-content-unified-routes.js')).default;
+  app.use('/api/admin/portal-content-unified', authMiddleware, unifiedPortalContentRoutes);
+  console.log('✅ Unified portal content document routes registered');
+  // Multi-stage portal content flag management
+  const portalContentFlagRoutes = (await import('./routes/portal-content-flag-routes.js')).default;
+  app.use('/api/admin/portal-content-flag', authMiddleware, portalContentFlagRoutes);
+  console.log('✅ Portal content flag routes registered');
 
   // 🔷 Portal Resources Routes - Public Resources for Representatives Portal
   app.use('/api/portal', portalResourcesRoutes);
@@ -1215,43 +1221,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         announcementsTitle: announcementsTitle?.value || '📢 اعلانات و اطلاعیه‌ها'
       };
 
-      // ⚙️ PORTAL_CONTENT_READ_SWITCH: shadow/full migration برای محتوای متنی
+      // ⚙️ PORTAL_CONTENT_READ_SWITCH ارتقاء یافته: meta + version + diff در shadow
+      let portalConfigVersion = 0;
+      let portalContentSource: 'legacy' | 'shadow' | 'full' = 'legacy';
+      let contentDiff: Array<{ field: string; blockKey: string; legacyLen: number; newLen: number }> | undefined;
       try {
         const portalContentFlag = featureFlagManager.getMultiStageFlagState('portal_content_read_switch');
         if (portalContentFlag === 'shadow' || portalContentFlag === 'full') {
-          // خواندن بلوک‌های جدید
-            const blocks = await db.select().from(portalContentBlocks);
-            const map: Record<string, string> = {};
-            for (const b of blocks) {
-              map[b.blockKey] = b.body || '';
+          const { portalContentBlocks, portalContentPublicationState } = await import('../shared/schema.js');
+          const blocks = await db.select().from(portalContentBlocks);
+          const map: Record<string, string> = {};
+          for (const b of blocks) map[b.blockKey] = b.body || '';
+          // نسخه منتشر شده
+          try {
+            const pubRows = await db.select().from(portalContentPublicationState).limit(1);
+            if (pubRows.length) portalConfigVersion = pubRows[0].contentVersion || 0;
+          } catch {}
+          const compare: [keyof typeof portalConfig, string, string][] = [
+            ['downloadsIntro','downloads_intro', portalConfig.downloadsIntro],
+            ['guidanceText','guidance', portalConfig.guidanceText],
+            ['contactPhone','contact_info', portalConfig.contactPhone],
+            ['supportHours','support_hours', portalConfig.supportHours],
+            ['announcementsTitle','announcements_title', portalConfig.announcementsTitle]
+          ];
+          const diffs: typeof contentDiff = [];
+          for (const [cfgKey, blockKey, legacyVal] of compare) {
+            const newVal = map[blockKey];
+            if (newVal && newVal !== legacyVal) {
+              diffs.push({ field: cfgKey as string, blockKey, legacyLen: legacyVal?.length || 0, newLen: newVal.length });
             }
-            // Shadow: مقایسه و لاگ تفاوت بدون تغییر خروجی اصلی
-            const diffs: any[] = [];
-            const comparePairs: [keyof typeof portalConfig, string, string][] = [
-              ['downloadsIntro','downloads_intro', portalConfig.downloadsIntro],
-              ['guidanceText','guidance', portalConfig.guidanceText],
-              ['contactPhone','contact_info', portalConfig.contactPhone],
-              ['supportHours','support_hours', portalConfig.supportHours],
-              ['announcementsTitle','announcements_title', portalConfig.announcementsTitle]
-            ];
-            for (const [cfgKey, blockKey, legacyVal] of comparePairs) {
-              if (map[blockKey] && map[blockKey] !== legacyVal) {
-                diffs.push({ field: cfgKey, blockKey, legacyLen: legacyVal?.length || 0, newLen: map[blockKey].length });
-              }
-            }
-            if (diffs.length && portalContentFlag === 'shadow') {
+          }
+          if (portalContentFlag === 'shadow') {
+            portalContentSource = 'shadow';
+            if (diffs.length) {
+              contentDiff = diffs.slice(0, 20);
               console.log('🌓 portal_content_read_switch shadow diffs:', diffs);
             }
-            if (portalContentFlag === 'full') {
-              // جایگزینی کامل
-              if (map['downloads_intro']) portalConfig.downloadsIntro = map['downloads_intro'];
-              if (map['guidance']) portalConfig.guidanceText = map['guidance'];
-              if (map['contact_info']) portalConfig.contactPhone = map['contact_info']; // فرض: contact_info شامل multiline است (Phase 2: structure)
-              if (map['support_hours']) portalConfig.supportHours = map['support_hours'];
-              if (map['announcements_title']) portalConfig.announcementsTitle = map['announcements_title'];
-              // لاگ مختصر جهت Traceability
-              console.log('✅ portal_content_read_switch FULL applied');
-            }
+          } else if (portalContentFlag === 'full') {
+            portalContentSource = 'full';
+            if (map['downloads_intro']) portalConfig.downloadsIntro = map['downloads_intro'];
+            if (map['guidance']) portalConfig.guidanceText = map['guidance'];
+            if (map['contact_info']) portalConfig.contactPhone = map['contact_info'];
+            if (map['support_hours']) portalConfig.supportHours = map['support_hours'];
+            if (map['announcements_title']) portalConfig.announcementsTitle = map['announcements_title'];
+            console.log('✅ portal_content_read_switch FULL applied (version=' + portalConfigVersion + ')');
+          }
         }
       } catch (e) {
         console.warn('WARN: portal_content_read_switch handling error:', (e as Error).message);
@@ -1321,7 +1335,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // ✅ استفاده از داده‌های محاسبه شده از Unified Financial Engine
-      res.json(publicData);
+      res.json({
+        ...publicData,
+        portalConfigVersion,
+        portalContentSource,
+        contentDiff
+      });
     } catch (error) {
       console.error('Portal API error:', error);
       res.status(500).json({ error: "خطا در دریافت اطلاعات پورتال" });
@@ -2741,7 +2760,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/settings/:key", authMiddleware, async (req, res) => {
     try {
       const setting = await storage.getSetting(req.params.key);
-      res.json(setting);
+      // نرمال سازی پاسخ: جلوگیری از بدنه خالی برای undefined
+      if (!setting) {
+        return res.json({ key: req.params.key, value: null, exists: false });
+      }
+      return res.json({ key: setting.key, value: setting.value, exists: true, updatedAt: setting.updatedAt });
     } catch (error) {
       res.status(500).json({ error: "خطا در دریافت تنظیمات" });
     }

@@ -20,16 +20,7 @@ export interface AnnouncementDTO {
   expiresAt: string | null;
 }
 
-export interface AppDownloadDTO {
-  id: number;
-  title: string;
-  description: string | null;
-  downloadLink: string;
-  qrCodeUrl: string | null;
-  videoUrl: string | null;
-  displayOrder: number;
-  isActive: boolean;
-}
+// Legacy AppDownloadDTO حذف شد؛ مدیریت دانلودها اکنون در سند یکپارچه است
 
 // Generic fetch helper with error handling
 async function apiFetch<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -68,32 +59,24 @@ export const AnnouncementsAPI = {
   delete: (id: number) => apiFetch<{ success: boolean }>(`/api/admin/announcements/${id}`, { method: 'DELETE' })
 };
 
-// App Downloads
-export const AppDownloadsAPI = {
-  list: () => apiFetch<{ success: boolean; data: AppDownloadDTO[] }>(`/api/admin/app-downloads`),
-  create: (payload: Partial<AppDownloadDTO>) => apiFetch<{ success: boolean; data: AppDownloadDTO }>(`/api/admin/app-downloads`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-  }),
-  update: (id: number, payload: Partial<AppDownloadDTO>) => apiFetch<{ success: boolean }>(`/api/admin/app-downloads/${id}`, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-  }),
-  delete: (id: number) => apiFetch<{ success: boolean }>(`/api/admin/app-downloads/${id}`, { method: 'DELETE' }),
-  reorder: (order: { id: number; displayOrder: number }[]) => apiFetch<{ success: boolean; updated?: number }>(`/api/admin/app-downloads/reorder`, {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ order })
-  })
-};
 
 export const PortalContentService = {
   blocks: PortalBlocksAPI,
   announcements: AnnouncementsAPI,
-  downloads: AppDownloadsAPI
+  // downloads legacy حذف شد؛ از PortalContentUnifiedService استفاده کنید
+  flag: {
+    getState: () => apiFetch<{ success:boolean; data:{ state:string } }>(`/api/admin/portal-content-flag/state`),
+    updateState: (state: 'off'|'shadow'|'full') => apiFetch<{ success:boolean; data:{ state:string } }>(`/api/admin/portal-content-flag/state`, {
+      method: 'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ state })
+    })
+  }
 };
 
 // کلیدهای ثابت کوئری برای تمرکز در invalidate ها
 export const portalContentQueryKeys = {
   blocks: ['/api/admin/portal-content-blocks'] as const,
   announcements: ['/api/admin/announcements'] as const,
-  downloads: ['/api/admin/app-downloads'] as const,
+  // downloads key حذف شد
   full: ['/api/admin/portal-content-blocks/full'] as const
 };
 
@@ -106,13 +89,12 @@ export const portalContentQueryKeys = {
  */
 export async function invalidatePortalContent(
   queryClient: import('@tanstack/react-query').QueryClient,
-  scope: { blocks?: boolean; announcements?: boolean; downloads?: boolean; full?: boolean } = {}
+  scope: { blocks?: boolean; announcements?: boolean; full?: boolean } = {}
 ) {
-  const { blocks = true, announcements = true, downloads = true, full = true } = scope;
+  const { blocks = true, announcements = true, full = true } = scope;
   const tasks: Promise<any>[] = [];
   if (blocks) tasks.push(queryClient.invalidateQueries({ queryKey: portalContentQueryKeys.blocks }));
   if (announcements) tasks.push(queryClient.invalidateQueries({ queryKey: portalContentQueryKeys.announcements }));
-  if (downloads) tasks.push(queryClient.invalidateQueries({ queryKey: portalContentQueryKeys.downloads }));
   if (full) tasks.push(queryClient.invalidateQueries({ queryKey: portalContentQueryKeys.full }));
   await Promise.all(tasks);
 }

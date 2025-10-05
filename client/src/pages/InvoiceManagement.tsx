@@ -121,18 +121,18 @@ export function InvoiceManagement() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6" dir="rtl">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">مدیریت فاکتورهای دستی</h1>
-        
+    <div className="container mx-auto px-4 py-6 space-y-6" dir="rtl">
+      <div className="stack-responsive">
+        <h1 className="text-2xl font-bold sm:text-3xl">مدیریت فاکتورهای دستی</h1>
+
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
+            <Button className="flex items-center gap-2 w-full sm:w-auto justify-center">
               <Plus className="h-4 w-4" />
               ایجاد فاکتور دستی
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+          <DialogContent className="w-full max-w-full sm:max-w-4xl max-h-[90vh] overflow-auto p-4 sm:p-6">
             <DialogHeader>
               <DialogTitle>ایجاد فاکتور دستی</DialogTitle>
             </DialogHeader>
@@ -148,7 +148,7 @@ export function InvoiceManagement() {
 
       {/* SHERLOCK v12.4: آمار فاکتورهای دستی */}
       {manualStats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5 mb-6">
           <Card>
             <CardContent className="p-4">
               <div className="text-center">
@@ -214,9 +214,9 @@ export function InvoiceManagement() {
             فیلترها و جستجو
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex gap-4 items-center">
-            <div className="flex-1">
+        <CardContent className="space-y-4">
+          <div className="filters-responsive">
+            <div className="flex-1 w-full">
               <div className="relative">
                 <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
@@ -229,7 +229,7 @@ export function InvoiceManagement() {
             </div>
             
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-full sm:w-[200px]">
                 <SelectValue placeholder="فیلتر وضعیت" />
               </SelectTrigger>
               <SelectContent>
@@ -246,6 +246,7 @@ export function InvoiceManagement() {
                 setSearchTerm("");
                 setStatusFilter("");
               }}
+              className="w-full sm:w-auto"
             >
               پاک کردن فیلترها
             </Button>
@@ -266,7 +267,7 @@ export function InvoiceManagement() {
               {!Array.isArray(invoices) || invoices.length === 0 ? "هیچ فاکتوری یافت نشد" : "نتیجه‌ای برای جستجوی شما یافت نشد"}
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="table-scroll-wrapper">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -307,7 +308,7 @@ export function InvoiceManagement() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button
@@ -318,7 +319,7 @@ export function InvoiceManagement() {
                                 <Edit className="h-4 w-4" />
                               </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+                            <DialogContent className="w-full max-w-full sm:max-w-4xl max-h-[90vh] overflow-auto p-4 sm:p-6">
                               <DialogHeader>
                                 <DialogTitle>ویرایش فاکتور {invoice.invoiceNumber}</DialogTitle>
                               </DialogHeader>

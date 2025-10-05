@@ -29,7 +29,6 @@ const UnifiedAuth = lazy(() => import("@/pages/unified-auth"));
 const KpiDashboard = lazy(() => import("@/pages/kpi-dashboard"));
 
 // Admin Resources Management Pages
-const AppDownloadsManager = lazy(() => import("@/pages/admin/AppDownloadsManager"));
 const AnnouncementsManager = lazy(() => import("@/pages/admin/AnnouncementsManager"));
 const PortalContentManager = lazy(() => import("@/pages/admin/PortalContentManager"));
 const ImportJobsMonitor = lazy(() => import("@/pages/admin/ImportJobsMonitor"));
@@ -126,7 +125,7 @@ function AuthenticatedRouter() {
              * با افزودن این Route، محتوای صفحه تنظیمات (pages/settings.tsx) اکنون رندر می‌شود.
              */}
             <Route path="/settings" component={Settings} />
-            <Route path="/admin/app-downloads" component={AppDownloadsManager} />
+            {/* مسیر legacy مدیریت دانلودها حذف شد: اکنون در سند یکپارچه مدیریت می‌شود */}
             <Route path="/admin/announcements" component={AnnouncementsManager} />
             <Route path="/admin/portal-content" component={PortalContentManager} />
             <Route path="/admin/system-settings" component={SystemSettingsPage} /> {/* Add the new route */}

@@ -1,711 +1,285 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, RefreshCcw, FileText, Megaphone, Download, Eye, Plus, Trash2 } from 'lucide-react';
-import { PortalContentService, invalidatePortalContent, portalContentQueryKeys } from '@/services/portal-content';
+import React, { useState, useEffect } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { Save, RefreshCcw, Megaphone, Download, Eye, Plus, Trash2, FileDiff, Rocket, Layers } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { PortalContentUnifiedService } from '@/services/portalContentUnified';
 
-interface PortalContentBlock {
-  id: number;
-  blockKey: string;
-  title: string;
-  body: string;
-  updatedAt: string | null;
-  updatedBy: string | null;
-}
+// ============================================================================
+// PortalContentManager (Unified) - CLEAN VERSION
+// فایل legacy کاملاً حذف شد. این نسخه فقط با سند یکپارچه portal_content_documents کار می‌کند.
+// ============================================================================
 
-interface Announcement {
-  id: number;
-  title: string;
-  content: string;
-  priority: number;
-  type: string;
-  isActive: boolean;
-  expiresAt: string | null;
-}
+interface UnifiedSection { id: string; title: string; body: string; order: number; }
+interface UnifiedAnnouncement { id: string; title: string; content: string; priority: number; type: 'info'|'warning'|'success'|'error'; isActive: boolean; }
+interface UnifiedDownload { id: string; title: string; description?: string; downloadLink: string; qrCodeUrl?: string|null; videoUrl?: string|null; isActive: boolean; displayOrder: number; }
+interface PortalUnifiedDraft { displayTitle: string; sections: UnifiedSection[]; announcements: UnifiedAnnouncement[]; downloads: UnifiedDownload[]; metadata?: Record<string, any>; }
 
-interface AppDownload {
-  id: number;
-  title: string;
-  description: string | null;
-  downloadLink: string;
-  qrCodeUrl: string | null;
-  videoUrl: string | null;
-  displayOrder: number;
-  isActive: boolean;
-}
+const genId = () => 'id_' + Math.random().toString(36).slice(2,11);
 
-// Initial simple tab enum
 const tabs = [
-  { key: 'blocks', label: 'بلوک‌های محتوایی', icon: <FileText className="w-4 h-4" /> },
-  { key: 'announcements', label: 'اطلاعیه‌ها', icon: <Megaphone className="w-4 h-4" /> },
-  { key: 'downloads', label: 'دانلود اپ‌ها', icon: <Download className="w-4 h-4" /> },
+  { key: 'structure', label: 'ساختار و متن', icon: <Layers className="w-4 h-4" /> },
+  { key: 'announcements', label: 'اعلانات', icon: <Megaphone className="w-4 h-4" /> },
+  { key: 'downloads', label: 'دانلودها', icon: <Download className="w-4 h-4" /> },
+  { key: 'diff', label: 'Diff', icon: <FileDiff className="w-4 h-4" /> },
   { key: 'preview', label: 'پیش‌نمایش', icon: <Eye className="w-4 h-4" /> }
 ];
 
 export default function PortalContentManager() {
-  const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('blocks');
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [editBody, setEditBody] = useState('');
-  const [editTitle, setEditTitle] = useState('');
-  const [originalBody, setOriginalBody] = useState('');
-  const [originalTitle, setOriginalTitle] = useState('');
+  const [activeTab, setActiveTab] = useState<string>('structure');
 
-  // Announcements state
-  const [newAnn, setNewAnn] = useState({ title: '', content: '', priority: 0, type: 'info', isActive: true, expiresAt: null as string | null });
-  const annErrors = (() => {
-    const errs: string[] = [];
-    if(newAnn.title.trim().length < 3) errs.push('عنوان حداقل ۳ کاراکتر');
-    if(newAnn.title.length > 120) errs.push('عنوان حداکثر ۱۲۰ کاراکتر');
-    if(newAnn.content.trim().length < 5) errs.push('محتوا حداقل ۵ کاراکتر');
-    if(newAnn.content.length > 1000) errs.push('محتوا حداکثر ۱۰۰۰ کاراکتر');
-    if(newAnn.priority < 0 || newAnn.priority>9999) errs.push('اولویت بین 0 تا 9999');
-    return errs;
-  })();
-  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
-  // Downloads state
-  const [newDownload, setNewDownload] = useState({ title: '', downloadLink: '', description: '', isActive: true, qrCodeUrl: null as string | null, videoUrl: null as string | null });
-  const downloadErrors = (() => {
-    const errs: string[] = [];
-    if(newDownload.title.trim().length < 2) errs.push('عنوان دانلود حداقل ۲ کاراکتر');
-    if(newDownload.title.length > 120) errs.push('عنوان دانلود حداکثر ۱۲۰ کاراکتر');
-    if(!/^https?:\/\//i.test(newDownload.downloadLink.trim())) errs.push('لینک باید با http/https شروع شود');
-    if(newDownload.downloadLink.length > 500) errs.push('طول لینک بیش از ۵۰۰');
-    if(newDownload.description && newDownload.description.length > 500) errs.push('توضیح حداکثر ۵۰۰ کاراکتر');
-    return errs;
-  })();
-  const [editingDownload, setEditingDownload] = useState<AppDownload | null>(null);
+  // Queries
+  const draftQuery = useQuery({ queryKey: ['unified-portal-draft'], queryFn: () => PortalContentUnifiedService.getDraft() });
+  const statusQuery = useQuery({ queryKey: ['unified-portal-status'], queryFn: () => PortalContentUnifiedService.getStatus(), enabled: true });
+  const flagQuery = useQuery({ queryKey: ['portal-content-flag-state'], queryFn: async ()=> {
+    try { const r = await fetch('/api/admin/portal-content-flag/state',{ credentials:'include' }); if(!r.ok) throw new Error('flag_state_fetch'); return (await r.json())?.data?.state || 'off'; } catch { return 'off'; }
+  }, staleTime: 15_000 });
+  const diffQuery = useQuery({ queryKey: ['unified-portal-diff'], queryFn: () => PortalContentUnifiedService.getDiff(), enabled: activeTab === 'diff' });
 
-  // Fetch blocks
-  const { data, isLoading, refetch, isFetching } = useQuery<{ success: boolean; data: PortalContentBlock[] }>({
-    queryKey: portalContentQueryKeys.blocks,
-    queryFn: () => PortalContentService.blocks.list()
-  });
+  const draft = draftQuery.data?.data?.draftJson as PortalUnifiedDraft | undefined;
+  const draftVersion = draftQuery.data?.data?.draftVersion || 1;
+  const publishedVersion = draftQuery.data?.data?.publishedVersion || 0;
+  const docStatus = draftQuery.data?.data?.status || 'draft';
 
-  const blocks: PortalContentBlock[] = data?.data || [];
+  const [localDraft, setLocalDraft] = useState<PortalUnifiedDraft | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
 
-  // Mutation for save
+  useEffect(()=>{ if(draft && !localDraft){ setLocalDraft(JSON.parse(JSON.stringify(draft))); setIsDirty(false);} }, [draft, localDraft]);
+  useEffect(()=>{ if(!draft || !localDraft) return; setIsDirty(JSON.stringify(draft)!==JSON.stringify(localDraft)); }, [draft, localDraft]);
+
   const saveMutation = useMutation({
-    mutationFn: (payload: { blockKey: string; title: string; body: string }) => {
-      return PortalContentService.blocks.update(payload.blockKey, { title: payload.title, body: payload.body });
-    },
-    onMutate: async (payload) => {
-      // Optimistic update cache
-      await queryClient.cancelQueries({ queryKey: portalContentQueryKeys.blocks });
-      const prev = queryClient.getQueryData<any>(portalContentQueryKeys.blocks);
-      if (prev?.data) {
-        const newData = prev.data.map((b: PortalContentBlock) => b.blockKey === payload.blockKey ? { ...b, title: payload.title, body: payload.body, updatedAt: new Date().toISOString() } : b);
-        queryClient.setQueryData(portalContentQueryKeys.blocks, { ...prev, data: newData });
-      }
-      return { prev };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(portalContentQueryKeys.blocks, ctx.prev);
-      toast({ title: 'خطا در ذخیره', description: 'عملیات ذخیره بلوک انجام نشد', variant: 'destructive' });
-    },
-    onSuccess: (_data, vars) => {
-      toast({ title: 'ذخیره شد', description: `بلوک ${vars.blockKey} با موفقیت بروزرسانی شد` });
-      setOriginalBody(editBody);
-      setOriginalTitle(editTitle);
-    },
-    // قبلاً full: true باعث رفرش همه تب‌ها می‌شد (هزینه بالا). اکنون فقط بلوک‌ها را invalidate می‌کنیم
-    // و اگر کاربر در تب preview باشد، full را هم تازه می‌کنیم تا سازگاری حفظ شود.
-    onSettled: () => {
-      invalidatePortalContent(queryClient, { blocks: true });
-      if (activeTab === 'preview') {
-        invalidatePortalContent(queryClient, { full: true });
-      }
-    }
+    mutationFn: () => { if(!localDraft) throw new Error('no_local_draft'); return PortalContentUnifiedService.saveDraft(localDraft as any); },
+    onSuccess: () => { toast({ title: 'پیش‌نویس ذخیره شد' }); draftQuery.refetch(); },
+    onError: () => toast({ title: 'خطا در ذخیره', variant: 'destructive' })
+  });
+  const publishMutation = useMutation({
+    mutationFn: () => PortalContentUnifiedService.publish(),
+    onSuccess: () => { toast({ title: 'منتشر شد', description: 'نسخه جدید فعال شد' }); draftQuery.refetch(); statusQuery.refetch(); diffQuery.refetch(); },
+    onError: () => toast({ title: 'انتشار ناموفق', variant: 'destructive' })
   });
 
-  const startEdit = (b: PortalContentBlock) => {
-    setSelectedKey(b.blockKey);
-    setEditBody(b.body || '');
-    setEditTitle(b.title || '');
-    setOriginalBody(b.body || '');
-    setOriginalTitle(b.title || '');
+  // Draft field helpers
+  const updateDraftField = <K extends keyof PortalUnifiedDraft>(k: K, v: PortalUnifiedDraft[K]) => setLocalDraft(d => d? { ...d, [k]: v } : d);
+  const addSection = () => updateDraftField('sections', [...(localDraft?.sections||[]), { id: genId(), title: 'عنوان جدید', body: '', order: (localDraft?.sections?.length||0)*10 }]);
+  const updateSection = (id:string, patch: Partial<UnifiedSection>) => updateDraftField('sections', (localDraft?.sections||[]).map(s=> s.id===id? {...s, ...patch}:s));
+  const removeSection = (id:string) => updateDraftField('sections', (localDraft?.sections||[]).filter(s=> s.id!==id));
+
+  const addAnnouncement = () => updateDraftField('announcements', [...(localDraft?.announcements||[]), { id: genId(), title:'عنوان اعلان', content:'متن اعلان', priority:0, type:'info', isActive:true }]);
+  const updateAnnouncement = (id:string, patch: Partial<UnifiedAnnouncement>) => updateDraftField('announcements', (localDraft?.announcements||[]).map(a=> a.id===id? {...a, ...patch}:a));
+  const removeAnnouncement = (id:string) => updateDraftField('announcements', (localDraft?.announcements||[]).filter(a=> a.id!==id));
+
+  const addDownload = () => updateDraftField('downloads', [...(localDraft?.downloads||[]), { id: genId(), title:'اپ جدید', description:'', downloadLink:'https://', isActive:true, displayOrder:(localDraft?.downloads?.length||0)*10, qrCodeUrl:null, videoUrl:null }]);
+  const updateDownload = (id:string, patch: Partial<UnifiedDownload>) => updateDraftField('downloads', (localDraft?.downloads||[]).map(d=> d.id===id? {...d, ...patch}:d));
+  const removeDownload = (id:string) => updateDraftField('downloads', (localDraft?.downloads||[]).filter(d=> d.id!==id));
+  const reorderDownload = (sourceId:string, targetId:string) => {
+    const arr = [ ...(localDraft?.downloads || []) ];
+    const si = arr.findIndex(d => d.id === sourceId);
+    const ti = arr.findIndex(d => d.id === targetId);
+    if (si === -1 || ti === -1) return;
+    const [mv] = arr.splice(si, 1);
+    arr.splice(ti, 0, mv);
+    updateDraftField('downloads', arr.map((d, i) => ({ ...d, displayOrder: i * 10 })));
   };
 
-  const isDirty = selectedKey && (editBody !== originalBody || editTitle !== originalTitle);
-  const isSaving = saveMutation.isPending;
-
-  const handleSave = useCallback(() => {
-    if (!selectedKey) return;
-    if (!isDirty) return;
-    saveMutation.mutate({ blockKey: selectedKey, title: editTitle.trim(), body: editBody });
-  }, [selectedKey, editTitle, editBody, isDirty, saveMutation]);
-
-  // Auto-select first block once loaded
+  const handleSave = () => { if(!isDirty || saveMutation.isPending) return; saveMutation.mutate(); };
   useEffect(() => {
-    if (!selectedKey && blocks.length) {
-      startEdit(blocks[0]);
-    }
-  }, [blocks, selectedKey]);
-
-  // Keyboard shortcut Ctrl+S / Cmd+S
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
+    const h = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
         handleSave();
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [handleSave]);
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [handleSave, isDirty, saveMutation.isPending]);
 
-  const [dirtyMap, setDirtyMap] = useState<Record<string, { title: string; body: string }>>({});
+  const loading = draftQuery.isLoading || !localDraft;
+  const unifiedPreview = localDraft;
 
-  // Track dirty changes per block for future batch save
-  useEffect(() => {
-    if(selectedKey){
-      if(editBody !== originalBody || editTitle !== originalTitle){
-        setDirtyMap(m => ({ ...m, [selectedKey]: { title: editTitle, body: editBody } }));
-      } else {
-        setDirtyMap(m => { const clone = { ...m }; delete clone[selectedKey]; return clone; });
-      }
-    }
-  }, [selectedKey, editBody, editTitle, originalBody, originalTitle]);
-
-  const batchSave = async () => {
-    const entries = Object.entries(dirtyMap);
-    if(!entries.length) return;
-    for(const [blockKey, value] of entries){
-      await saveMutation.mutateAsync({ blockKey, title: value.title.trim(), body: value.body });
-    }
-    setDirtyMap({});
-    toast({ title: 'همه تغییرات ذخیره شد' });
-  };
-
-  // Fetch announcements
-  const { data: announcementsData, refetch: refetchAnnouncements } = useQuery<{ success: boolean; data: Announcement[] }>({
-    queryKey: portalContentQueryKeys.announcements,
-    queryFn: () => PortalContentService.announcements.list()
-  });
-  const announcements = announcementsData?.data || [];
-
-  // Fetch downloads
-  const { data: downloadsData, refetch: refetchDownloads } = useQuery<{ success: boolean; data: AppDownload[] }>({
-    queryKey: portalContentQueryKeys.downloads,
-    queryFn: () => PortalContentService.downloads.list()
-  });
-  const downloads = downloadsData?.data || [];
-  const [localDownloads, setLocalDownloads] = useState<AppDownload[]>([]);
-
-  // sync local state for DnD
-  useEffect(() => {
-    setLocalDownloads(downloads.slice().sort((a,b)=>a.displayOrder - b.displayOrder));
-  }, [downloads]);
-
-  // Full content for preview
-  const { data: fullContentData, refetch: refetchFull } = useQuery<{ success: boolean; data: any }>({
-    queryKey: portalContentQueryKeys.full,
-    queryFn: () => PortalContentService.blocks.full(),
-    enabled: activeTab === 'preview'
-  });
-
-  // Publication status
-  const { data: statusData, refetch: refetchStatus } = useQuery<{ success: boolean; data: { contentVersion: number; lastPublishedAt: string | null; lastPublishedBy: string | null } }>({
-    queryKey: ['portal-content-status'],
-    queryFn: () => PortalContentService.blocks.status(),
-    enabled: activeTab === 'preview'
-  });
-  const publishMutation = useMutation({
-    mutationFn: () => PortalContentService.blocks.publish(),
-    onSuccess: () => {
-      toast({ title: 'منتشر شد', description: 'نسخه جدید محتوا فعال شد' });
-      invalidatePortalContent(queryClient, { blocks: true, announcements: true, downloads: true, full: true });
-      refetchStatus();
-    },
-    onError: () => toast({ title: 'انتشار ناموفق', variant: 'destructive' })
-  });
-
-  // محاسبه ماکزیمم updatedAt برای تشخیص نیاز به انتشار
-  const maxLastUpdate = React.useMemo(()=>{
-    const blockMax = blocks.reduce<Date | null>((acc,b)=> b.updatedAt ? (acc && acc > new Date(b.updatedAt) ? acc : new Date(b.updatedAt)) : acc, null);
-    const annMax = announcements.reduce<Date | null>((acc,a)=> a.expiresAt || a.id ? acc : acc, null); // فعلاً اطلاعیه‌ها updatedAt ندارند؛ قابل گسترش در آینده
-    const dlMax = downloads.reduce<Date | null>((acc,d)=> acc, null); // similar placeholder
-    return blockMax || annMax || dlMax || null;
-  }, [blocks, announcements, downloads]);
-
-  const unpublishedChanges = React.useMemo(()=>{
-    if(!statusData) return false;
-    if(!statusData.data.lastPublishedAt) return true; // اصلاً منتشر نشده
-    if(maxLastUpdate && new Date(statusData.data.lastPublishedAt) < maxLastUpdate) return true;
-    if(Object.keys(dirtyMap).length>0) return true;
-    return false;
-  }, [statusData, maxLastUpdate, dirtyMap]);
-
-  // Announcement mutations
-  const [selectedAnnouncements, setSelectedAnnouncements] = useState<number[]>([]);
-  const toggleAnnouncement = (id:number) => setSelectedAnnouncements(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
-  const clearSelectedAnnouncements = () => setSelectedAnnouncements([]);
-  const createAnnMutation = useMutation({
-    mutationFn: (payload: Omit<Announcement, 'id'>) => PortalContentService.announcements.create(payload),
-    onSuccess: () => {
-      toast({ title: 'اطلاعیه ایجاد شد' });
-      setNewAnn({ title: '', content: '', priority: 0, type: 'info', isActive: true, expiresAt: null });
-    },
-    onError: () => {
-      toast({ title: 'خطا در ایجاد', variant: 'destructive' });
-    },
-    onSettled: () => {
-      invalidatePortalContent(queryClient, { announcements: true });
-      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
-    }
-  });
-  const updateAnnMutation = useMutation({
-    mutationFn: (ann: Announcement) => PortalContentService.announcements.update(ann.id, ann),
-    onSuccess: () => {
-      toast({ title: 'اطلاعیه ویرایش شد' });
-      setEditingAnnouncement(null);
-    },
-    onError: () => {
-      toast({ title: 'خطا در ویرایش', variant: 'destructive' });
-    },
-    onSettled: () => {
-      invalidatePortalContent(queryClient, { announcements: true });
-      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
-    }
-  });
-  const deleteAnnMutation = useMutation({
-    mutationFn: (id: number) => PortalContentService.announcements.delete(id),
-    onSuccess: () => {
-      toast({ title: 'اطلاعیه حذف شد' });
-    },
-    onError: () => {
-      toast({ title: 'خطا در حذف', variant: 'destructive' });
-    },
-    onSettled: () => {
-      invalidatePortalContent(queryClient, { announcements: true });
-      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
-    }
-  });
-  const bulkDeleteAnnouncements = async () => {
-    if(!selectedAnnouncements.length) return;
-    const ids = [...selectedAnnouncements];
-    clearSelectedAnnouncements();
-    const results = await Promise.allSettled(ids.map(id=> deleteAnnMutation.mutateAsync(id)));
-    const failed = results.filter(r=> r.status==='rejected').length;
-    toast({ title: failed? 'حذف گروهی با خطا' : 'حذف گروهی موفق', description: failed? `${failed} مورد حذف نشد` : `${ids.length} مورد حذف شد` , variant: failed? 'destructive': undefined });
-    invalidatePortalContent(queryClient, { announcements: true, full: true });
-  };
-
-  // Download mutations
-  const [selectedDownloads, setSelectedDownloads] = useState<number[]>([]);
-  const toggleDownload = (id:number) => setSelectedDownloads(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
-  const clearSelectedDownloads = () => setSelectedDownloads([]);
-  const createDownloadMutation = useMutation({
-    mutationFn: (payload: Omit<AppDownload, 'id' | 'displayOrder'>) => PortalContentService.downloads.create(payload),
-    onSuccess: () => {
-      toast({ title: 'اپ افزوده شد' });
-      setNewDownload({ title: '', downloadLink: '', description: '', isActive: true, qrCodeUrl: null, videoUrl: null });
-    },
-    onError: () => {
-      toast({ title: 'خطا در افزودن', variant: 'destructive' });
-    },
-    onSettled: () => {
-      invalidatePortalContent(queryClient, { downloads: true });
-      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
-    }
-  });
-  const updateDownloadMutation = useMutation({
-    mutationFn: (d: AppDownload) => PortalContentService.downloads.update(d.id, d),
-    onSuccess: () => {
-      toast({ title: 'اپ ویرایش شد' });
-      setEditingDownload(null);
-    },
-    onError: () => {
-      toast({ title: 'خطا در ویرایش', variant: 'destructive' });
-    },
-    onSettled: () => {
-      invalidatePortalContent(queryClient, { downloads: true });
-      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
-    }
-  });
-  const deleteDownloadMutation = useMutation({
-    mutationFn: (id: number) => PortalContentService.downloads.delete(id),
-    onSuccess: () => {
-      toast({ title: 'اپ حذف شد' });
-    },
-    onError: () => {
-      toast({ title: 'خطا در حذف', variant: 'destructive' });
-    },
-    onSettled: () => {
-      invalidatePortalContent(queryClient, { downloads: true });
-      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
-    }
-  });
-  const bulkDeleteDownloads = async () => {
-    if(!selectedDownloads.length) return;
-    const ids = [...selectedDownloads];
-    clearSelectedDownloads();
-    const results = await Promise.allSettled(ids.map(id=> deleteDownloadMutation.mutateAsync(id)));
-    const failed = results.filter(r=> r.status==='rejected').length;
-    toast({ title: failed? 'حذف گروهی با خطا' : 'حذف گروهی موفق', description: failed? `${failed} مورد حذف نشد` : `${ids.length} مورد حذف شد` , variant: failed? 'destructive': undefined });
-    invalidatePortalContent(queryClient, { downloads: true, full: true });
-  };
-
-  // Derived for editor
-  const currentBlock = selectedKey ? blocks.find(b => b.blockKey === selectedKey) : null;
-
+  const flagState = flagQuery.data as string | undefined;
+  const isUnifiedLive = flagState === 'full';
+  const isPublishedBehind = publishedVersion < draftVersion;
   return (
-  <div className="p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">مدیریت محتوای پرتال</h1>
-        <p className="text-gray-600 text-sm">
-          مدیریت یکپارچه بلوک‌های متنی، اطلاعیه‌ها، لینک‌های دانلود اپلیکیشن‌ها و پیش‌نمایش کامل محتوای پرتال عمومی
-        </p>
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      <div className="mb-6 flex flex-col gap-2">
+        <h1 className="text-2xl font-bold">مدیریت یکپارچه محتوای پرتال</h1>
+        <div className="text-xs flex flex-wrap gap-3 items-center">
+          <span className="px-2 py-1 rounded bg-gray-100 border">draft v{draftVersion}</span>
+            <span className="px-2 py-1 rounded bg-gray-100 border">published v{publishedVersion}</span>
+            <span className={`px-2 py-1 rounded border ${docStatus==='published' ? 'bg-emerald-50 border-emerald-300 text-emerald-700':'bg-amber-50 border-amber-300 text-amber-700'}`}>وضعیت: {docStatus}</span>
+            {isDirty && <span className="px-2 py-1 rounded bg-amber-100 border border-amber-300 text-amber-800">تغییرات ذخیره نشده</span>}
+            {flagState && <span className="px-2 py-1 rounded bg-indigo-50 border border-indigo-300 text-indigo-700">flag: {flagState}</span>}
+            {!isUnifiedLive && <span className="px-2 py-1 rounded bg-rose-50 border border-rose-300 text-rose-700">⚠ public هنوز legacy است</span>}
+            {isUnifiedLive && isPublishedBehind && <span className="px-2 py-1 rounded bg-amber-50 border border-amber-300 text-amber-700">⚠ انتشار لازم است</span>}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={()=> draftQuery.refetch()} className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border flex items-center gap-1"><RefreshCcw className="w-3 h-3"/>بارگذاری مجدد</button>
+          <button disabled={!isDirty || saveMutation.isPending} onClick={handleSave} className="px-3 py-1 text-xs rounded bg-blue-600 text-white flex items-center gap-1 disabled:opacity-40"><Save className="w-3 h-3" />{saveMutation.isPending? 'در حال ذخیره...' : 'ذخیره پیش‌نویس'}</button>
+          <button disabled={publishMutation.isPending || (publishedVersion>0 && !isDirty && docStatus==='published')} onClick={()=> publishMutation.mutate()} className="px-3 py-1 text-xs rounded bg-emerald-600 text-white flex items-center gap-1 disabled:opacity-40"><Rocket className="w-3 h-3" />{publishMutation.isPending? 'انتشار...' : 'انتشار'}</button>
+        </div>
+        <div className="text-[11px] text-gray-500 flex flex-col gap-1">
+          {!isUnifiedLive && <div>در حالت <b>{flagState}</b> محتوای عمومی هنوز از مسیر legacy سرو می‌شود. برای مشاهده تغییرات در پرتال عمومی، flag را به <code className="px-1 bg-gray-100 rounded">full</code> ببرید.</div>}
+          {isUnifiedLive && isPublishedBehind && <div>نسخه پیش‌نویس از نسخه منتشر شده جلوتر است. برای اعمال در پرتال عمومی دکمه انتشار را بزنید.</div>}
+        </div>
       </div>
 
-      {/* Tabs */}
-  <div className="flex gap-2 mb-4 md:mb-6 flex-wrap border-b pb-2">
+      <div className="flex gap-2 mb-5 border-b pb-2 flex-wrap">
         {tabs.map(t => (
-          <button 
-            key={t.key} 
-            onClick={() => setActiveTab(t.key)} 
-            className={`px-4 py-2 rounded-t-lg text-sm flex items-center gap-2 transition-all ${
-              activeTab === t.key 
-                ? 'bg-blue-600 text-white shadow-md -mb-2 border-b-2 border-blue-600' 
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-sm'
-            }`}
-          >
-            {t.icon}
-            {t.label}
-          </button>
+          <button key={t.key} onClick={()=> setActiveTab(t.key)} className={`px-4 py-2 rounded-t-lg text-xs flex items-center gap-2 transition-all ${activeTab===t.key? 'bg-blue-600 text-white shadow -mb-[2px]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>{t.icon}{t.label}</button>
         ))}
-        <div className="ms-auto flex items-center gap-2 ml-auto mr-0 pr-2">
-          <span className="text-[10px] px-2 py-1 rounded bg-gray-200 text-gray-700 border border-gray-300">locale: fa-IR (preview)</span>
-          <select disabled className="text-[10px] border rounded px-1 py-0.5 bg-gray-100 text-gray-400">
-            <option>fa-IR</option>
-            <option>en-US</option>
-          </select>
-        </div>
       </div>
 
-      {activeTab === 'blocks' && (
-  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
-          {/* List */}
-          <div className="md:col-span-1 bg-white rounded-lg shadow p-4 border border-gray-200 h-fit max-h-[70vh] overflow-auto">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-gray-800 text-sm">بلوک‌ها</h2>
-              <button onClick={() => refetch()} className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 flex items-center gap-1"><RefreshCcw className={`w-3 h-3 ${isFetching ? 'animate-spin' : ''}`} />بارگذاری</button>
-            </div>
-            <ul className="space-y-2">
-              {isLoading && <li className="text-xs text-gray-500">در حال بارگذاری...</li>}
-              {!isLoading && blocks.map(b => (
-                <li key={b.blockKey}>
-                  <button onClick={() => startEdit(b)} className={`w-full text-right px-3 py-2 rounded border text-xs flex flex-col items-start transition ${selectedKey === b.blockKey ? 'bg-blue-50 border-blue-400 shadow-sm' : 'bg-gray-50 hover:bg-gray-100 border-gray-200'}`}>
-                    <span className="font-medium text-gray-800 flex items-center gap-2">{b.title}{selectedKey === b.blockKey && isDirty && <span className="text-[10px] px-1 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300">ویرایش نشده</span>}</span>
-                    <span className="text-[10px] text-gray-500 ltr:font-mono rtl:font-sans">{b.blockKey}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Editor */}
-          <div className="md:col-span-3 bg-white rounded-lg shadow p-4 md:p-6 border border-gray-200 min-h-[400px]" role="region" aria-label="ویرایش بلوک محتوایی">
-            {!currentBlock && <div className="text-center text-gray-500 text-sm">یک بلوک را از لیست انتخاب کنید</div>}
-            {currentBlock && (
-              <div className="space-y-4">
+      {loading && <div className="text-sm text-gray-500">در حال بارگذاری پیش‌نویس...</div>}
+      {!loading && localDraft && (
+        <>
+          {activeTab==='structure' && (
+            <div className="space-y-6">
+              <div className="bg-white border rounded p-4 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium mb-1">عنوان اصلی (displayTitle)</label>
+                  <input value={localDraft.displayTitle} onChange={e=> updateDraftField('displayTitle', e.target.value)} className="w-full px-3 py-2 text-sm border rounded" />
+                </div>
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-800">{currentBlock.title}</h2>
-                    <p className="text-xs text-gray-500">ویرایش محتوای بلوک - آخرین بروزرسانی: {currentBlock.updatedAt ? new Date(currentBlock.updatedAt).toLocaleString('fa-IR') : '—'}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button disabled={!isDirty || isSaving} onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50">
-                      <Save className="w-4 h-4" /> {isSaving ? 'در حال ذخیره...' : isDirty ? 'ذخیره' : 'ذخیره شده'}
-                    </button>
-                    <button
-                      disabled={!Object.keys(dirtyMap).length || isSaving}
-                      onClick={batchSave}
-                      className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs flex items-center gap-1 hover:bg-indigo-700 disabled:opacity-50"
-                      title="ذخیره همه بلوک‌های تغییر کرده"
-                    >
-                      <Save className="w-3 h-3" /> Save All ({Object.keys(dirtyMap).length})
-                    </button>
-                  </div>
+                  <h3 className="text-sm font-semibold">بخش‌ها (sections)</h3>
+                  <button onClick={addSection} className="text-xs px-2 py-1 bg-blue-600 text-white rounded flex items-center gap-1"><Plus className="w-3 h-3"/>افزودن بخش</button>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">عنوان نمایشی</label>
-                  <input value={editTitle} onChange={e => setEditTitle(e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">محتوا (Markdown ساده یا متن)</label>
-                  <textarea value={editBody} onChange={e => setEditBody(e.target.value)} className="w-full px-3 py-2 border rounded-lg font-mono text-xs leading-relaxed" rows={14} />
-                </div>
-                <div className="flex items-center gap-4 pt-2 text-[11px]" aria-live="polite">
-                  {isDirty && !isSaving && <span className="text-amber-600">تغییرات ذخیره نشده</span>}
-                  {isSaving && <span className="text-blue-600 animate-pulse">در حال ذخیره...</span>}
-                  {!isDirty && !isSaving && selectedKey && <span className="text-green-600">همه تغییرات ذخیره شده‌اند</span>}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeTab !== 'blocks' && (
-        <div className="bg-white rounded-lg shadow p-6 text-sm text-gray-700 border border-gray-200 min-h-[360px]">
-          {activeTab === 'announcements' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold">اطلاعیه‌ها</h2>
-                <div className="flex items-center gap-2">
-                  {selectedAnnouncements.length>0 && (
-                    <div className="flex items-center gap-1 text-[10px] bg-amber-50 border border-amber-300 rounded px-2 py-1">
-                      <span>{selectedAnnouncements.length} انتخاب شده</span>
-                      <button onClick={bulkDeleteAnnouncements} className="text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3" />حذف گروهی</button>
-                      <button onClick={clearSelectedAnnouncements} className="text-gray-500">×</button>
+                <div className="space-y-3">
+                  {localDraft.sections.length===0 && <div className="text-[11px] text-gray-500">هیچ بخشی تعریف نشده</div>}
+                  {localDraft.sections.sort((a,b)=> a.order - b.order).map(sec => (
+                    <div key={sec.id} className="border rounded p-3 bg-gray-50 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input value={sec.title} onChange={e=> updateSection(sec.id,{ title: e.target.value })} className="flex-1 text-xs border rounded px-2 py-1" />
+                        <button onClick={()=> removeSection(sec.id)} className="text-[10px] px-2 py-1 border rounded text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3"/>حذف</button>
+                      </div>
+                      <textarea value={sec.body} onChange={e=> updateSection(sec.id,{ body: e.target.value })} rows={4} className="w-full text-xs border rounded px-2 py-1 leading-relaxed font-mono" />
                     </div>
-                  )}
-                  <button onClick={() => refetchAnnouncements()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
+                  ))}
                 </div>
               </div>
-              {/* Create */}
-              <div className="border rounded-lg p-4 bg-gray-50 space-y-2">
-                <div className="grid md:grid-cols-6 gap-2">
-                  <input value={newAnn.title} onChange={e => setNewAnn(a => ({ ...a, title: e.target.value }))} placeholder="عنوان" className="px-2 py-1 border rounded col-span-2 text-xs" />
-                  <input value={newAnn.content} onChange={e => setNewAnn(a => ({ ...a, content: e.target.value }))} placeholder="محتوا" className="px-2 py-1 border rounded col-span-2 text-xs" />
-                  <input type="number" value={newAnn.priority} onChange={e => setNewAnn(a => ({ ...a, priority: Number(e.target.value) }))} placeholder="اولویت" className="px-2 py-1 border rounded text-xs" />
-                  <select value={newAnn.type} onChange={e => setNewAnn(a => ({ ...a, type: e.target.value }))} className="px-2 py-1 border rounded text-xs">
-                    <option value="info">info</option><option value="warning">warning</option><option value="success">success</option><option value="error">error</option>
-                  </select>
-                </div>
-                {annErrors.length>0 && <ul className="text-red-600 text-[10px] list-disc pr-4 space-y-0.5">{annErrors.map(er=> <li key={er}>{er}</li>)}</ul>}
-                <button disabled={annErrors.length>0 || createAnnMutation.isPending} onClick={() => createAnnMutation.mutate(newAnn)} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-40"><Plus className="w-3 h-3" />افزودن</button>
-              </div>
-              {/* List */}
-              <div className="space-y-2 max-h-72 overflow-auto">
-                {announcements.map(a => (
-                  <div key={a.id} className="border rounded p-3 bg-white flex flex-col gap-2">
-                    {editingAnnouncement?.id === a.id ? (
-                      <div className="space-y-2">
-                        <input value={editingAnnouncement.title} onChange={e => setEditingAnnouncement(o => o ? { ...o, title: e.target.value } : o)} className="w-full text-xs border px-2 py-1 rounded" />
-                        <textarea value={editingAnnouncement.content} onChange={e => setEditingAnnouncement(o => o ? { ...o, content: e.target.value } : o)} rows={2} className="w-full text-xs border px-2 py-1 rounded" />
-                        <div className="flex gap-2 items-center">
-                          <input type="number" value={editingAnnouncement.priority} onChange={e => setEditingAnnouncement(o => o ? { ...o, priority: Number(e.target.value) } : o)} className="w-20 text-xs border px-2 py-1 rounded" />
-                          <select value={editingAnnouncement.type} onChange={e => setEditingAnnouncement(o => o ? { ...o, type: e.target.value } : o)} className="text-xs border px-2 py-1 rounded">
-                            <option value="info">info</option><option value="warning">warning</option><option value="success">success</option><option value="error">error</option>
-                          </select>
-                          <label className="text-[10px] flex items-center gap-1"><input type="checkbox" checked={editingAnnouncement.isActive} onChange={e => setEditingAnnouncement(o => o ? { ...o, isActive: e.target.checked } : o)} />فعال</label>
-                          <button
-                            disabled={!(editingAnnouncement.title.trim().length>=3 && editingAnnouncement.content.trim().length>=5)}
-                            onClick={() => editingAnnouncement && updateAnnMutation.mutate(editingAnnouncement)}
-                            className="text-xs px-2 py-1 bg-green-600 text-white rounded disabled:opacity-40"
-                          >ذخیره</button>
-                          <button onClick={() => setEditingAnnouncement(null)} className="text-xs px-2 py-1 border rounded">لغو</button>
-                        </div>
-                        {editingAnnouncement && (editingAnnouncement.title.trim().length<3 || editingAnnouncement.content.trim().length<5) && (
-                          <div className="text-[10px] text-red-600">حداقل طول عنوان ۳ و محتوا ۵ کاراکتر</div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="text-xs leading-5">
-                          <label className="flex items-center gap-1 text-[10px] mb-1 select-none">
-                            <input type="checkbox" checked={selectedAnnouncements.includes(a.id)} onChange={()=>toggleAnnouncement(a.id)} />انتخاب
-                          </label>
-                          <div className="font-semibold flex items-center gap-2">{a.title}<span className="px-1 rounded bg-gray-100 border text-[10px]">{a.type}</span>{!a.isActive && <span className="text-[10px] bg-red-50 border border-red-200 text-red-600 rounded px-1">غیرفعال</span>}</div>
-                          <div className="text-gray-600 whitespace-pre-wrap">{a.content}</div>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <button onClick={() => setEditingAnnouncement(a)} className="text-[10px] px-2 py-1 border rounded">ویرایش</button>
-                          <button onClick={() => deleteAnnMutation.mutate(a.id)} className="text-[10px] px-2 py-1 border rounded text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3" />حذف</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {announcements.length === 0 && <div className="text-center text-xs text-gray-500">اطلاعیه‌ای ثبت نشده</div>}
-              </div>
+              <p className="text-[11px] text-gray-500">نکته: هر بخش می‌تواند برای راهنما، ساعات پشتیبانی، اطلاعات تماس و ... استفاده شود. ترتیب نهایی بر اساس order است.</p>
             </div>
           )}
 
-          {activeTab === 'downloads' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold">اپلیکیشن‌های دانلود</h2>
-                <div className="flex items-center gap-2">
-                  {selectedDownloads.length>0 && (
-                    <div className="flex items-center gap-1 text-[10px] bg-amber-50 border border-amber-300 rounded px-2 py-1">
-                      <span>{selectedDownloads.length} انتخاب شده</span>
-                      <button onClick={bulkDeleteDownloads} className="text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3" />حذف گروهی</button>
-                      <button onClick={clearSelectedDownloads} className="text-gray-500">×</button>
-                    </div>
-                  )}
-                  <button onClick={() => refetchDownloads()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
-                </div>
-              </div>
-              {/* Create */}
-              <div className="border rounded-lg p-4 bg-gray-50 space-y-2">
-                <div className="grid md:grid-cols-5 gap-2">
-                  <input value={newDownload.title} onChange={e => setNewDownload(d => ({ ...d, title: e.target.value }))} placeholder="عنوان" className="px-2 py-1 border rounded text-xs" />
-                  <input value={newDownload.downloadLink} onChange={e => setNewDownload(d => ({ ...d, downloadLink: e.target.value }))} placeholder="لینک" className="px-2 py-1 border rounded text-xs col-span-2" />
-                  <input value={newDownload.description} onChange={e => setNewDownload(d => ({ ...d, description: e.target.value }))} placeholder="توضیح" className="px-2 py-1 border rounded text-xs" />
-                  <button disabled={downloadErrors.length>0 || createDownloadMutation.isPending} onClick={() => createDownloadMutation.mutate(newDownload)} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-40"><Plus className="w-3 h-3" />افزودن</button>
-                </div>
-                {downloadErrors.length>0 && <ul className="text-red-600 text-[10px] list-disc pr-4 space-y-0.5">{downloadErrors.map(er=> <li key={er}>{er}</li>)}</ul>}
-              </div>
-              {/* List */}
-              <div className="space-y-2 max-h-72 overflow-auto"
-                   onDragOver={(e)=>e.preventDefault()}
-              >
-                {localDownloads.map(d => (
-                  <div key={d.id}
-                       draggable
-                       onDragStart={(e)=>{e.dataTransfer.setData('text/plain', String(d.id));}}
-                       onDrop={(e)=>{
-                          e.preventDefault();
-                          const sourceId = Number(e.dataTransfer.getData('text/plain'));
-                          if(!sourceId || sourceId===d.id) return;
-                          setLocalDownloads(prev => {
-                            const srcIndex = prev.findIndex(x=>x.id===sourceId);
-                            const targetIndex = prev.findIndex(x=>x.id===d.id);
-                            if(srcIndex===-1||targetIndex===-1) return prev;
-                            const clone = prev.slice();
-                            const [moved] = clone.splice(srcIndex,1);
-                            clone.splice(targetIndex,0,moved);
-                            // reassign displayOrder sequentially (step 10)
-                            return clone.map((item,idx)=>({...item, displayOrder: idx*10}));
-                          });
-                       }}
-                       className="border rounded p-3 bg-white flex items-start justify-between gap-4 cursor-move opacity-100 hover:shadow transition-shadow"
-                  >
-                    {editingDownload?.id === d.id ? (
-                      <div className="flex-1 space-y-2">
-                        <input value={editingDownload.title} onChange={e => setEditingDownload(o => o ? { ...o, title: e.target.value } : o)} className="w-full text-xs border px-2 py-1 rounded" />
-                        <input value={editingDownload.downloadLink} onChange={e => setEditingDownload(o => o ? { ...o, downloadLink: e.target.value } : o)} className="w-full text-xs border px-2 py-1 rounded" />
-                        <textarea value={editingDownload.description || ''} onChange={e => setEditingDownload(o => o ? { ...o, description: e.target.value } : o)} rows={2} className="w-full text-xs border px-2 py-1 rounded" />
-                        <div className="flex gap-2 items-center">
-                          <label className="text-[10px] flex items-center gap-1"><input type="checkbox" checked={editingDownload.isActive} onChange={e => setEditingDownload(o => o ? { ...o, isActive: e.target.checked } : o)} />فعال</label>
-                          <button
-                            disabled={!(editingDownload.title.trim().length>=2 && /^https?:\/\//i.test(editingDownload.downloadLink.trim()))}
-                            onClick={() => editingDownload && updateDownloadMutation.mutate(editingDownload)}
-                            className="text-[10px] px-2 py-1 bg-green-600 text-white rounded disabled:opacity-40"
-                          >ذخیره</button>
-                          <button onClick={() => setEditingDownload(null)} className="text-[10px] px-2 py-1 border rounded">لغو</button>
-                        </div>
-                        {editingDownload && (!(editingDownload.title.trim().length>=2) || !/^https?:\/\//i.test(editingDownload.downloadLink.trim())) && (
-                          <div className="text-[10px] text-red-600">عنوان حداقل ۲ کاراکتر و لینک معتبر http/https لازم است</div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex-1 text-xs space-y-1">
-                        <div className="font-semibold flex items-center gap-2">{d.title}{!d.isActive && <span className="text-[10px] bg-red-50 border border-red-200 text-red-600 rounded px-1">غیرفعال</span>}</div>
-                        <label className="flex items-center gap-1 text-[10px] select-none">
-                          <input type="checkbox" checked={selectedDownloads.includes(d.id)} onChange={()=>toggleDownload(d.id)} />انتخاب
-                        </label>
-                        <div className="text-gray-600 break-all">{d.downloadLink}</div>
-                        {d.description && <div className="text-gray-500 whitespace-pre-wrap">{d.description}</div>}
-                      </div>
-                    )}
-                    <div className="flex flex-col gap-1">
-                      {editingDownload?.id === d.id ? null : <button onClick={() => setEditingDownload(d)} className="text-[10px] px-2 py-1 border rounded">ویرایش</button>}
-                      <button onClick={() => deleteDownloadMutation.mutate(d.id)} className="text-[10px] px-2 py-1 border rounded text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3" />حذف</button>
-                    </div>
-                  </div>
-                ))}
-                {localDownloads.length === 0 && <div className="text-center text-xs text-gray-500">اپلیکیشنی ثبت نشده</div>}
-              </div>
-              <div className="pt-2 text-[10px] text-gray-500 flex items-center justify-between">
-                <span>برای تغییر ترتیب آیتم‌ها را بکشید. سپس ذخیره ترتیب را بزنید.</span>
-                <button
-                  disabled={localDownloads.length===0}
-                  onClick={async ()=>{
-                    try {
-                      // prepare payload as array of {id, displayOrder}
-                      const order = localDownloads.map(d=>({ id: d.id, displayOrder: d.displayOrder }));
-                      const res = await PortalContentService.downloads.reorder(order);
-                      if(res.success){
-                        toast({ title: 'ترتیب ذخیره شد', description: res.updated ? `${res.updated} آیتم` : undefined });
-                        refetchDownloads();
-                      }
-                    } catch(err:any){
-                      toast({ title: 'خطا', description: err.message, variant:'destructive' });
-                    }
-                  }}
-                  className="text-[10px] px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
-                >ذخیره ترتیب</button>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'preview' && (
+          {activeTab==='announcements' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="font-semibold">پیش‌نمایش پرتال (read-only)</h2>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => { refetchFull(); refetchStatus(); }} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />بارگذاری</button>
-                  <button disabled={publishMutation.isPending} onClick={() => publishMutation.mutate()} className="text-xs px-2 py-1 bg-emerald-600 text-white rounded flex items-center gap-1 disabled:opacity-50">
-                    {publishMutation.isPending ? 'در حال انتشار...' : 'انتشار' }
-                  </button>
-                </div>
+                <h3 className="text-sm font-semibold">اعلانات</h3>
+                <button onClick={addAnnouncement} className="text-xs px-2 py-1 bg-blue-600 text-white rounded flex items-center gap-1"><Plus className="w-3 h-3"/>افزودن اعلان</button>
               </div>
-              <div className="text-[11px] rounded border p-2 bg-gray-50 flex flex-wrap gap-4">
-                <span>نسخه محتوا: <strong>{statusData?.data.contentVersion ?? '—'}</strong></span>
-                <span>آخرین انتشار: {statusData?.data.lastPublishedAt ? new Date(statusData.data.lastPublishedAt).toLocaleString('fa-IR') : 'منتشر نشده'}</span>
-                {statusData?.data.lastPublishedBy && <span>منتشر کننده: {statusData.data.lastPublishedBy}</span>}
+              <div className="space-y-3">
+                {localDraft.announcements.length===0 && <div className="text-[11px] text-gray-500">اعلانی وجود ندارد</div>}
+                {localDraft.announcements.sort((a,b)=> b.priority - a.priority).map(a => (
+                  <div key={a.id} className="border rounded p-3 bg-white space-y-2">
+                    <div className="grid md:grid-cols-5 gap-2 text-xs items-start">
+                      <input value={a.title} onChange={e=> updateAnnouncement(a.id,{ title: e.target.value })} className="border rounded px-2 py-1 col-span-1" />
+                      <textarea value={a.content} onChange={e=> updateAnnouncement(a.id,{ content: e.target.value })} rows={2} className="border rounded px-2 py-1 col-span-2" />
+                      <div className="flex flex-col gap-1 col-span-1">
+                        <input type="number" value={a.priority} onChange={e=> updateAnnouncement(a.id,{ priority: Number(e.target.value) })} className="border rounded px-2 py-1" />
+                        <select value={a.type} onChange={e=> updateAnnouncement(a.id,{ type: e.target.value as any })} className="border rounded px-2 py-1"><option value="info">info</option><option value="warning">warning</option><option value="success">success</option><option value="error">error</option></select>
+                        <label className="flex items-center gap-1 text-[10px]"><input type="checkbox" checked={a.isActive} onChange={e=> updateAnnouncement(a.id,{ isActive: e.target.checked })} />فعال</label>
+                      </div>
+                      <div className="flex flex-col gap-1 col-span-1">
+                        <button onClick={()=> removeAnnouncement(a.id)} className="text-[10px] px-2 py-1 border rounded text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3"/>حذف</button>
+                      </div>
+                    </div>
+                    <div className="text-[10px] text-gray-500 flex gap-4"><span>priority: {a.priority}</span><span>type: {a.type}</span></div>
+                  </div>
+                ))}
               </div>
-              {unpublishedChanges && (
-                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-800 flex items-start gap-2">
-                  <Megaphone className="w-3 h-3 mt-0.5" />
-                  <div>
-                    <div className="font-medium">تغییرات منتشر نشده</div>
-                    <div>برخی ویرایش‌ها اعمال شده‌اند اما هنوز منتشر نشده‌اند. برای اعمال در پرتال عمومی دکمه انتشار را بزنید.</div>
-                  </div>
-                </div>
-              )}
-              {!fullContentData && <div className="text-xs text-gray-500">در حال بارگذاری...</div>}
-              {fullContentData && (
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2 space-y-4">
-                    <div className="border rounded-lg p-4 bg-white">
-                      <h3 className="font-semibold text-sm mb-2">بلوک‌ها</h3>
-                      <ul className="space-y-2 text-xs">
-                        {fullContentData.data.blocks.map((b: any) => (
-                          <li key={b.blockKey} className="border rounded p-2">
-                            <div className="font-medium">{b.title} <span className="text-[10px] text-gray-500">({b.blockKey})</span></div>
-                            <div className="text-gray-600 whitespace-pre-wrap mt-1 leading-relaxed text-[11px]">{b.body.slice(0, 500) || '—'}</div>
-                          </li>
-                        ))}
-                      </ul>
+              <p className="text-[10px] text-gray-500">مرتب‌سازی عمومی بر اساس priority (نزولی) است.</p>
+            </div>
+          )}
+
+          {activeTab==='downloads' && (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">دانلودها</h3><button onClick={addDownload} className="text-xs px-2 py-1 bg-blue-600 text-white rounded flex items-center gap-1"><Plus className="w-3 h-3"/>افزودن دانلود</button></div>
+              <div className="space-y-3" onDragOver={e=>e.preventDefault()}>
+                {localDraft.downloads.length===0 && <div className="text-[11px] text-gray-500">موردی ثبت نشده</div>}
+                {localDraft.downloads.sort((a,b)=> a.displayOrder - b.displayOrder).map(d => (
+                  <div key={d.id} draggable onDragStart={e=> e.dataTransfer.setData('text/plain', d.id)} onDrop={e=> { e.preventDefault(); const sid = e.dataTransfer.getData('text/plain'); if(sid && sid!==d.id) reorderDownload(sid, d.id); }} className="border rounded p-3 bg-white space-y-2 cursor-move">
+                    <div className="flex items-start gap-3 text-xs flex-wrap">
+                      <input value={d.title} onChange={e=> updateDownload(d.id,{ title: e.target.value })} className="border rounded px-2 py-1 flex-1 min-w-[140px]" />
+                      <input value={d.downloadLink} onChange={e=> updateDownload(d.id,{ downloadLink: e.target.value })} className="border rounded px-2 py-1 flex-[2] min-w-[200px]" />
+                      <input value={d.description || ''} onChange={e=> updateDownload(d.id,{ description: e.target.value })} className="border rounded px-2 py-1 flex-1 min-w-[160px]" placeholder="توضیح" />
+                      <label className="flex items-center gap-1 text-[10px]"><input type="checkbox" checked={d.isActive} onChange={e=> updateDownload(d.id,{ isActive: e.target.checked })} />فعال</label>
+                      <button onClick={()=> removeDownload(d.id)} className="text-[10px] px-2 py-1 border rounded text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3"/>حذف</button>
                     </div>
-                    <div className="border rounded-lg p-4 bg-white">
-                      <h3 className="font-semibold text-sm mb-2">اطلاعیه‌های فعال</h3>
-                      <ul className="space-y-2 text-xs">
-                        {fullContentData.data.announcements.map((a: any) => (
-                          <li key={a.id} className="border rounded p-2">
-                            <div className="font-medium flex items-center gap-2">{a.title}<span className="text-[10px] bg-gray-100 border rounded px-1">{a.type}</span></div>
-                            <div className="text-gray-600 whitespace-pre-wrap mt-1 leading-relaxed text-[11px]">{a.content}</div>
-                          </li>
-                        ))}
-                        {fullContentData.data.announcements.length === 0 && <li className="text-gray-400">موردی نیست</li>}
-                      </ul>
+                    <div className="grid md:grid-cols-2 gap-2 text-[10px]">
+                      <input value={d.qrCodeUrl || ''} onChange={e=> updateDownload(d.id,{ qrCodeUrl: e.target.value })} placeholder="QR URL" className="border rounded px-2 py-1" />
+                      <input value={d.videoUrl || ''} onChange={e=> updateDownload(d.id,{ videoUrl: e.target.value })} placeholder="Video URL" className="border rounded px-2 py-1" />
                     </div>
+                    <div className="text-[10px] text-gray-500">order: {d.displayOrder}</div>
                   </div>
-                  <div className="space-y-4">
-                    <div className="border rounded-lg p-4 bg-white">
-                      <h3 className="font-semibold text-sm mb-2">اپلیکیشن‌ها</h3>
-                      <ul className="space-y-1 text-[11px]">
-                        {fullContentData.data.downloads.map((d: any) => (
-                          <li key={d.id} className="border rounded px-2 py-1 flex flex-col">
-                            <span className="font-medium">{d.title}</span>
-                            <span className="text-gray-600 break-all">{d.downloadLink}</span>
-                          </li>
-                        ))}
-                        {fullContentData.data.downloads.length === 0 && <li className="text-gray-400">موردی نیست</li>}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-gray-500">Drag & Drop برای تغییر ترتیب.</p>
+            </div>
+          )}
+
+          {activeTab==='diff' && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold">Diff آخرین انتشار</h3>
+              {diffQuery.isLoading && <div className="text-xs text-gray-500">در حال بارگذاری diff...</div>}
+              {!diffQuery.isLoading && (!diffQuery.data?.diff || Object.keys(diffQuery.data.diff).length===0) && <div className="text-xs text-gray-500">تفاوتی ثبت نشده</div>}
+              {diffQuery.data?.diff && (
+                <ul className="space-y-2 text-[11px]">
+                  {Object.entries(diffQuery.data.diff).map(([k,v]:any) => (
+                    <li key={k} className="border rounded p-3 bg-white">
+                      <div className="font-medium text-xs mb-1">{k}</div>
+                      <pre className="bg-gray-50 border rounded p-2 overflow-auto max-h-48 whitespace-pre-wrap text-[10px] ltr:text-left rtl:text-right"><code>{JSON.stringify(v.after, null, 2)}</code></pre>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           )}
-        </div>
+
+          {activeTab==='preview' && unifiedPreview && (
+            <div className="space-y-6">
+              <div className="border rounded p-4 bg-white space-y-4">
+                <h2 className="text-lg font-bold text-center">{unifiedPreview.displayTitle}</h2>
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2"><Megaphone className="w-4 h-4"/>اعلانات و اطلاعیه‌ها</h3>
+                  <div className="grid md:grid-cols-3 gap-3">
+                    {unifiedPreview.announcements.filter(a=>a.isActive).sort((a,b)=> b.priority - a.priority).map(a => (
+                      <div key={a.id} className="rounded border p-3 text-xs bg-gradient-to-b from-amber-50 to-white">
+                        <div className="font-semibold flex items-center gap-2">{a.title}<span className="px-1 rounded bg-gray-100 border text-[9px]">{a.type}</span></div>
+                        <div className="mt-1 whitespace-pre-wrap leading-relaxed text-[11px] text-gray-700">{a.content}</div>
+                      </div>
+                    ))}
+                    {unifiedPreview.announcements.filter(a=>a.isActive).length===0 && <div className="text-[11px] text-gray-400">اعلان فعالی نیست</div>}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2"><Download className="w-4 h-4"/>دانلود اپلیکیشن‌ها</h3>
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {unifiedPreview.downloads.filter(d=>d.isActive).sort((a,b)=> a.displayOrder - b.displayOrder).map(d => (
+                      <div key={d.id} className="border rounded p-4 bg-gray-800/90 text-white text-xs flex flex-col gap-3">
+                        <div className="font-semibold text-sm">{d.title}</div>
+                        {d.qrCodeUrl && <div className="bg-white p-2 rounded flex items-center justify-center"><img src={d.qrCodeUrl} alt="qr" className="w-28 h-28 object-contain" /></div>}
+                        <div className="space-y-2">
+                          <a href={d.downloadLink} className="block w-full text-center rounded bg-emerald-500 hover:bg-emerald-600 text-white py-1">دانلود مستقیم</a>
+                          <button onClick={()=> navigator.clipboard.writeText(d.downloadLink)} className="block w-full text-center rounded bg-blue-600 hover:bg-blue-700 text-white py-1">کپی لینک</button>
+                        </div>
+                        {d.description && <div className="text-[10px] text-gray-200 whitespace-pre-wrap">{d.description}</div>}
+                      </div>
+                    ))}
+                    {unifiedPreview.downloads.filter(d=>d.isActive).length===0 && <div className="text-[11px] text-gray-400">دانلود فعالی نیست</div>}
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {unifiedPreview.sections.sort((a,b)=> a.order - b.order).map(s => (
+                    <div key={s.id} className="border rounded p-4 bg-teal-900/90 text-teal-50 text-xs">
+                      <div className="font-semibold mb-2">{s.title}</div>
+                      <div className="whitespace-pre-wrap leading-relaxed">{s.body || '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-500">این پیش‌نمایش بر اساس پیش‌نویس فعلی است و ممکن است هنوز منتشر نشده باشد.</p>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

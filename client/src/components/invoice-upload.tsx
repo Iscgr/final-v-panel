@@ -290,10 +290,10 @@ export default function InvoiceUpload() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>تولید فاکتور از فایل JSON</span>
-          <Badge variant="secondary" className="bg-green-100 text-green-800">
-            <CheckCircle className="w-3 h-3 mr-1" />
+        <CardTitle className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-lg font-semibold">تولید فاکتور از فایل JSON</span>
+          <Badge variant="secondary" className="bg-green-100 text-green-800 flex items-center gap-2 justify-center sm:justify-start w-full sm:w-auto">
+            <CheckCircle className="w-3 h-3" />
             آماده
           </Badge>
         </CardTitle>
@@ -302,7 +302,7 @@ export default function InvoiceUpload() {
         {/* Invoice Date Settings */}
         <Card className="border-dashed border-gray-300 dark:border-gray-600">
           <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-3">
               <h3 className="text-sm font-medium text-gray-900 dark:text-white flex items-center">
                 <Calendar className="w-4 h-4 ml-2" />
                 تنظیمات تاریخ صدور فاکتور
@@ -311,7 +311,7 @@ export default function InvoiceUpload() {
                 size="sm"
                 variant="ghost"
                 onClick={() => setShowDateSettings(!showDateSettings)}
-                className="text-xs"
+                className="text-xs w-full sm:w-auto"
               >
                 {showDateSettings ? 'بستن' : 'تنظیمات'}
               </Button>
@@ -382,6 +382,7 @@ export default function InvoiceUpload() {
           </p>
           <Button 
             disabled={uploadMutation.isPending || (invoiceDateMode === 'custom' && !customInvoiceDate.trim())}
+            className="w-full sm:w-auto"
           >
             {uploadMutation.isPending ? "در حال پردازش..." : "انتخاب فایل"}
           </Button>
@@ -396,15 +397,15 @@ export default function InvoiceUpload() {
         {/* Upload Progress */}
         {uploadMutation.isPending && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
+            <div className="flex flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
               <span>در حال پردازش فایل...</span>
-              <div className="flex items-center space-x-2 space-x-reverse">
+              <div className="flex items-center space-x-2 space-x-reverse justify-between sm:justify-end">
                 <span>{toPersianDigits(uploadProgress.toString())}%</span>
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => setShowProcessingModal(true)}
-                  className="text-xs"
+                  className="text-xs w-full sm:w-auto"
                 >
                   <Eye className="w-3 h-3 mr-1" />
                   نمایش جزئیات
@@ -449,32 +450,32 @@ export default function InvoiceUpload() {
         {/* Generated Invoices List */}
         {uploadResult && uploadResult.invoices.length > 0 && (
           <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
-            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="font-medium text-gray-900 dark:text-white">
                 فاکتورهای تولید شده ({toPersianDigits(uploadResult.invoices.length.toString())} فاکتور)
               </h3>
-              <div className="flex items-center space-x-2 space-x-reverse">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
                 <Button
                   size="sm"
                   onClick={handleSendToTelegram}
                   disabled={selectedInvoices.length === 0 || sendToTelegramMutation.isPending}
-                  className="bg-primary text-white hover:bg-primary/90"
+                  className="bg-primary text-white hover:bg-primary/90 w-full sm:w-auto"
                 >
-                  <Send className="w-3 h-3 mr-1" />
+                  <Send className="w-3 h-3 ml-1" />
                   {sendToTelegramMutation.isPending 
                     ? "در حال ارسال..." 
                     : `ارسال ${toPersianDigits(selectedInvoices.length.toString())} فاکتور`
                   }
                 </Button>
-                <Button size="sm" variant="outline">
-                  <Download className="w-3 h-3 mr-1" />
+                <Button size="sm" variant="outline" className="w-full sm:w-auto">
+                  <Download className="w-3 h-3 ml-1" />
                   دانلود گزارش
                 </Button>
               </div>
             </div>
             
             <div className="p-4">
-              <div className="flex items-center mb-4">
+              <div className="flex flex-wrap items-center gap-2 mb-4">
                 <Checkbox
                   checked={
                     uploadResult.invoices
@@ -484,7 +485,7 @@ export default function InvoiceUpload() {
                   }
                   onCheckedChange={handleSelectAll}
                 />
-                <span className="text-sm text-gray-600 dark:text-gray-400 mr-2">
+                <span className="text-sm text-gray-600 dark:text-gray-400 mr-0 sm:mr-2">
                   انتخاب همه فاکتورهای ارسال نشده
                 </span>
               </div>
@@ -493,7 +494,7 @@ export default function InvoiceUpload() {
                 {uploadResult.invoices.map((invoice) => (
                   <div 
                     key={invoice.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                    className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
                   >
                     <div className="flex items-center space-x-3 space-x-reverse">
                       <Checkbox

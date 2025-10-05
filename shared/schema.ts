@@ -1108,6 +1108,28 @@ export const portalContentPublicationState = pgTable('portal_content_publication
   updatedAt: timestamp("updated_at").notNull().defaultNow()
 });
 
+// Unified Portal Content Document (Phase 2 - replaces scattered blocks + announcements/download linkage)
+// docKey: منطقی برای پشتیبانی اسناد متعدد آتی (الان فقط 'portal_main')
+// draftJson: آخرین پیش‌نویس در حال ویرایش
+// publishedJson: نسخه منتشر شده برای مصرف پرتال عمومی
+// draftVersion/publishedVersion: شمارنده افزایشی برای diff و همگام‌سازی
+// status: draft | dirty | published (dirty یعنی published وجود دارد ولی draft تغییر کرده است)
+// diffJson: آخرین diff محاسبه شده بین draft و published (اختیاری برای shadow mode)
+export const portalContentDocuments = pgTable('portal_content_documents', {
+  id: serial('id').primaryKey(),
+  docKey: text('doc_key').notNull().unique(),
+  draftJson: json('draft_json').notNull().default({}),
+  publishedJson: json('published_json'),
+  draftVersion: integer('draft_version').notNull().default(1),
+  publishedVersion: integer('published_version').default(0),
+  status: text('status').notNull().default('draft'), // draft | dirty | published
+  diffJson: json('diff_json'),
+  updatedBy: text('updated_by'),
+  publishedBy: text('published_by'),
+  updatedAt: timestamp('updated_at').defaultNow(),
+  publishedAt: timestamp('published_at')
+});
+
 export const backupAuditLog = pgTable('backup_audit_log', {
   id: serial('id').primaryKey(),
   timestamp: timestamp('timestamp').defaultNow().notNull(),
