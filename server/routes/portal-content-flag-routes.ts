@@ -25,11 +25,11 @@ router.get('/state', requireAuth, (_req: Request, res: Response) => {
 router.post('/state', requireAuth, (req: Request, res: Response) => {
   try {
     const { state } = req.body || {};
-    if (!['off','shadow','full'].includes(state)) {
-      return res.status(400).json({ success:false, error:'state نامعتبر (off|shadow|full)' });
+    if (state !== 'full') {
+      return res.status(400).json({ success:false, error:'حالت معتبر تنها full است.' });
     }
-    featureFlagManager.updateMultiStageFlag('portal_content_read_switch', state, (req as any).user?.username || 'admin');
-    res.json({ success:true, data:{ state } });
+    featureFlagManager.updateMultiStageFlag('portal_content_read_switch', 'full', (req as any).user?.username || 'admin');
+    res.json({ success:true, data:{ state: 'full' } });
   } catch (e: any) {
     res.status(500).json({ success:false, error: e.message });
   }

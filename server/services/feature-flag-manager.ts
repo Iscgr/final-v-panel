@@ -165,11 +165,11 @@ export class FeatureFlagManager {
         description: 'فعال کردن تحلیل Threshold و اعلان داخلی داشبورد متریک گارد (E-B5 مرحله 2)'
       },
       portal_content_read_switch: {
-        state: 'off',
-        allowed: ['off','shadow','full'],
+        state: 'full',
+        allowed: ['full'],
         lastModified: new Date().toISOString(),
         modifiedBy: 'init',
-        description: 'سوییچ مهاجرت خواندن محتوای پرتال از settings قدیمی به portal_content_blocks (shadow=مقایسه بی‌صدا، full=سوئیچ کامل)'
+        description: 'ارائه ۱۰۰٪ محتوای پرتال از portal_content_blocks (حالت FULL دائمی)'
       }
     };
     console.log('🚩 ATOMOS Feature Flag Manager v1.0 initialized with safe defaults');

@@ -1,0 +1,28 @@
+server {
+    server_name marfanet.irnrefnation.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    listen 443 ssl; 
+    ssl_certificate /etc/letsencrypt/live/marfanet.irnrefnation.com/fullchain.pem; 
+    ssl_certificate_key /etc/letsencrypt/live/marfanet.irnrefnation.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf; 
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; 
+}
+
+server {
+    if ($host = marfanet.irnrefnation.com) {
+        return 301 https://$host$request_uri;
+    } 
+
+    listen 80;
+    server_name marfanet.irnrefnation.com;
+    return 404; 
+}

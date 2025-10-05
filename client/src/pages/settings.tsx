@@ -634,7 +634,7 @@ export default function Settings() {
             <span className="mx-1 font-mono text-[11px]">/admin/portal-content</span>
             انجام می‌شود. پس از فعال‌سازی فلگ
             <code className="mx-1 bg-white px-1 py-0.5 rounded border border-amber-300">portal_content_read_switch</code>
-            (shadow/full) این فرم صرفاً برای مشاهده و rollback موقت خواهد بود.
+            اکنون به‌صورت دائمی در حالت <span className="font-mono text-[11px]">FULL</span> قرار دارد و این فرم صرفاً برای مشاهده و rollback موقت خواهد بود.
           </div>
           <Card>
             <CardHeader>
