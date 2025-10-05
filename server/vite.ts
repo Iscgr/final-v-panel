@@ -18,54 +18,62 @@ export function log(message: string, source = "express") {
 }
 
 export async function setupVite(app: Express, server: Server) {
-  const { createServer: createViteServer, createLogger } = (await import("vite")) as ViteModule;
-  const { default: viteConfig } = await import("../vite.config.js");
-  const viteLogger = createLogger();
-  const serverOptions = {
-    middlewareMode: true,
-    hmr: { server },
-    allowedHosts: true as const,
-  };
+  // اگر در محیط production یا test هستیم به جای setup کامل vite از fallback استفاده کنیم
+  const env = process.env.NODE_ENV || app.get('env');
+  if (env !== 'development') {
+    console.log('⚠️  setupVite skipped (env != development). Using static serving fallback.');
+    return; // serveStatic در index.ts صدا زده می‌شود
+  }
+  try {
+    const { createServer: createViteServer, createLogger } = (await import("vite")) as ViteModule;
+    const { default: viteConfig } = await import("../vite.config.js");
+    const viteLogger = createLogger();
+    const serverOptions = {
+      middlewareMode: true,
+      hmr: { server },
+      allowedHosts: true as const,
+    };
 
-  const vite = await createViteServer({
-    ...viteConfig,
-    configFile: false,
-    customLogger: {
-      ...viteLogger,
-      error: (msg, options) => {
-        viteLogger.error(msg, options);
-        process.exit(1);
+    const vite = await createViteServer({
+      ...viteConfig,
+      configFile: false,
+      customLogger: {
+        ...viteLogger,
+        error: (msg, options) => {
+          viteLogger.error(msg, options);
+          // در توسعه هم سرور را به طور کامل متوقف نکن، فقط هشدار
+        },
       },
-    },
-    server: serverOptions,
-    appType: "custom",
-  });
+      server: serverOptions,
+      appType: "custom",
+    });
 
-  app.use(vite.middlewares);
-  app.use("*", async (req, res, next) => {
-    const url = req.originalUrl;
-
-    try {
-      const clientTemplate = path.resolve(
-        import.meta.dirname,
-        "..",
-        "client",
-        "index.html",
-      );
-
-      // always reload the index.html file from disk incase it changes
-      let template = await fs.promises.readFile(clientTemplate, "utf-8");
-      template = template.replace(
-        `src="/src/main.tsx"`,
-        `src="/src/main.tsx?v=${nanoid()}"`,
-      );
-      const page = await vite.transformIndexHtml(url, template);
-      res.status(200).set({ "Content-Type": "text/html" }).end(page);
-    } catch (e) {
-      vite.ssrFixStacktrace(e as Error);
-      next(e);
-    }
-  });
+    app.use(vite.middlewares);
+    app.use("*", async (req, res, next) => {
+      const url = req.originalUrl;
+      try {
+        const clientTemplate = path.resolve(
+          import.meta.dirname,
+          "..",
+          "client",
+          "index.html",
+        );
+        let template = await fs.promises.readFile(clientTemplate, "utf-8");
+        template = template.replace(
+          `src="/src/main.tsx"`,
+          `src="/src/main.tsx?v=${nanoid()}"`,
+        );
+        const page = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(page);
+      } catch (e) {
+        vite.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
+  } catch (err) {
+    // اگر vite نصب نیست (production build) لاگ مختصر و ادامه
+    console.warn('⚠️  Vite dev server not initialized:', (err as Error).message);
+  }
 }
 
 export function serveStatic(app: Express) {

@@ -220,6 +220,17 @@ export default function PortalContentManager() {
     },
     onError: () => toast({ title: 'انتشار ناموفق', variant: 'destructive' })
   });
+  // Flag state (multi-stage portal content)
+  const { data: flagStateData, refetch: refetchFlagState } = useQuery<{ success:boolean; data:{ state:string } }>({
+    queryKey: ['portal-content-flag-state'],
+    queryFn: () => PortalContentService.flag.getState()
+  });
+  const flagState = flagStateData?.data.state || 'off';
+  const updateFlagMutation = useMutation({
+    mutationFn: (state: 'off'|'shadow'|'full') => PortalContentService.flag.updateState(state),
+    onSuccess: () => { toast({ title: 'وضعیت سوییچ بروزرسانی شد' }); refetchFlagState(); },
+    onError: ()=> toast({ title:'خطا در بروزرسانی سوییچ', variant:'destructive' })
+  });
 
   // محاسبه ماکزیمم updatedAt برای تشخیص نیاز به انتشار
   const maxLastUpdate = React.useMemo(()=>{
@@ -352,6 +363,28 @@ export default function PortalContentManager() {
 
   return (
   <div className="p-4 md:p-6 max-w-7xl mx-auto">
+      {/* Flag status banner */}
+      <div className="mb-4 space-y-2">
+        <div className={`rounded-md border p-3 text-xs flex flex-col gap-2 ${flagState==='full' ? 'bg-emerald-50 border-emerald-300 text-emerald-800':'bg-amber-50 border-amber-300 text-amber-800'}`}> 
+          <div className="flex items-center justify-between">
+            <span className="font-semibold">وضعیت خوانش محتوای پورتال: {flagState.toUpperCase()}</span>
+            <div className="flex gap-2">
+              {flagState === 'off' && (
+                <button disabled={updateFlagMutation.isPending} onClick={()=> updateFlagMutation.mutate('shadow')} className="px-2 py-1 bg-blue-600 text-white rounded text-[11px]">فعال‌سازی Shadow</button>
+              )}
+              {flagState === 'shadow' && (
+                <button disabled={updateFlagMutation.isPending} onClick={()=> { if(confirm('سوئیچ به FULL باعث نمایش عمومی بلوک‌های جدید می‌شود. ادامه؟')) updateFlagMutation.mutate('full'); }} className="px-2 py-1 bg-green-600 text-white rounded text-[11px]">سوئیچ به FULL</button>
+              )}
+              {flagState === 'full' && (
+                <button disabled={updateFlagMutation.isPending} onClick={()=> updateFlagMutation.mutate('shadow')} className="px-2 py-1 bg-indigo-600 text-white rounded text-[11px]">بازگشت به Shadow</button>
+              )}
+            </div>
+          </div>
+          {flagState !== 'full' && <p className="leading-relaxed">تا زمانی که حالت FULL فعال نشود، پورتال عمومی همچنان از تنظیمات legacy استفاده می‌کند و تغییرات بلوک‌ها فقط در Preview قابل مشاهده است.</p>}
+          {flagState === 'shadow' && <p className="text-[11px] opacity-80">در حالت Shadow اختلاف‌ها لاگ می‌شوند ولی خروجی public تغییر نمی‌کند.</p>}
+          {flagState === 'full' && <p className="text-[11px] opacity-80">FULL فعال است و محتوای عمومی از بلوک‌های نسخه‌بندی‌شده می‌خواند.</p>}
+        </div>
+      </div>
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">مدیریت محتوای پرتال</h1>
         <p className="text-gray-600 text-sm">

@@ -86,7 +86,13 @@ export const AppDownloadsAPI = {
 export const PortalContentService = {
   blocks: PortalBlocksAPI,
   announcements: AnnouncementsAPI,
-  downloads: AppDownloadsAPI
+  downloads: AppDownloadsAPI,
+  flag: {
+    getState: () => apiFetch<{ success:boolean; data:{ state:string } }>(`/api/admin/portal-content-flag/state`),
+    updateState: (state: 'off'|'shadow'|'full') => apiFetch<{ success:boolean; data:{ state:string } }>(`/api/admin/portal-content-flag/state`, {
+      method: 'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ state })
+    })
+  }
 };
 
 // کلیدهای ثابت کوئری برای تمرکز در invalidate ها

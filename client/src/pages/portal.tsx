@@ -514,6 +514,12 @@ export default function PublicPortal() {
       fontFamily: 'Tahoma, sans-serif',
       direction: 'rtl'
     }}>
+      {process.env.NODE_ENV !== 'production' && (
+        <div style={{position:'fixed', top:10, left:10, zIndex:9999, background:'#1e293b', border:'1px solid #475569', borderRadius:8, padding:'8px 12px', fontSize:12, fontFamily:'monospace', opacity:0.9}}>
+          <div>Source: {(data as any)?.portalContentSource || 'legacy'}</div>
+          <div>Version: {(data as any)?.portalConfigVersion ?? 0}</div>
+        </div>
+      )}
       <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
         
         {/* ===== 1. HEADER - اطلاعات هویتی ===== */}
