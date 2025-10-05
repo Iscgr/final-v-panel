@@ -14,7 +14,7 @@ interface AdminDraftResp { success:boolean; data?:{ draftJson:any; draftVersion:
 interface AdminStatusResp { success:boolean; data?:{ draftVersion:number; publishedVersion:number; status:string }; }
 interface PublicUnifiedResp { success:boolean; data?:{ unified?:any; source:string; appDownloads?:any[]; announcements?:any[] } }
 
-const ADMIN_BASE = process.env.ADMIN_BASE || 'http://localhost:3000/api/admin/portal-content/unified';
+const ADMIN_BASE = process.env.ADMIN_BASE || 'http://localhost:3000/api/admin/portal-content-unified';
 const PUBLIC_BASE = process.env.PUBLIC_BASE || 'http://localhost:3000/api/portal';
 const SAMPLE_PUBLIC_ID = process.env.PUBLIC_ID || 'sample'; // در محیط واقعی مقدار معتبر بدهید
 
