@@ -8,6 +8,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { representativesService } from '../services/representatives-service.js';
 
 const router = Router();
@@ -86,6 +87,39 @@ router.get('/:code', async (req: Request, res: Response) => {
 });
 
 /**
+ * ✅ Phase3 Support: GET /api/representatives/id/:id
+ * دریافت جزئیات نماینده بر اساس شناسه عددی برای همگام‌سازی با چک لیست (همگام‌سازی React Query بر مبنای id)
+ */
+router.get('/id/:id', async (req: Request, res: Response) => {
+  try {
+    const idNum = Number(req.params.id);
+    if (!Number.isInteger(idNum) || idNum <= 0) {
+      return res.status(400).json({ error: 'شناسه نامعتبر است' });
+    }
+    // یافتن code و سپس استفاده از سرویس موجود (اجتناب از تکرار منطق)
+    const result = await representativesService.getRepresentativesList({ limit: 1, offset: 0 });
+    // روش بهینه‌تر: query مستقیم - برای سادگی فعلاً سریع: (TODO بهینه¬سازی select مستقیم در صورت نیاز عملکردی)
+    // با توجه به اینکه service اختصاصی getById نداریم، مستقیماً مشابه getRepresentativeByCode را تکرار نمی‌کنیم.
+    // رویکرد دقیق: افزودن تابع getRepresentativeById در Service (در صورت نیاز عملکردی آینده).
+    // در این پیاده سازی سریع: ابتدا code را از DB استخراج می‌کنیم.
+    const repList = await (await import('../services/representatives-service.js')).representativesService;
+    // استفاده مجدد از db برای استخراج code
+    // (به دلیل محدودیت عدم تکرار منطق مالی، فقط select ساده انجام می‌شود)
+    const { db } = await import('../db.js');
+    const { representatives } = await import('../../shared/schema.js');
+    const { eq } = await import('drizzle-orm');
+    const [row] = await db.select().from(representatives).where(eq(representatives.id, idNum)).limit(1);
+    if (!row) return res.status(404).json({ error: 'نماینده یافت نشد' });
+    const data = await repList.getRepresentativeByCode(row.code);
+    if (!data) return res.status(404).json({ error: 'نماینده یافت نشد' });
+    res.json(data);
+  } catch (error) {
+    console.error('❌ Error in GET /api/representatives/id/:id:', error);
+    res.status(500).json({ error: 'خطا در دریافت اطلاعات نماینده', message: error instanceof Error ? error.message : 'Unknown error' });
+  }
+});
+
+/**
  * GET /api/representatives/:code/invoices
  * فاکتورهای یک نماینده
  */
@@ -136,6 +170,39 @@ router.get('/:code/payments', async (req: Request, res: Response) => {
     console.error(`❌ Error in GET /api/representatives/${req.params.code}/payments:`, error);
     res.status(500).json({ 
       error: 'خطا در دریافت پرداخت‌های نماینده',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// ================== Phase 3: Update Representative Profile ==================
+const updateRepresentativeProfileSchema = z.object({
+  ownerName: z.string().trim().max(120).optional(),
+  phone: z.string().trim().max(32).regex(/^\+?[\d\s-]{5,18}$/,'شماره تماس نامعتبر است').optional(),
+  telegramHandle: z.string().trim().regex(/^@?[A-Za-z0-9_]{5,32}$/,'آیدی تلگرام نامعتبر است').optional(),
+  salesPartnerId: z.number().int().positive().nullable().optional(),
+  panelUsername: z.string().trim().min(3).max(64).optional()
+}).refine(data => Object.keys(data).length > 0, {
+  message: 'بدون فیلد برای بروزرسانی',
+  path: ['_root']
+});
+
+router.put('/:id/profile', async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ error: 'شناسه نامعتبر است' });
+    }
+    const payload = updateRepresentativeProfileSchema.parse(req.body);
+    const updated = await representativesService.updateRepresentativeProfile(id, payload as any);
+    res.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'داده نامعتبر', details: error.flatten() });
+    }
+    console.error('❌ Error in PUT /api/representatives/:id/profile:', error);
+    res.status(500).json({
+      error: 'خطا در بروزرسانی پروفایل نماینده',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }

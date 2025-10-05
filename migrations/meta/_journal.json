@@ -15,6 +15,27 @@
       "when": 1759438179994,
       "tag": "0001_nostalgic_phil_sheldon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762192800000,
+      "tag": "0002_portal_content_blocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1762354800000,
+      "tag": "0003_sales_partner_commissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1759609666179,
+      "tag": "0004_amused_jackal",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Save, RefreshCcw, FileText, Megaphone, Download, Eye, Plus, Trash2 } from 'lucide-react';
+import { PortalContentService, invalidatePortalContent, portalContentQueryKeys } from '@/services/portal-content';
 import { useToast } from '@/hooks/use-toast';
 
 interface PortalContentBlock {
@@ -52,45 +53,55 @@ export default function PortalContentManager() {
   const [originalTitle, setOriginalTitle] = useState('');
 
   // Announcements state
-  const [newAnn, setNewAnn] = useState({ title: '', content: '', priority: 0, type: 'info' });
+  const [newAnn, setNewAnn] = useState({ title: '', content: '', priority: 0, type: 'info', isActive: true, expiresAt: null as string | null });
+  const annErrors = (() => {
+    const errs: string[] = [];
+    if(newAnn.title.trim().length < 3) errs.push('عنوان حداقل ۳ کاراکتر');
+    if(newAnn.title.length > 120) errs.push('عنوان حداکثر ۱۲۰ کاراکتر');
+    if(newAnn.content.trim().length < 5) errs.push('محتوا حداقل ۵ کاراکتر');
+    if(newAnn.content.length > 1000) errs.push('محتوا حداکثر ۱۰۰۰ کاراکتر');
+    if(newAnn.priority < 0 || newAnn.priority>9999) errs.push('اولویت بین 0 تا 9999');
+    return errs;
+  })();
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
   // Downloads state
-  const [newDownload, setNewDownload] = useState({ title: '', downloadLink: '', description: '' });
+  const [newDownload, setNewDownload] = useState({ title: '', downloadLink: '', description: '', isActive: true, qrCodeUrl: null as string | null, videoUrl: null as string | null });
+  const downloadErrors = (() => {
+    const errs: string[] = [];
+    if(newDownload.title.trim().length < 2) errs.push('عنوان دانلود حداقل ۲ کاراکتر');
+    if(newDownload.title.length > 120) errs.push('عنوان دانلود حداکثر ۱۲۰ کاراکتر');
+    if(!/^https?:\/\//i.test(newDownload.downloadLink.trim())) errs.push('لینک باید با http/https شروع شود');
+    if(newDownload.downloadLink.length > 500) errs.push('طول لینک بیش از ۵۰۰');
+    if(newDownload.description && newDownload.description.length > 500) errs.push('توضیح حداکثر ۵۰۰ کاراکتر');
+    return errs;
+  })();
   const [editingDownload, setEditingDownload] = useState<AppDownload | null>(null);
 
   // Fetch blocks
   const { data, isLoading, refetch, isFetching } = useQuery<{ success: boolean; data: PortalContentBlock[] }>({
-    queryKey: ['/api/admin/portal-content-blocks'],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/portal-content-blocks');
-      return res.json();
-    }
+    queryKey: portalContentQueryKeys.blocks,
+    queryFn: () => PortalContentService.blocks.list()
   });
 
   const blocks: PortalContentBlock[] = data?.data || [];
 
   // Mutation for save
   const saveMutation = useMutation({
-    mutationFn: async (payload: { blockKey: string; title: string; body: string }) => {
-      const res = await fetch(`/api/admin/portal-content-blocks/${payload.blockKey}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: payload.title, body: payload.body })
-      });
-      return res.json();
+    mutationFn: (payload: { blockKey: string; title: string; body: string }) => {
+      return PortalContentService.blocks.update(payload.blockKey, { title: payload.title, body: payload.body });
     },
     onMutate: async (payload) => {
       // Optimistic update cache
-      await queryClient.cancelQueries({ queryKey: ['/api/admin/portal-content-blocks'] });
-      const prev = queryClient.getQueryData<any>(['/api/admin/portal-content-blocks']);
+      await queryClient.cancelQueries({ queryKey: portalContentQueryKeys.blocks });
+      const prev = queryClient.getQueryData<any>(portalContentQueryKeys.blocks);
       if (prev?.data) {
         const newData = prev.data.map((b: PortalContentBlock) => b.blockKey === payload.blockKey ? { ...b, title: payload.title, body: payload.body, updatedAt: new Date().toISOString() } : b);
-        queryClient.setQueryData(['/api/admin/portal-content-blocks'], { ...prev, data: newData });
+        queryClient.setQueryData(portalContentQueryKeys.blocks, { ...prev, data: newData });
       }
       return { prev };
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(['/api/admin/portal-content-blocks'], ctx.prev);
+      if (ctx?.prev) queryClient.setQueryData(portalContentQueryKeys.blocks, ctx.prev);
       toast({ title: 'خطا در ذخیره', description: 'عملیات ذخیره بلوک انجام نشد', variant: 'destructive' });
     },
     onSuccess: (_data, vars) => {
@@ -98,8 +109,13 @@ export default function PortalContentManager() {
       setOriginalBody(editBody);
       setOriginalTitle(editTitle);
     },
+    // قبلاً full: true باعث رفرش همه تب‌ها می‌شد (هزینه بالا). اکنون فقط بلوک‌ها را invalidate می‌کنیم
+    // و اگر کاربر در تب preview باشد، full را هم تازه می‌کنیم تا سازگاری حفظ شود.
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/portal-content-blocks'] });
+      invalidatePortalContent(queryClient, { blocks: true });
+      if (activeTab === 'preview') {
+        invalidatePortalContent(queryClient, { full: true });
+      }
     }
   });
 
@@ -111,11 +127,14 @@ export default function PortalContentManager() {
     setOriginalTitle(b.title || '');
   };
 
+  const isDirty = selectedKey && (editBody !== originalBody || editTitle !== originalTitle);
+  const isSaving = saveMutation.isPending;
+
   const handleSave = useCallback(() => {
     if (!selectedKey) return;
     if (!isDirty) return;
     saveMutation.mutate({ blockKey: selectedKey, title: editTitle.trim(), body: editBody });
-  }, [selectedKey, editTitle, editBody, saveMutation, editBody, editTitle]);
+  }, [selectedKey, editTitle, editBody, isDirty, saveMutation]);
 
   // Auto-select first block once loaded
   useEffect(() => {
@@ -136,97 +155,239 @@ export default function PortalContentManager() {
     return () => window.removeEventListener('keydown', handler);
   }, [handleSave]);
 
-  const isDirty = selectedKey && (editBody !== originalBody || editTitle !== originalTitle);
-  const isSaving = saveMutation.isPending;
+  const [dirtyMap, setDirtyMap] = useState<Record<string, { title: string; body: string }>>({});
+
+  // Track dirty changes per block for future batch save
+  useEffect(() => {
+    if(selectedKey){
+      if(editBody !== originalBody || editTitle !== originalTitle){
+        setDirtyMap(m => ({ ...m, [selectedKey]: { title: editTitle, body: editBody } }));
+      } else {
+        setDirtyMap(m => { const clone = { ...m }; delete clone[selectedKey]; return clone; });
+      }
+    }
+  }, [selectedKey, editBody, editTitle, originalBody, originalTitle]);
+
+  const batchSave = async () => {
+    const entries = Object.entries(dirtyMap);
+    if(!entries.length) return;
+    for(const [blockKey, value] of entries){
+      await saveMutation.mutateAsync({ blockKey, title: value.title.trim(), body: value.body });
+    }
+    setDirtyMap({});
+    toast({ title: 'همه تغییرات ذخیره شد' });
+  };
 
   // Fetch announcements
   const { data: announcementsData, refetch: refetchAnnouncements } = useQuery<{ success: boolean; data: Announcement[] }>({
-    queryKey: ['/api/admin/announcements'],
-    queryFn: async () => (await fetch('/api/admin/announcements')).json()
+    queryKey: portalContentQueryKeys.announcements,
+    queryFn: () => PortalContentService.announcements.list()
   });
   const announcements = announcementsData?.data || [];
 
   // Fetch downloads
   const { data: downloadsData, refetch: refetchDownloads } = useQuery<{ success: boolean; data: AppDownload[] }>({
-    queryKey: ['/api/admin/app-downloads'],
-    queryFn: async () => (await fetch('/api/admin/app-downloads')).json()
+    queryKey: portalContentQueryKeys.downloads,
+    queryFn: () => PortalContentService.downloads.list()
   });
   const downloads = downloadsData?.data || [];
+  const [localDownloads, setLocalDownloads] = useState<AppDownload[]>([]);
+
+  // sync local state for DnD
+  useEffect(() => {
+    setLocalDownloads(downloads.slice().sort((a,b)=>a.displayOrder - b.displayOrder));
+  }, [downloads]);
 
   // Full content for preview
   const { data: fullContentData, refetch: refetchFull } = useQuery<{ success: boolean; data: any }>({
-    queryKey: ['/api/admin/portal-content-blocks/full'],
-    queryFn: async () => (await fetch('/api/admin/portal-content-blocks/full')).json(),
+    queryKey: portalContentQueryKeys.full,
+    queryFn: () => PortalContentService.blocks.full(),
     enabled: activeTab === 'preview'
   });
 
-  // Announcement mutations
-  const createAnnMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/admin/announcements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newAnn, priority: Number(newAnn.priority) || 0 }) });
-      return res.json();
+  // Publication status
+  const { data: statusData, refetch: refetchStatus } = useQuery<{ success: boolean; data: { contentVersion: number; lastPublishedAt: string | null; lastPublishedBy: string | null } }>({
+    queryKey: ['portal-content-status'],
+    queryFn: () => PortalContentService.blocks.status(),
+    enabled: activeTab === 'preview'
+  });
+  const publishMutation = useMutation({
+    mutationFn: () => PortalContentService.blocks.publish(),
+    onSuccess: () => {
+      toast({ title: 'منتشر شد', description: 'نسخه جدید محتوا فعال شد' });
+      invalidatePortalContent(queryClient, { blocks: true, announcements: true, downloads: true, full: true });
+      refetchStatus();
     },
-    onSuccess: (r: any) => {
-      if (r.success) {
-        toast({ title: 'اطلاعیه ایجاد شد' });
-        setNewAnn({ title: '', content: '', priority: 0, type: 'info' });
-        refetchAnnouncements();
-      } else toast({ title: 'خطا', description: r.error, variant: 'destructive' });
+    onError: () => toast({ title: 'انتشار ناموفق', variant: 'destructive' })
+  });
+
+  // محاسبه ماکزیمم updatedAt برای تشخیص نیاز به انتشار
+  const maxLastUpdate = React.useMemo(()=>{
+    const blockMax = blocks.reduce<Date | null>((acc,b)=> b.updatedAt ? (acc && acc > new Date(b.updatedAt) ? acc : new Date(b.updatedAt)) : acc, null);
+    const annMax = announcements.reduce<Date | null>((acc,a)=> a.expiresAt || a.id ? acc : acc, null); // فعلاً اطلاعیه‌ها updatedAt ندارند؛ قابل گسترش در آینده
+    const dlMax = downloads.reduce<Date | null>((acc,d)=> acc, null); // similar placeholder
+    return blockMax || annMax || dlMax || null;
+  }, [blocks, announcements, downloads]);
+
+  const unpublishedChanges = React.useMemo(()=>{
+    if(!statusData) return false;
+    if(!statusData.data.lastPublishedAt) return true; // اصلاً منتشر نشده
+    if(maxLastUpdate && new Date(statusData.data.lastPublishedAt) < maxLastUpdate) return true;
+    if(Object.keys(dirtyMap).length>0) return true;
+    return false;
+  }, [statusData, maxLastUpdate, dirtyMap]);
+
+  // Announcement mutations
+  const [selectedAnnouncements, setSelectedAnnouncements] = useState<number[]>([]);
+  const toggleAnnouncement = (id:number) => setSelectedAnnouncements(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  const clearSelectedAnnouncements = () => setSelectedAnnouncements([]);
+  const createAnnMutation = useMutation({
+    mutationFn: (payload: Omit<Announcement, 'id'>) => PortalContentService.announcements.create(payload),
+    onSuccess: () => {
+      toast({ title: 'اطلاعیه ایجاد شد' });
+      setNewAnn({ title: '', content: '', priority: 0, type: 'info', isActive: true, expiresAt: null });
+    },
+    onError: () => {
+      toast({ title: 'خطا در ایجاد', variant: 'destructive' });
+    },
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { announcements: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
     }
   });
   const updateAnnMutation = useMutation({
-    mutationFn: async (ann: Announcement) => {
-      const res = await fetch(`/api/admin/announcements/${ann.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ann) });
-      return res.json();
+    mutationFn: (ann: Announcement) => PortalContentService.announcements.update(ann.id, ann),
+    onSuccess: () => {
+      toast({ title: 'اطلاعیه ویرایش شد' });
+      setEditingAnnouncement(null);
     },
-    onSuccess: (r: any) => { if (r.success) { toast({ title: 'ویرایش اطلاعیه' }); setEditingAnnouncement(null); refetchAnnouncements(); } }
+    onError: () => {
+      toast({ title: 'خطا در ویرایش', variant: 'destructive' });
+    },
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { announcements: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
+    }
   });
   const deleteAnnMutation = useMutation({
-    mutationFn: async (id: number) => { const res = await fetch(`/api/admin/announcements/${id}`, { method: 'DELETE' }); return res.json(); },
-    onSuccess: (r: any) => { if (r.success) { toast({ title: 'حذف شد' }); refetchAnnouncements(); } }
+    mutationFn: (id: number) => PortalContentService.announcements.delete(id),
+    onSuccess: () => {
+      toast({ title: 'اطلاعیه حذف شد' });
+    },
+    onError: () => {
+      toast({ title: 'خطا در حذف', variant: 'destructive' });
+    },
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { announcements: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
+    }
   });
+  const bulkDeleteAnnouncements = async () => {
+    if(!selectedAnnouncements.length) return;
+    const ids = [...selectedAnnouncements];
+    clearSelectedAnnouncements();
+    const results = await Promise.allSettled(ids.map(id=> deleteAnnMutation.mutateAsync(id)));
+    const failed = results.filter(r=> r.status==='rejected').length;
+    toast({ title: failed? 'حذف گروهی با خطا' : 'حذف گروهی موفق', description: failed? `${failed} مورد حذف نشد` : `${ids.length} مورد حذف شد` , variant: failed? 'destructive': undefined });
+    invalidatePortalContent(queryClient, { announcements: true, full: true });
+  };
 
   // Download mutations
+  const [selectedDownloads, setSelectedDownloads] = useState<number[]>([]);
+  const toggleDownload = (id:number) => setSelectedDownloads(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  const clearSelectedDownloads = () => setSelectedDownloads([]);
   const createDownloadMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch('/api/admin/app-downloads', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newDownload }) });
-      return res.json();
+    mutationFn: (payload: Omit<AppDownload, 'id' | 'displayOrder'>) => PortalContentService.downloads.create(payload),
+    onSuccess: () => {
+      toast({ title: 'اپ افزوده شد' });
+      setNewDownload({ title: '', downloadLink: '', description: '', isActive: true, qrCodeUrl: null, videoUrl: null });
     },
-    onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ افزوده شد' }); setNewDownload({ title: '', downloadLink: '', description: '' }); refetchDownloads(); } }
+    onError: () => {
+      toast({ title: 'خطا در افزودن', variant: 'destructive' });
+    },
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { downloads: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
+    }
   });
   const updateDownloadMutation = useMutation({
-    mutationFn: async (d: AppDownload) => {
-      const res = await fetch(`/api/admin/app-downloads/${d.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(d) });
-      return res.json();
+    mutationFn: (d: AppDownload) => PortalContentService.downloads.update(d.id, d),
+    onSuccess: () => {
+      toast({ title: 'اپ ویرایش شد' });
+      setEditingDownload(null);
     },
-    onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ ویرایش شد' }); setEditingDownload(null); refetchDownloads(); } }
+    onError: () => {
+      toast({ title: 'خطا در ویرایش', variant: 'destructive' });
+    },
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { downloads: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
+    }
   });
   const deleteDownloadMutation = useMutation({
-    mutationFn: async (id: number) => { const res = await fetch(`/api/admin/app-downloads/${id}`, { method: 'DELETE' }); return res.json(); },
-    onSuccess: (r: any) => { if (r.success) { toast({ title: 'اپ حذف شد' }); refetchDownloads(); } }
+    mutationFn: (id: number) => PortalContentService.downloads.delete(id),
+    onSuccess: () => {
+      toast({ title: 'اپ حذف شد' });
+    },
+    onError: () => {
+      toast({ title: 'خطا در حذف', variant: 'destructive' });
+    },
+    onSettled: () => {
+      invalidatePortalContent(queryClient, { downloads: true });
+      if (activeTab === 'preview') invalidatePortalContent(queryClient, { full: true });
+    }
   });
+  const bulkDeleteDownloads = async () => {
+    if(!selectedDownloads.length) return;
+    const ids = [...selectedDownloads];
+    clearSelectedDownloads();
+    const results = await Promise.allSettled(ids.map(id=> deleteDownloadMutation.mutateAsync(id)));
+    const failed = results.filter(r=> r.status==='rejected').length;
+    toast({ title: failed? 'حذف گروهی با خطا' : 'حذف گروهی موفق', description: failed? `${failed} مورد حذف نشد` : `${ids.length} مورد حذف شد` , variant: failed? 'destructive': undefined });
+    invalidatePortalContent(queryClient, { downloads: true, full: true });
+  };
 
   // Derived for editor
   const currentBlock = selectedKey ? blocks.find(b => b.blockKey === selectedKey) : null;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+  <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">مدیریت محتوای پرتال</h1>
-        <p className="text-gray-600 text-sm">Phase 1: فقط ذخیره‌سازی بلوک‌های متنی – پرتال عمومی هنوز از settings قدیمی می‌خواند.</p>
+        <p className="text-gray-600 text-sm">
+          مدیریت یکپارچه بلوک‌های متنی، اطلاعیه‌ها، لینک‌های دانلود اپلیکیشن‌ها و پیش‌نمایش کامل محتوای پرتال عمومی
+        </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap">
+  <div className="flex gap-2 mb-4 md:mb-6 flex-wrap border-b pb-2">
         {tabs.map(t => (
-          <button key={t.key} onClick={() => setActiveTab(t.key)} className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 border transition ${activeTab === t.key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>{t.icon}{t.label}</button>
+          <button 
+            key={t.key} 
+            onClick={() => setActiveTab(t.key)} 
+            className={`px-4 py-2 rounded-t-lg text-sm flex items-center gap-2 transition-all ${
+              activeTab === t.key 
+                ? 'bg-blue-600 text-white shadow-md -mb-2 border-b-2 border-blue-600' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-sm'
+            }`}
+          >
+            {t.icon}
+            {t.label}
+          </button>
         ))}
+        <div className="ms-auto flex items-center gap-2 ml-auto mr-0 pr-2">
+          <span className="text-[10px] px-2 py-1 rounded bg-gray-200 text-gray-700 border border-gray-300">locale: fa-IR (preview)</span>
+          <select disabled className="text-[10px] border rounded px-1 py-0.5 bg-gray-100 text-gray-400">
+            <option>fa-IR</option>
+            <option>en-US</option>
+          </select>
+        </div>
       </div>
 
       {activeTab === 'blocks' && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6">
           {/* List */}
-          <div className="md:col-span-1 bg-white rounded-lg shadow p-4 border border-gray-200 h-fit">
+          <div className="md:col-span-1 bg-white rounded-lg shadow p-4 border border-gray-200 h-fit max-h-[70vh] overflow-auto">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold text-gray-800 text-sm">بلوک‌ها</h2>
               <button onClick={() => refetch()} className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 flex items-center gap-1"><RefreshCcw className={`w-3 h-3 ${isFetching ? 'animate-spin' : ''}`} />بارگذاری</button>
@@ -245,7 +406,7 @@ export default function PortalContentManager() {
           </div>
 
           {/* Editor */}
-          <div className="md:col-span-3 bg-white rounded-lg shadow p-6 border border-gray-200 min-h-[400px]">
+          <div className="md:col-span-3 bg-white rounded-lg shadow p-4 md:p-6 border border-gray-200 min-h-[400px]" role="region" aria-label="ویرایش بلوک محتوایی">
             {!currentBlock && <div className="text-center text-gray-500 text-sm">یک بلوک را از لیست انتخاب کنید</div>}
             {currentBlock && (
               <div className="space-y-4">
@@ -258,6 +419,14 @@ export default function PortalContentManager() {
                     <button disabled={!isDirty || isSaving} onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm flex items-center gap-2 hover:bg-blue-700 disabled:opacity-50">
                       <Save className="w-4 h-4" /> {isSaving ? 'در حال ذخیره...' : isDirty ? 'ذخیره' : 'ذخیره شده'}
                     </button>
+                    <button
+                      disabled={!Object.keys(dirtyMap).length || isSaving}
+                      onClick={batchSave}
+                      className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs flex items-center gap-1 hover:bg-indigo-700 disabled:opacity-50"
+                      title="ذخیره همه بلوک‌های تغییر کرده"
+                    >
+                      <Save className="w-3 h-3" /> Save All ({Object.keys(dirtyMap).length})
+                    </button>
                   </div>
                 </div>
                 <div>
@@ -268,7 +437,7 @@ export default function PortalContentManager() {
                   <label className="block text-xs font-medium text-gray-700 mb-1">محتوا (Markdown ساده یا متن)</label>
                   <textarea value={editBody} onChange={e => setEditBody(e.target.value)} className="w-full px-3 py-2 border rounded-lg font-mono text-xs leading-relaxed" rows={14} />
                 </div>
-                <div className="flex items-center gap-4 pt-2 text-[11px]">
+                <div className="flex items-center gap-4 pt-2 text-[11px]" aria-live="polite">
                   {isDirty && !isSaving && <span className="text-amber-600">تغییرات ذخیره نشده</span>}
                   {isSaving && <span className="text-blue-600 animate-pulse">در حال ذخیره...</span>}
                   {!isDirty && !isSaving && selectedKey && <span className="text-green-600">همه تغییرات ذخیره شده‌اند</span>}
@@ -285,7 +454,16 @@ export default function PortalContentManager() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold">اطلاعیه‌ها</h2>
-                <button onClick={() => refetchAnnouncements()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
+                <div className="flex items-center gap-2">
+                  {selectedAnnouncements.length>0 && (
+                    <div className="flex items-center gap-1 text-[10px] bg-amber-50 border border-amber-300 rounded px-2 py-1">
+                      <span>{selectedAnnouncements.length} انتخاب شده</span>
+                      <button onClick={bulkDeleteAnnouncements} className="text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3" />حذف گروهی</button>
+                      <button onClick={clearSelectedAnnouncements} className="text-gray-500">×</button>
+                    </div>
+                  )}
+                  <button onClick={() => refetchAnnouncements()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
+                </div>
               </div>
               {/* Create */}
               <div className="border rounded-lg p-4 bg-gray-50 space-y-2">
@@ -297,7 +475,8 @@ export default function PortalContentManager() {
                     <option value="info">info</option><option value="warning">warning</option><option value="success">success</option><option value="error">error</option>
                   </select>
                 </div>
-                <button disabled={!newAnn.title || !newAnn.content} onClick={() => createAnnMutation.mutate()} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1"><Plus className="w-3 h-3" />افزودن</button>
+                {annErrors.length>0 && <ul className="text-red-600 text-[10px] list-disc pr-4 space-y-0.5">{annErrors.map(er=> <li key={er}>{er}</li>)}</ul>}
+                <button disabled={annErrors.length>0 || createAnnMutation.isPending} onClick={() => createAnnMutation.mutate(newAnn)} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-40"><Plus className="w-3 h-3" />افزودن</button>
               </div>
               {/* List */}
               <div className="space-y-2 max-h-72 overflow-auto">
@@ -313,13 +492,23 @@ export default function PortalContentManager() {
                             <option value="info">info</option><option value="warning">warning</option><option value="success">success</option><option value="error">error</option>
                           </select>
                           <label className="text-[10px] flex items-center gap-1"><input type="checkbox" checked={editingAnnouncement.isActive} onChange={e => setEditingAnnouncement(o => o ? { ...o, isActive: e.target.checked } : o)} />فعال</label>
-                          <button onClick={() => editingAnnouncement && updateAnnMutation.mutate(editingAnnouncement)} className="text-xs px-2 py-1 bg-green-600 text-white rounded">ذخیره</button>
+                          <button
+                            disabled={!(editingAnnouncement.title.trim().length>=3 && editingAnnouncement.content.trim().length>=5)}
+                            onClick={() => editingAnnouncement && updateAnnMutation.mutate(editingAnnouncement)}
+                            className="text-xs px-2 py-1 bg-green-600 text-white rounded disabled:opacity-40"
+                          >ذخیره</button>
                           <button onClick={() => setEditingAnnouncement(null)} className="text-xs px-2 py-1 border rounded">لغو</button>
                         </div>
+                        {editingAnnouncement && (editingAnnouncement.title.trim().length<3 || editingAnnouncement.content.trim().length<5) && (
+                          <div className="text-[10px] text-red-600">حداقل طول عنوان ۳ و محتوا ۵ کاراکتر</div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex items-start justify-between gap-4">
                         <div className="text-xs leading-5">
+                          <label className="flex items-center gap-1 text-[10px] mb-1 select-none">
+                            <input type="checkbox" checked={selectedAnnouncements.includes(a.id)} onChange={()=>toggleAnnouncement(a.id)} />انتخاب
+                          </label>
                           <div className="font-semibold flex items-center gap-2">{a.title}<span className="px-1 rounded bg-gray-100 border text-[10px]">{a.type}</span>{!a.isActive && <span className="text-[10px] bg-red-50 border border-red-200 text-red-600 rounded px-1">غیرفعال</span>}</div>
                           <div className="text-gray-600 whitespace-pre-wrap">{a.content}</div>
                         </div>
@@ -340,7 +529,16 @@ export default function PortalContentManager() {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold">اپلیکیشن‌های دانلود</h2>
-                <button onClick={() => refetchDownloads()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
+                <div className="flex items-center gap-2">
+                  {selectedDownloads.length>0 && (
+                    <div className="flex items-center gap-1 text-[10px] bg-amber-50 border border-amber-300 rounded px-2 py-1">
+                      <span>{selectedDownloads.length} انتخاب شده</span>
+                      <button onClick={bulkDeleteDownloads} className="text-red-600 flex items-center gap-1"><Trash2 className="w-3 h-3" />حذف گروهی</button>
+                      <button onClick={clearSelectedDownloads} className="text-gray-500">×</button>
+                    </div>
+                  )}
+                  <button onClick={() => refetchDownloads()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />تازه‌سازی</button>
+                </div>
               </div>
               {/* Create */}
               <div className="border rounded-lg p-4 bg-gray-50 space-y-2">
@@ -348,13 +546,35 @@ export default function PortalContentManager() {
                   <input value={newDownload.title} onChange={e => setNewDownload(d => ({ ...d, title: e.target.value }))} placeholder="عنوان" className="px-2 py-1 border rounded text-xs" />
                   <input value={newDownload.downloadLink} onChange={e => setNewDownload(d => ({ ...d, downloadLink: e.target.value }))} placeholder="لینک" className="px-2 py-1 border rounded text-xs col-span-2" />
                   <input value={newDownload.description} onChange={e => setNewDownload(d => ({ ...d, description: e.target.value }))} placeholder="توضیح" className="px-2 py-1 border rounded text-xs" />
-                  <button disabled={!newDownload.title || !newDownload.downloadLink} onClick={() => createDownloadMutation.mutate()} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1"><Plus className="w-3 h-3" />افزودن</button>
+                  <button disabled={downloadErrors.length>0 || createDownloadMutation.isPending} onClick={() => createDownloadMutation.mutate(newDownload)} className="text-xs px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-40"><Plus className="w-3 h-3" />افزودن</button>
                 </div>
+                {downloadErrors.length>0 && <ul className="text-red-600 text-[10px] list-disc pr-4 space-y-0.5">{downloadErrors.map(er=> <li key={er}>{er}</li>)}</ul>}
               </div>
               {/* List */}
-              <div className="space-y-2 max-h-72 overflow-auto">
-                {downloads.map(d => (
-                  <div key={d.id} className="border rounded p-3 bg-white flex items-start justify-between gap-4">
+              <div className="space-y-2 max-h-72 overflow-auto"
+                   onDragOver={(e)=>e.preventDefault()}
+              >
+                {localDownloads.map(d => (
+                  <div key={d.id}
+                       draggable
+                       onDragStart={(e)=>{e.dataTransfer.setData('text/plain', String(d.id));}}
+                       onDrop={(e)=>{
+                          e.preventDefault();
+                          const sourceId = Number(e.dataTransfer.getData('text/plain'));
+                          if(!sourceId || sourceId===d.id) return;
+                          setLocalDownloads(prev => {
+                            const srcIndex = prev.findIndex(x=>x.id===sourceId);
+                            const targetIndex = prev.findIndex(x=>x.id===d.id);
+                            if(srcIndex===-1||targetIndex===-1) return prev;
+                            const clone = prev.slice();
+                            const [moved] = clone.splice(srcIndex,1);
+                            clone.splice(targetIndex,0,moved);
+                            // reassign displayOrder sequentially (step 10)
+                            return clone.map((item,idx)=>({...item, displayOrder: idx*10}));
+                          });
+                       }}
+                       className="border rounded p-3 bg-white flex items-start justify-between gap-4 cursor-move opacity-100 hover:shadow transition-shadow"
+                  >
                     {editingDownload?.id === d.id ? (
                       <div className="flex-1 space-y-2">
                         <input value={editingDownload.title} onChange={e => setEditingDownload(o => o ? { ...o, title: e.target.value } : o)} className="w-full text-xs border px-2 py-1 rounded" />
@@ -362,13 +582,23 @@ export default function PortalContentManager() {
                         <textarea value={editingDownload.description || ''} onChange={e => setEditingDownload(o => o ? { ...o, description: e.target.value } : o)} rows={2} className="w-full text-xs border px-2 py-1 rounded" />
                         <div className="flex gap-2 items-center">
                           <label className="text-[10px] flex items-center gap-1"><input type="checkbox" checked={editingDownload.isActive} onChange={e => setEditingDownload(o => o ? { ...o, isActive: e.target.checked } : o)} />فعال</label>
-                          <button onClick={() => editingDownload && updateDownloadMutation.mutate(editingDownload)} className="text-[10px] px-2 py-1 bg-green-600 text-white rounded">ذخیره</button>
+                          <button
+                            disabled={!(editingDownload.title.trim().length>=2 && /^https?:\/\//i.test(editingDownload.downloadLink.trim()))}
+                            onClick={() => editingDownload && updateDownloadMutation.mutate(editingDownload)}
+                            className="text-[10px] px-2 py-1 bg-green-600 text-white rounded disabled:opacity-40"
+                          >ذخیره</button>
                           <button onClick={() => setEditingDownload(null)} className="text-[10px] px-2 py-1 border rounded">لغو</button>
                         </div>
+                        {editingDownload && (!(editingDownload.title.trim().length>=2) || !/^https?:\/\//i.test(editingDownload.downloadLink.trim())) && (
+                          <div className="text-[10px] text-red-600">عنوان حداقل ۲ کاراکتر و لینک معتبر http/https لازم است</div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex-1 text-xs space-y-1">
                         <div className="font-semibold flex items-center gap-2">{d.title}{!d.isActive && <span className="text-[10px] bg-red-50 border border-red-200 text-red-600 rounded px-1">غیرفعال</span>}</div>
+                        <label className="flex items-center gap-1 text-[10px] select-none">
+                          <input type="checkbox" checked={selectedDownloads.includes(d.id)} onChange={()=>toggleDownload(d.id)} />انتخاب
+                        </label>
                         <div className="text-gray-600 break-all">{d.downloadLink}</div>
                         {d.description && <div className="text-gray-500 whitespace-pre-wrap">{d.description}</div>}
                       </div>
@@ -379,9 +609,28 @@ export default function PortalContentManager() {
                     </div>
                   </div>
                 ))}
-                {downloads.length === 0 && <div className="text-center text-xs text-gray-500">اپلیکیشنی ثبت نشده</div>}
+                {localDownloads.length === 0 && <div className="text-center text-xs text-gray-500">اپلیکیشنی ثبت نشده</div>}
               </div>
-              <div className="pt-2 text-[10px] text-gray-500">(درگ و دراپ برای ترتیب‌دهی در گام بعدی افزوده می‌شود)</div>
+              <div className="pt-2 text-[10px] text-gray-500 flex items-center justify-between">
+                <span>برای تغییر ترتیب آیتم‌ها را بکشید. سپس ذخیره ترتیب را بزنید.</span>
+                <button
+                  disabled={localDownloads.length===0}
+                  onClick={async ()=>{
+                    try {
+                      // prepare payload as array of {id, displayOrder}
+                      const order = localDownloads.map(d=>({ id: d.id, displayOrder: d.displayOrder }));
+                      const res = await PortalContentService.downloads.reorder(order);
+                      if(res.success){
+                        toast({ title: 'ترتیب ذخیره شد', description: res.updated ? `${res.updated} آیتم` : undefined });
+                        refetchDownloads();
+                      }
+                    } catch(err:any){
+                      toast({ title: 'خطا', description: err.message, variant:'destructive' });
+                    }
+                  }}
+                  className="text-[10px] px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-50"
+                >ذخیره ترتیب</button>
+              </div>
             </div>
           )}
 
@@ -389,8 +638,27 @@ export default function PortalContentManager() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="font-semibold">پیش‌نمایش پرتال (read-only)</h2>
-                <button onClick={() => refetchFull()} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />بارگذاری</button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => { refetchFull(); refetchStatus(); }} className="text-xs px-2 py-1 border rounded flex items-center gap-1"><RefreshCcw className="w-3 h-3" />بارگذاری</button>
+                  <button disabled={publishMutation.isPending} onClick={() => publishMutation.mutate()} className="text-xs px-2 py-1 bg-emerald-600 text-white rounded flex items-center gap-1 disabled:opacity-50">
+                    {publishMutation.isPending ? 'در حال انتشار...' : 'انتشار' }
+                  </button>
+                </div>
               </div>
+              <div className="text-[11px] rounded border p-2 bg-gray-50 flex flex-wrap gap-4">
+                <span>نسخه محتوا: <strong>{statusData?.data.contentVersion ?? '—'}</strong></span>
+                <span>آخرین انتشار: {statusData?.data.lastPublishedAt ? new Date(statusData.data.lastPublishedAt).toLocaleString('fa-IR') : 'منتشر نشده'}</span>
+                {statusData?.data.lastPublishedBy && <span>منتشر کننده: {statusData.data.lastPublishedBy}</span>}
+              </div>
+              {unpublishedChanges && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-[11px] text-amber-800 flex items-start gap-2">
+                  <Megaphone className="w-3 h-3 mt-0.5" />
+                  <div>
+                    <div className="font-medium">تغییرات منتشر نشده</div>
+                    <div>برخی ویرایش‌ها اعمال شده‌اند اما هنوز منتشر نشده‌اند. برای اعمال در پرتال عمومی دکمه انتشار را بزنید.</div>
+                  </div>
+                </div>
+              )}
               {!fullContentData && <div className="text-xs text-gray-500">در حال بارگذاری...</div>}
               {fullContentData && (
                 <div className="grid md:grid-cols-3 gap-4">

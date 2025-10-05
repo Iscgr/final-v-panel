@@ -4,3 +4,50 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+.vs/
+.prometheus/
+
+# Local runtime markers
+.dev_pid
+cookie.txt
+test-upload.json
+
+# Runtime artifacts
+logs/
+!logs/.gitkeep
+uploads/
+!uploads/.gitkeep
+!uploads/qr-codes/.gitkeep
+!uploads/videos/.gitkeep
+backups/
+!backups/.gitkeep
+*.log
+*.pid
+*.pid.lock
+*.tmp
+*.sqlite
+*.sqlite3
+
+# Python caches
+__pycache__/
+python-service/__pycache__/
+*.py[cod]
+
+# Env files
+.env
+.env.*
+
+# Testing & coverage
+coverage/
+*.coverage
+nyc_output/
+playwright-report/
+test-results/
+
+# Misc build caches
+.turbo/
+.vercel/
+.next/
+.swc/
+*.tsbuildinfo
+*.tgz

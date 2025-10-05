@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../db.js';
-import { portalContentBlocks, announcements, appDownloads } from '../../shared/schema.js';
+import { portalContentBlocks, announcements, appDownloads, portalContentPublicationState } from '../../shared/schema.js';
 import { eq } from 'drizzle-orm';
+import { getCachedFull, cacheFull, getCachedStatus, cacheStatus, invalidateAllPortalContent } from '../utils/portalContentCache.js';
 
 /**
  * Admin Portal Content Routes (Phase 1)
@@ -56,16 +57,19 @@ router.put('/:blockKey', async (req: Request, res: Response) => {
     } else {
       await db.insert(portalContentBlocks).values({ blockKey, body, title: title ?? ALLOWED_BLOCKS[blockKey].title, updatedBy });
     }
-    res.json({ success: true });
+    invalidateAllPortalContent();
+    res.json({ success: true, cacheInvalidated: true });
   } catch (err) {
     console.error('❌ Error updating portal content block:', err);
     res.status(500).json({ success: false, error: 'خطا در ذخیره بلوک' });
   }
 });
 
-// GET /full  → بلوک‌ها + اطلاعیه‌های فعال + اپ‌های فعال + legacy portal settings (حداقلی)
+// GET /full  → بلوک‌ها + اطلاعیه‌های فعال + اپ‌های فعال
 router.get('/full', async (req: Request, res: Response) => {
   try {
+    const cached = getCachedFull();
+    if (cached) return res.json({ success: true, data: cached, cache: 'HIT' });
     const [blocksRows, annRows, dlRows] = await Promise.all([
       db.select().from(portalContentBlocks),
       db.select().from(announcements).orderBy(announcements.priority, announcements.id),
@@ -75,17 +79,64 @@ router.get('/full', async (req: Request, res: Response) => {
       const existing = blocksRows.find(r => r.blockKey === key);
       return existing || { id: 0, blockKey: key, title: meta.title, body: meta.fallbackBody, updatedAt: null, updatedBy: null };
     });
-    res.json({
-      success: true,
-      data: {
-        blocks: normalizedBlocks,
-        announcements: annRows,
-        downloads: dlRows
-      }
-    });
+    const payload = { blocks: normalizedBlocks, announcements: annRows, downloads: dlRows };
+    cacheFull(payload);
+    res.json({ success: true, data: payload, cache: 'MISS' });
   } catch (e) {
     console.error('❌ Error fetching full portal content:', e);
     res.status(500).json({ success:false, error:'خطا در دریافت محتوای کامل پرتال' });
+  }
+});
+
+// GET /status → وضعیت انتشار و نسخه محتوا
+router.get('/status', async (_req: Request, res: Response) => {
+  try {
+    const cached = getCachedStatus();
+    if (cached) return res.json({ success: true, data: cached, cache: 'HIT' });
+    const rows = await db.select().from(portalContentPublicationState).limit(1);
+    const state = rows[0] || null;
+    const payload = state ? {
+      contentVersion: state.contentVersion,
+      lastPublishedAt: state.lastPublishedAt,
+      lastPublishedBy: state.lastPublishedBy
+    } : { contentVersion: 0, lastPublishedAt: null, lastPublishedBy: null };
+    cacheStatus(payload);
+    res.json({ success: true, data: payload, cache: 'MISS' });
+  } catch (e) {
+    console.error('❌ Error fetching portal content status:', e);
+    res.status(500).json({ success:false, error:'خطا در دریافت وضعیت انتشار' });
+  }
+});
+
+// POST /publish → افزایش نسخه و ثبت timestamp انتشار
+router.post('/publish', async (req: Request, res: Response) => {
+  try {
+    const username = (req as any).user?.username || 'system';
+    const existing = await db.select().from(portalContentPublicationState).limit(1);
+    if (existing.length === 0) {
+      await db.insert(portalContentPublicationState).values({
+        contentVersion: 1,
+        lastPublishedAt: new Date(),
+        lastPublishedBy: username
+      });
+      const payload = { contentVersion:1, lastPublishedAt:new Date(), lastPublishedBy: username };
+      invalidateAllPortalContent();
+      cacheStatus(payload);
+      return res.json({ success:true, data: payload, cacheInvalidated: true });
+    } else {
+      const current = existing[0];
+      const newVersion = (current.contentVersion || 0) + 1;
+      await db.update(portalContentPublicationState)
+        .set({ contentVersion: newVersion, lastPublishedAt: new Date(), lastPublishedBy: username, updatedAt: new Date() })
+        .where(eq(portalContentPublicationState.id, current.id));
+      const payload = { contentVersion:newVersion, lastPublishedAt:new Date(), lastPublishedBy: username };
+      invalidateAllPortalContent();
+      cacheStatus(payload);
+      return res.json({ success:true, data: payload, cacheInvalidated: true });
+    }
+  } catch (e) {
+    console.error('❌ Error publishing portal content:', e);
+    res.status(500).json({ success:false, error:'خطا در انتشار محتوا' });
   }
 });
 
@@ -112,7 +163,8 @@ router.put('/settings', async (req: Request, res: Response) => {
           .values({ blockKey: b.blockKey, body: b.body, title: b.title ?? ALLOWED_BLOCKS[b.blockKey].title, updatedBy: username });
       }
     }
-    res.json({ success:true, updated: blocks.length });
+    invalidateAllPortalContent();
+    res.json({ success:true, updated: blocks.length, cacheInvalidated: true });
   } catch (e) {
     console.error('❌ Error batch updating portal content blocks:', e);
     res.status(500).json({ success:false, error:'خطا در بروزرسانی گروهی بلوک‌ها' });

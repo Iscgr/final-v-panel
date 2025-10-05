@@ -1,88 +1,70 @@
 # MarFaNet Financial Management System - Multi-stage Dockerfile
-# Optimized for production deployment
+# Optimized for production deployment with a unified build process
 
-FROM node:20-alpine AS base
+# ==============================================================================
+# Stage 1: Builder
+# This stage installs all dependencies, builds the client and server.
+# ==============================================================================
+FROM node:20-alpine AS builder
 
-# Install system dependencies
-RUN apk add --no-cache \
-    postgresql-client \
-    bash \
-    curl \
-    openssl \
-    tzdata \
-    && rm -rf /var/cache/apk/*
+# Install bash for build scripts
+RUN apk add --no-cache bash
 
 WORKDIR /app
 
-# Copy package files
+# Copy all necessary configuration and source files
 COPY package*.json ./
-COPY tsconfig.json ./
+COPY tsconfig*.json ./
 COPY vite.config.ts ./
 COPY tailwind.config.ts ./
 COPY postcss.config.js ./
 COPY drizzle.config.ts ./
 COPY components.json ./
+COPY fix-imports.sh ./
+COPY client/ ./client/
+COPY server/ ./server/
+COPY shared/ ./shared/
+COPY types/ ./types/
+COPY start-server.cjs ./
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
-
-# Copy source code
-COPY . .
-
-# Build stage
-FROM base AS builder
-
-# Install dev dependencies for build
+# Install ALL dependencies (including devDependencies for building)
 RUN npm ci
 
-# Build the application
-RUN npm run build
+# Run the unified build script and validate build artifacts exist
+RUN npm run build \
+    && test -d dist/public \
+    && test -f dist/server/index.js \
+    && npm prune --omit=dev
 
-# Production stage
+# ==============================================================================
+# Stage 2: Production
+# This stage creates the final, lean image for production.
+# ==============================================================================
 FROM node:20-alpine AS production
 
-# Create app user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S marfanet -u 1001
+# Install required system dependencies
+RUN apk add --no-cache postgresql-client curl
 
-# Install runtime dependencies
-RUN apk add --no-cache \
-    postgresql-client \
-    bash \
-    curl \
-    openssl \
-    tzdata \
-    && rm -rf /var/cache/apk/*
+# Create a non-root user and necessary directories first
+RUN addgroup -S nodejs && adduser -S marfanet -G nodejs && \
+    mkdir -p /app/logs && \
+    chown -R marfanet:nodejs /app/logs && \
+    mkdir -p /app/uploads && \
+    chown -R marfanet:nodejs /app/uploads
 
+# Switch to the non-root user
+USER marfanet
 WORKDIR /app
 
-# Copy built application
+# Copy artifacts from the builder stage
 COPY --from=builder --chown=marfanet:nodejs /app/dist ./dist
+# Client assets already reside inside dist/public (vite.config.ts)
 COPY --from=builder --chown=marfanet:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=marfanet:nodejs /app/package*.json ./
-COPY --from=builder --chown=marfanet:nodejs /app/shared ./shared
-COPY --from=builder --chown=marfanet:nodejs /app/start-server.cjs ./start-server.cjs
+COPY --from=builder --chown=marfanet:nodejs /app/package.json .
+COPY --from=builder --chown=marfanet:nodejs /app/start-server.cjs .
 
-# Copy necessary config files
-COPY --from=builder --chown=marfanet:nodejs /app/drizzle.config.ts ./
-
-# Resolve TypeScript path aliases at runtime
-RUN rm -rf node_modules/@shared && \
-    ln -s ../dist/shared node_modules/@shared
-
-# Create necessary directories
-RUN mkdir -p /app/logs && \
-    chown -R marfanet:nodejs /app
-
-# Switch to non-root user
-USER marfanet
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=5 \
-    CMD curl -fsS http://localhost:3000/health || exit 1
-
-# Expose port
+# Expose the application port
 EXPOSE 3000
 
-# Start command
+# Set the command to run the application
 CMD ["node", "start-server.cjs"]

@@ -1,364 +1,218 @@
-﻿# MarFaNet – استقرار و راه‌اندازی یکپارچه (سند جامع واحد)
+﻿## Final V Panel
 
+**آخرین به‌روزرسانی:** ۲۰۲۵-۱۰-۰۴  
+**لایه‌های اصلی:** React 18 + Vite (Frontend) · Node.js 20 + Express + Drizzle (Backend) · FastAPI (Drift/تحلیل) · PostgreSQL 14 + Redis · Docker + Nginx (استقرار)
 
+### نمای کلی سه‌هسته‌ای
+- **Frontend:** پنل ادمین و پورتال عمومی با Tailwind، Radix UI و مدیریت State ایزوله، آماده برای تست کمپوننتی و Playwright.
+- **Backend:** API کاملاً تایپ‌شده با Drizzle ORM، سیستم Outbox، Feature Flags و سرویس پشتیبان‌گیری.
+- **UX & Operations:** تأمین تجربه پایدار، مانیتورینگ SLA، سیاست‌های پشتیبان‌گیری/بازیابی و مسیرهای عیب‌یابی سریع.
 
-> این تنها سند رسمی پروژه است. هرآنچه برای نصب، اجرا، پشتیبان‌گیری، به‌روزرسانی، عیب‌یابی و بهره‌برداری نیاز دارید اینجاست. مناسب کاربری که حتی تجربه‌ی قبلی با Linux یا Docker ندارد.
+## ساختار مخزن
+```text
+.
+├── client/                # اپ React (پنل ادمین + پورتال)
+│   ├── src/
+│   │   ├── components/    # طراحی ماژولار UI (Radix, Tailwind)
+│   │   ├── contexts/      # State Application و Auth
+│   │   ├── pages/         # صفحات مدیریتی و پورتال
+│   │   ├── services/      # فراخوانی API و کش سمت کلاینت
+│   │   └── tests/         # الگوهای Vitest / RTL / Playwright
+├── server/                # هسته Node 20 + Express
+│   ├── routes/            # ماژول‌های API (Invoices, Portal, System)
+│   ├── services/          # Outbox، Drift Shadow، Feature Flags، Backup
+│   ├── middleware/        # امنیت، عملکرد، سازگاری Android
+│   ├── bootstrap/         # Seed و مقداردهی اولیه
+│   └── tests/             # تست‌های Vitest (نمونه: Outbox)
+├── shared/                # اسکیمای Drizzle و انواع مشترک
+├── scripts/               # اسکریپت‌های عملیاتی و رگرسیون
+├── python-service/        # FastAPI برای Drift و محاسبات دقیق
+├── Dockerfile             # Build چندمرحله‌ای (Builder + Runtime)
+├── docker-compose.yml     # استک توسعه (app + db + redis)
+├── nginx.conf             # کانفیگ Reverse Proxy نمونه
+├── install.sh             # استقرار خودکار روی Ubuntu 22
+├── validate-install.sh    # اعتبارسنجی نصب Production
+├── logs/.gitkeep          # نگه‌دار پوشه لاگ (Volume در Production)
+├── uploads/.gitkeep       # پوشه فایل‌های آپلودی (Volume در Production)
+└── backups/.gitkeep       # مسیر نسخه‌های پشتیبان (Volume در Production)
+```
 
+## پیکربندی و متغیرهای محیطی
+نمونهٔ پایه در `.env.example` قرار دارد. کلیدهای حیاتی:
 
+| کلید | توضیح | یادداشت |
+|------|-------|---------|
+| `DATABASE_URL` | اتصال PostgreSQL | در Docker → `postgresql://postgres:postgres@db:5432/marfanet` |
+| `SESSION_SECRET` | کلید رمزنگاری Session | در Production طولانی، تصادفی، همراه با HTTPS (`secure=true`) |
+| `PORT` | پورت اپلیکیشن | پیش‌فرض `3000` |
+| `ADMIN_USERNAME`/`ADMIN_PASSWORD` | حساب اولیهٔ ادمین | توسط `install.sh` نیز تولید می‌شود |
+| `TELEGRAM_BOT_TOKEN` | ارسال هشدار تلگرام | برای Worker Outbox ضروری |
+| `REDIS_URL` | اتصال Redis | در Compose تنظیم شده |
+| `APP_URL` / `PUBLIC_PORTAL_BASE_URL` | نشانی عمومی پنل و پورتال | برای لینک‌سازی ایمیل و Portal |
+| `LOG_DIRECTORY` | مسیر لاگ ساختاریافته | در Docker روی `/app/logs` پیکربندی شود |
 
-------
+کلیدهای اختیاری: `OPENAI_API_KEY`, `SMTP_*`, `WEBHOOK_URL`, `ENABLE_PERFORMANCE_MONITORING` و Feature Flagهای فعال‌سازی سرویس‌ها.
 
+> **امنیت:** فایل `.env` در Production با سطح دسترسی `600` نگهداری و از نسخه‌سازی حذف شود.
 
+## راه‌اندازی محلی (Dev / Test)
+1. **پیش‌نیازها:** Node.js 20، npm 10، PostgreSQL و Redis محلی.
+2. **نصب وابستگی‌ها:**
+   ```bash
+   npm install
+   ```
+3. **همگام‌سازی دیتابیس (Drizzle):**
+   ```bash
+   npm run db:push
+   ```
+4. **اجرای هم‌زمان API + UI:**
+   ```bash
+   npm run dev
+   ```
+   - اپلیکیشن روی `http://localhost:3000`؛ HMR فعال است.
+5. **اجرای صرفاً Frontend (در صورت نیاز):**
+   ```bash
+   npm run dev:client
+   ```
+   - Vite روی `http://localhost:5173`؛ نیازمند CORS یا Proxy.
+6. **اسکریپت‌های پرکاربرد:**
+   - `npm run check` → بررسی TypeScript.
+   - `npm run test:outbox` → تست واحد Outbox.
+   - `npx ts-node scripts/seed-portal-settings.ts` → Seed اولیهٔ محتوا.
 
-## 1. معرفی سریع
-MarFaNet یک سامانه مدیریت مالی و نمایندگان (Invoices, Payments, KPI, Portal) است که بر پایه:
-- Node.js 20 + Express (Backend + API)
-- React 18 + Vite (Frontend)
-- PostgreSQL 14+ (تنها پایگاه داده رسمی)
-- Redis (برای Session و کش آینده)
-- Docker / Docker Compose (محیط Production)
+## استقرار بر Ubuntu 22 + Docker
+### پیش‌نیازها
+- Ubuntu 22.04 با دسترسی sudo.
+- Docker Engine، Docker Compose Plugin و Nginx (SSL از طریق Certbot).
+- حداقل ۱۰GB فضای دیسک و ۲GB RAM.
 
-خروجی نهایی: یک سرویس واحد روی پورت 3000 که API و UI را یکجا سرو می‌کند.
+### فرآیند استاندارد
+1. اجرای `sudo bash install.sh` (پیش از اجرا URL مخزن/برنچ را به‌روز کنید).
+2. تولید تصویر تولیدی:
+   - **Builder:** `npm ci` → `npm run build` → خروجی `dist` → `npm prune --omit=dev`.
+   - **Runtime:** کاربر غیرریشه `marfanet`، کپی آرتیفکت‌ها، نصب `postgresql-client` و `curl` برای Healthcheck پیش‌فرض.
+3. سازوکار Compose (توسعه): `app`, `db (postgres:14)`, `redis`.
+4. استقرار بدون Downtime:
+   ```bash
+   git pull
+   docker compose build --no-cache app
+   docker compose up -d app
+   ```
+
+### توصیه‌های Production
+- فایل `docker-compose.prod.yml` خروجی نصب را بازبینی و متناسب با محیط تنظیم کنید.
+- Volumeهای پایدار:
+  ```yaml
+  volumes:
+    - ./logs:/app/logs
+    - ./uploads:/app/uploads
+    - ./backups:/app/backups
+  ```
+- در صورت نیاز به سرویس Drift Python:
+  ```yaml
+  python:
+    build: ./python-service
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+  ```
+- `nginx.conf` نمونهٔ Reverse Proxy است؛ SSL را با Certbot فعال کنید.
+- Rollback سریع:
+  ```bash
+  git checkout <PREVIOUS_COMMIT>
+  docker compose build app && docker compose up -d app
+  ```
+
+## استراتژی تست سه‌محوری
+### ۱) Frontend
+- Vitest + React Testing Library برای کمپوننت‌های بحرانی (`invoice-upload`, `LiveProcessingMonitor`, `SystemSettingsPage`).
+- Playwright/Cypress برای سناریوهای کامل (آپلود فاکتور → Outbox، مدیریت محتوا، Flowهای موبایل).
+- سنجش دسترس‌پذیری با `axe-core` و هدف Lighthouse ≥ 90.
+
+### ۲) Backend و سرویس‌ها
+- Vitest واحد برای `feature-flag-manager`, `portalContentCache`, `backup-service`.
+- Integration با Supertest روی مسیرهای `/api/invoices`, `/api/portal`, `/api/outbox`, `/api/system`, `/api/auth`.
+- سناریوهای سرتاسری روی استک Compose (Node + Postgres + Redis + Python) و پایش عملکرد با k6/Artillery.
+
+### ۳) UX و عملیات
+- Smoke Test پس از استقرار (`scripts/financial-e2e-smoke.ts`).
+- تست پیمایش کیبورد در Dialogها (Playwright).
+- بررسی هدرهای امنیتی، Session Hijacking کنترل‌شده و Rate Limiting پیشنهادی.
+
+### اسکریپت‌های پیشنهادی در `package.json`
+```jsonc
+"scripts": {
+  "test:unit": "vitest",
+  "test:api": "tsx server/tests/api-suite.ts",
+  "test:e2e": "playwright test",
+  "test:smoke": "npx ts-node scripts/financial-e2e-smoke.ts",
+  "lint": "eslint ."
+}
+```
+Pipeline پیشنهادی: Unit → Integration → E2E + Accessibility؛ گزارش‌ها به عنوان آرتیفکت ذخیره شوند.
+
+## عملیات، مانیتورینگ و سلامت
+- **Endpointها:** `GET /health` (وابستگی‌ها + حافظه + uptime)، `GET /ready` (آمادگی Load Balancer).
+- **لاگ‌ها:** فرمت ساختاریافته با پیشوند `STRUCT_LOG`؛ مسیر پیش‌فرض `logs/` (در Docker حتماً Volume).
+- **Outbox Metrics:** مسیر `/api/outbox/metrics` پس از فعال‌سازی `guard_metrics_alerts`؛ پایش SLA و هشدار تلگرام.
+- **پیشنهاد مانیتورینگ:** اتصال لاگ‌ها به ELK/Loki و ساخت داشبورد Grafana سبک.
+
+## پشتیبان‌گیری و بازیابی فاجعه
+- **PostgreSQL:**
+  ```bash
+  mkdir -p backups
+  docker compose exec -T db pg_dump -U postgres marfanet > backups/$(date +%F-%H%M).sql
+  ```
+  ```bash
+  cat backups/FILE.sql | docker compose exec -T db psql -U postgres -d marfanet
+  ```
+- **API Backup:**
+  - `/api/system/backup` → تولید فایل tar.gz شامل NDJSON جداول اصلی.
+  - `/api/system/restore` → بازگردانی کامل (دادهٔ فعلی حذف می‌شود) و ثبت در `backup_audit_log`.
+- **حفظ لاگ‌ها و سشن‌ها:** Volume `./backups` و در صورت نیاز بکاپ از جدول `session`.
+- **پاک‌سازی دوره‌ای:** `find logs -type f -mtime +15 -delete` (خارج از مخزن اجرا شود).
+
+## عیب‌یابی سریع
+| سناریو | بررسی سریع | اقدام اصلاحی |
+|--------|-------------|---------------|
+| عدم ارسال پیام تلگرام | بررسی `outbox_enabled` و `TELEGRAM_BOT_TOKEN`، لاگ Outbox | فعال‌سازی Flag، رفع خطاهای صف |
+| خطای آپلود JSON | اعتبارسنجی Build UI و مقداردهی `jobCode` | Build مجدد Frontend، اصلاح داده ورودی |
+| Timeout در پورتال موبایل | هدرهای مخصوص Android در `server/index.ts` | تنظیم مجدد Proxy و Cache |
+| Drift ناهماهنگ | اجرای `/reconcile/drift-detection` در سرویس Python | بررسی آستانه‌های Drift و داده Legacy |
+| Session کوتاه | تنظیم `cookie.secure`, `maxAge`, اجبار HTTPS | بازآرایی Session Store |
+
+## Feature Flagهای کلیدی
+| فلگ | هدف | توضیح حالت‌ها |
+|------|-----|---------------|
+| `outbox_enabled` | فعال‌سازی صف تلگرام | `off` / `shadow` / `active` |
+| `guard_metrics_alerts` | مانیتورینگ SLA | ارسال هشدار براساس متریک Outbox |
+| `portal_content_read_switch` | مهاجرت محتوا | `legacy` → `shadow` → `live` |
+
+## اسکریپت‌ها و اتوماسیون‌ها
+| فایل | کاربرد |
+|------|--------|
+| `scripts/seed-portal-settings.ts` | Seed اولیهٔ محتوای پورتال |
+| `scripts/portal-content-regression.ts` | سناریوی CRUD + Publish + Cache HIT/MISS |
+| `scripts/drift-shadow.ts` | مقایسه Drift در حالت Shadow |
+| `scripts/backfill-dry-run.ts` | بررسی Backfill بدون تغییر واقعی |
+| `scripts/payments-cast-shadow.ts` | صحت تخصیص پرداخت‌ها و Decimal |
+| `scripts/ingest-real-sample.ts` | تزریق نمونهٔ واقعی برای تست پذیرش |
+| `scripts/test-telegram-template-validation.ts` | اعتبارسنجی قالب پیام تلگرام |
+
+## نگه‌داری مخزن
+- پوشه‌های تولیدی (`dist/`, `node_modules/`, `logs/`, `uploads/`, `backups/`) در نسخه نگهداری نشوند؛ Volume در Production الزامی است.
+- از `npm ci` در CI/CD استفاده کنید تا قفل نسخه‌ها پایدار بماند.
+- اسکریپت `fix-imports.sh` پس از Build سرور اجرا شود تا مشکلات پسوند (`.js.js`) رفع گردد.
+- هر Commit شامل به‌روزرسانی README در صورت تغییر معماری یا وابستگی‌های حیاتی باشد.
+
+## نقشهٔ راه کوتاه‌مدت
+1. تکمیل پوشش Vitest/RTL روی کمپوننت‌های حیاتی و افزودن تست‌های API.
+2. افزودن سرویس Python به Compose Production با Healthcheck و پایش Drift مداوم.
+3. استقرار داشبورد Grafana/Prometheus بر پایه لاگ‌های `STRUCT_LOG`.
+4. تولید خودکار مستندات API (OpenAPI یا `ts-rest`).
+5. اعمال Rate Limiting و تقویت هدرهای امنیتی (CSP, HSTS).
 
 ---
 
-## 4. نصب ابزارهای پایه (Ubuntu)
-```bash
-sudo apt update
-sudo apt install -y ca-certificates curl gnupg lsb-release ufw git unzip bash coreutils
-curl -fsSL https://get.docker.com | sudo bash
-sudo usermod -aG docker $USER
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443/tcp && sudo ufw enable
-```
-
----
-## 5. کلون مخزن و آماده‌سازی
-```bash
-cd /opt
-sudo git clone https://github.com/Iscgr/final-v-panel.git marfanet
-cd marfanet
-sudo chown -R $USER:$USER .
-cp .env.example .env 2>/dev/null || true
-```
-مقادیر ضروری در `.env`:
-```env
-DATABASE_URL=postgresql://postgres:postgres@db:5432/marfanet
-SESSION_SECRET=$(openssl rand -hex 32)
-PORT=3000
-LOG_DIRECTORY=./logs
-```
-
----
-## 6. توسعه محلی (بدون Docker)
-```bash
-npm install
-npm run db:push
-npm run dev
-```
-آدرس: http://localhost:3000
-
----
-## 7. اجرای سریع با Docker محلی
-```bash
-docker build -t marfanet:local .
-docker run --rm -p 3000:3000 --name marfanet \
-	-e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/marfanet \
-	-e SESSION_SECRET=$(openssl rand -hex 32) \
-	-v $(pwd)/logs:/app/logs \
-	marfanet:local
-```
-Linux:
-```bash
---add-host=host.docker.internal:host-gateway
-```
-
----
-## 8. استقرار Production (Compose)
-```bash
-docker compose build
-docker compose up -d
-```
-بررسی:
-```bash
-docker compose ps
-curl -fsSL http://localhost/health
-```
-بروزرسانی:
-```bash
-git pull
-docker compose build --no-cache app && docker compose up -d app
-```
-Rollback:
-```bash
-git reflog
-git checkout <PREV_COMMIT>
-docker compose build app && docker compose up -d app
-```
-
----
-## 9. متغیرهای محیطی کلیدی
-| نام | توضیح | نمونه |
-|-----|-------|-------|
-| DATABASE_URL | اتصال PostgreSQL | postgresql://postgres:postgres@db:5432/marfanet |
-| SESSION_SECRET | رمز سشن | خروجی openssl |
-| PORT | پورت سرویس | 3000 |
-| LOG_DIRECTORY | مسیر لاگ | ./logs |
-| TELEGRAM_BOT_TOKEN | اختیاری | - |
-| TELEGRAM_CHAT_ID | اختیاری | - |
-
----
-## 10. سلامت
-| مسیر | هدف |
-|------|-----|
-| /health | زنده بودن |
-| /ready | اتصال پایگاه داده |
-
----
-## 11. لاگ‌ها
-```bash
-tail -f logs/server.log
-```
-
----
-## 12. مهاجرت دیتابیس
-```bash
-npm run db:push
-npm run db:generate
-npm run db:migrate
-```
-
----
-## 13. پشتیبان‌گیری
-```bash
-mkdir -p backups
-docker compose exec -T db pg_dump -U postgres marfanet > backups/$(date +%F-%H%M).sql
-```
-بازیابی:
-```bash
-cat backups/FILE.sql | docker compose exec -T db psql -U postgres -d marfanet
-```
-
----
-## 14. بروزرسانی نسخه
-```bash
-git pull
-docker compose build --no-cache app && docker compose up -d app
-```
-
----
-## 15. امنیت پایه
-1. UFW فعال (22,80,443)
-2. SESSION_SECRET قوی
-3. Backup روزانه
-4. عدم اشتراک گذاری `.env`
-5. محدود کردن اجرا در `uploads`
-
----
-## 16. Feature Flags
-فعال/غیرفعال کردن زیرسیستم‌ها (مثل Outbox Worker). افزودن فلگ جدید: ویرایش ماژول featureFlagManager.
-
----
-## 17. ساختار پروژه
-```
-client/  server/  shared/  scripts/  uploads/  docker-compose.yml  Dockerfile
-```
-
----
-## 18. اسکریپت‌های مهم
-| فایل | کار |
-|------|-----|
-| seed-portal-settings.ts | Seed اولیه |
-| alloc-validation.ts | اعتبارسنجی تخصیص |
-| drift-shadow.ts | تحلیل drift |
-
----
-## 19. بازیابی بحران
-| رویداد | اقدام |
-|--------|-------|
-| حذف DB | Restore آخرین بکاپ |
-| نشت SESSION_SECRET | Rotate + Restart |
-| پر شدن دیسک | حذف لاگ قدیمی |
-
----
-## 20. FAQ
-| سوال | پاسخ |
-|------|-------|
-| چرا یک پورت؟ | سادگی و ادغام UI+API |
-| چرا فقط PostgreSQL؟ | یکپارچگی و ثبات |
-
----
-## 21. API های نمونه
-| متد | مسیر | توضیح |
-|-----|------|-------|
-| GET | /health | وضعیت |
-| GET | /ready | آمادگی |
-| GET | /api/invoices | لیست فاکتورها |
-
----
-## 21.1 مدیریت محتوای پرتال (Phase 1)
-این فاز یک لایه ماژولار جدید برای بلوک‌های محتوایی پرتال عمومی معرفی می‌کند بدون اینکه مصرف فعلی پرتال (settings قدیمی) را هنوز تغییر دهد.
-
-مسیرهای Admin (احراز هویت لازم):
-| متد | مسیر | توضیح |
-|-----|------|-------|
-| GET | /api/admin/portal-content-blocks | دریافت لیست بلوک‌های استاندارد (guaranteed keys) |
-| PUT | /api/admin/portal-content-blocks/:blockKey | ایجاد/بروزرسانی (upsert) بلوک مشخص |
-
-کلیدهای فعلی:
-guidance, contact_info, downloads_intro, support_hours, announcements_title
-
-UI جدید: صفحه `PortalContentManager` در مسیر `/admin/portal-content` با تب فعلی «بلوک‌ها» و تب‌های Placeholder برای «اطلاعیه‌ها / دانلودها / پیش‌نمایش» (Phase 2 الحاقی).
-
-ایمن‌سازی:
-1. هنوز پرتال عمومی از settings موجود می‌خواند ⇒ بدون ریسک رگرسیون.
-2. حذف تب‌های قدیمی «Portal» و «Invoice Template» از صفحه Settings انجام شد (Deprecated) برای جلوگیری از سردرگمی.
-3. امکان rollback سریع: کافی است commit مربوط به حذف UI قدیمی revert شود و روتر جدید حذف گردد.
-
-گام‌های بعد (Phase 2 پیشنهادی):
-1. مهاجرت پرتال به خواندن از portal_content_blocks (read switch feature flag).
-2. ادغام Announcements & Downloads در همان صفحه با Preview زنده.
-3. افزودن نسخه‌بندی (اختیاری) برای history بلوک‌ها.
-
-Rollback Quick Guide:
-```
-git revert <commit_that_removed_old_settings_tabs>
-# یا حذف دستی مسیر /api/admin/portal-content-blocks و صفحه PortalContentManager
-```
-
-تست سریع صحت:
-```
-curl -s localhost:3000/api/admin/portal-content-blocks -b cookie.txt -c cookie.txt
-```
-خروجی باید شامل همه کلیدهای استاندارد حتی اگر مقدار body اولیه fallback باشد.
-
----
-## 21.2 مهاجرت خواندن محتوای پرتال (Feature Flag)
-فلگ چندمرحله‌ای جدید: portal_content_read_switch
-
-حالات:
-| حالت | توضیح |
-|------|-------|
-| off | رفتار legacy (خواندن از settings) |
-| shadow | خواندن موازی از portal_content_blocks + لاگ تفاوت‌ها (بدون تغییر خروجی) |
-| full | جایگزینی کامل فیلدهای متنی پرتال با بلوک‌های جدید |
-
-فعال‌سازی (نمونه API):
-```
-curl -X POST -H 'Content-Type: application/json' \
-	-d '{"feature":"portal_content_read_switch","state":"shadow"}' \
-	http://localhost:3000/api/feature-flags/multi-stage/update -b cookie.txt -c cookie.txt
-```
-
-لاگ Shadow: سطرهایی با برچسب 🌓 portal_content_read_switch shadow diffs در server.log که اختلاف طول محتوای legacy و بلوک جدید را نشان می‌دهد.
-
-Switch به full پس از بررسی تفاوت‌ها:
-```
-curl -X POST -H 'Content-Type: application/json' \
-	-d '{"feature":"portal_content_read_switch","state":"full"}' \
-	http://localhost:3000/api/feature-flags/multi-stage/update -b cookie.txt -c cookie.txt
-```
-
-Rollback: برگرداندن به off (ساختار legacy هنوز حفظ شده است)
-```
-curl -X POST -H 'Content-Type: application/json' \
-	-d '{"feature":"portal_content_read_switch","state":"off"}' \
-	http://localhost:3000/api/feature-flags/multi-stage/update -b cookie.txt -c cookie.txt
-```
-
-Deprecated Tabs: در صفحه Settings تب‌های Portal و Invoice Template حذف نشده‌اند بلکه با برچسب Deprecated و هشدار هدایت به صفحه جدید (/admin/portal-content) نشانه‌گذاری شده‌اند (اصل "حذف نه، ارتقا").
-
-Instrumentation اولیه پردازش Import:
-- جدول جدید import_jobs (migration 011) برای رهگیری وضعیت پردازش فایل‌های JSON.
-- API های اسکلت:
-	- GET /api/admin/import-jobs
-	- POST /api/admin/import-jobs (ایجاد رکورد ابتدایی)
-	- PATCH /api/admin/import-jobs/:jobCode (به‌روزرسانی وضعیت و شمارنده‌ها)
-	(TODO: اتصال کامل به جریان آپلود و نمایش UI مرحله‌ای)
-
-Regression Script به‌روزرسانی شده:
-```
-BASE_URL=http://localhost:3000 ts-node scripts/portal-content-regression.ts
-```
-خروجی شامل:
-1. تایید presence کلیدها
-2. تست upsert + revert guidance
-3. Snapshot SHA256 برای تشخیص drift
-4. (اختیاری) تست round-trip دوم با EXTRA_ROUND_TRIP=1
-
-گام‌های بعد (Phase 2):
-1. UI نمایش وضعیت import_jobs و نوار پیشرفت مرحله‌ای
-2. نسخه‌بندی portal_content_block_versions
-3. Preview زنده در PortalContentManager + آنونسمنت/دانلودها
-4. حذف تدریجی وابستگی portal_* legacy بعد از تثبیت full
-
----
-## 21.3 مانیتور مرحله‌ای پردازش فایل‌ها (Import Jobs)
-این فاز، قابلیت مشاهده پیشرفت Job های پردازش فایل JSON را با مراحل زیر فراهم می‌کند:
-pending → validating → ingesting → enriching → completed (یا failed)
-
-جداول / API:
-| متد | مسیر | توضیح |
-|-----|------|-------|
-| GET | /api/admin/import-jobs | لیست آخرین Job ها (حداکثر ۵۰ مورد) |
-| POST | /api/admin/import-jobs | ایجاد Job اولیه (status=pending) |
-| PATCH | /api/admin/import-jobs/:jobCode | به‌روزرسانی status / شمارنده‌ها |
-| GET | /api/admin/active-actions | تجمیع import jobs فعال + فلگ‌های multi-stage فعال |
-
-UI جدید:
-| مسیر | توضیح |
-|------|-------|
-| /admin/import-jobs | Progress Bar مرحله‌ای + Polling خودکار (۴ ثانیه) |
-| /admin/debug-actions | نمایش ترکیبی Jobs فعال + فلگ‌های فعال |
-
-اسکریپت دمو:
-```
-BASE_URL=http://localhost:3000 ADMIN_COOKIE="$(cat cookie.txt 2>/dev/null)" ts-node scripts/demo-import-job.ts
-```
-نمایش Job در مسیر /admin/import-jobs.
-
-ملاحظات:
-1. Migration 011 ایجاد جدول import_jobs (افزودنی ایمن).
-2. هنوز اتصال خودکار به جریان واقعی آپلود JSON انجام نشده (Phase بعد: hook در file-upload-routes + ایجاد job در شروع پردازش).
-3. endpoint /api/admin/active-actions برای داشبورد دیباگ سبک وزن.
-4. ساختار فعلی status قابل توسعه به زیرمرحله (subStage) یا درصد واقعی ingestion.
-
-گام‌های بعد پیشنهادی:
-1. اتصال خودکار: ایجاد job با POST هنگام آپلود فایل.
-2. ثبت خطا در job.lastError هنگام exception در pipeline.
-3. افزودن websocket یا Server-Sent Events برای کاهش Polling.
-4. نگارش شاخص SLA (مدت validating، مدت ingesting و ...) برای تحلیل عملکرد.
-
----
-
----
-## 22. Cheat Sheet
-```bash
-npm run dev
-npm run build && npm start
-docker compose up -d
-curl -s localhost/health
-```
-
----
-پایان سند.
-
-## 📄 لایسنس
-
-این پروژه تحت لایسنس MIT منتشر شده است.
-
----
-
-## 🆘 پشتیبانی
-در صورت مواجهه با مشکل:
-1. مسیرهای سلامت را بررسی کنید (`/health`, `/ready`)
-2. لاگ‌ها را ببینید: `tail -n 200 logs/server.log`
-3. صحت متغیرهای `.env` (خصوصا DATABASE_URL و SESSION_SECRET) را تأیید کنید
-4. در صورت نیاز Issue در مخزن GitHub ثبت کنید
-2. لاگ‌های سیستم را بررسی کنید: `docker-compose logs -f`
-3. Issue جدیدی در GitHub ایجاد کنید
-
----
-
-**نکته مهم:** این پروژه **فقط از PostgreSQL** استفاده می‌کند. هیچ‌گونه پشتیبانی از SQLite وجود ندارد.
+اگر تغییر معماری یا سرویس جدیدی معرفی شد، این سند را به‌روز کنید تا تطابق کامل بین کد، عملیات و تجربهٔ کاربر حفظ گردد.

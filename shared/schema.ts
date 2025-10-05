@@ -25,16 +25,42 @@ export const representatives = pgTable("representatives", {
   updatedAt: timestamp("updated_at").defaultNow()
 });
 
+// Session Store (connect-pg-simple)
+export const sessions = pgTable("session", {
+  sid: text("sid").primaryKey(),
+  sess: json("sess").notNull(),
+  expire: timestamp("expire", { withTimezone: true }).notNull()
+});
+
 // Sales Partners (همکاران فروش)
 export const salesPartners = pgTable("sales_partners", {
   id: serial("id").primaryKey(),
+  code: text("code"), // شناسه داخلی همکار فروش
   name: text("name").notNull(),
   phone: text("phone"),
   email: text("email"),
+  contactPerson: text("contact_person"),
   commissionRate: decimal("commission_rate", { precision: 5, scale: 2 }).default("0"), // نرخ کمیسیون درصدی
   totalCommission: decimal("total_commission", { precision: 15, scale: 2 }).default("0"), // کل کمیسیون
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow()
+});
+
+export const partnerCommissionPayments = pgTable("partner_commission_payments", {
+  id: serial("id").primaryKey(),
+  salesPartnerId: integer("sales_partner_id").notNull().references(() => salesPartners.id, { onDelete: "cascade" }),
+  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  paymentDate: timestamp("payment_date").defaultNow(),
+  // وضعیت تسویه: pending (ثبت شده ولی تسویه نهایی نشده) | paid (تسویه شده) | cancelled (باطل شده)
+  status: text("status").notNull().default("pending"),
+  // مجموع مبالغ تسویه جزئی انجام‌شده روی این پرداخت (برای partial settlement)
+  settledAmount: decimal("settled_amount", { precision: 15, scale: 2 }).notNull().default("0"),
+  // آخرین زمان انجام یک عمل تسویه جزئی (برای گزارش و لاگ تحلیلی)
+  lastPartialSettlementAt: timestamp("last_partial_settlement_at"),
+  note: text("note"),
+  createdBy: text("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow()
 });
 
 // Reconciliation Actions (اقدامات اصلاحی drift)
@@ -352,8 +378,6 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at").defaultNow()
 });
 
-
-
 // AI Configuration (تنظیمات پیشرفته هوش مصنوعی)
 // export const aiConfiguration = pgTable("ai_configuration", {
 //   id: serial("id").primaryKey(),
@@ -642,7 +666,15 @@ export const representativesRelations = relations(representatives, ({ one, many 
 }));
 
 export const salesPartnersRelations = relations(salesPartners, ({ many }) => ({
-  representatives: many(representatives)
+  representatives: many(representatives),
+  commissionPayments: many(partnerCommissionPayments)
+}));
+
+export const partnerCommissionPaymentsRelations = relations(partnerCommissionPayments, ({ one }) => ({
+  salesPartner: one(salesPartners, {
+    fields: [partnerCommissionPayments.salesPartnerId],
+    references: [salesPartners.id]
+  })
 }));
 
 // فاز ۱: Relations برای مدیریت دوره‌ای فاکتورها
@@ -702,6 +734,9 @@ export const dataIntegrityConstraintsRelations = relations(dataIntegrityConstrai
 export const insertRepresentativeSchema = omitInsert(createInsertSchema(representatives), "id", "publicId", "totalDebt", "totalSales", "credit", "createdAt", "updatedAt");
 
 export const insertSalesPartnerSchema = omitInsert(createInsertSchema(salesPartners), "id", "totalCommission", "createdAt");
+export const insertPartnerCommissionPaymentSchema = omitInsert(createInsertSchema(partnerCommissionPayments), "id", "createdAt", "updatedAt", "settledAmount", "lastPartialSettlementAt").extend({
+  status: z.enum(['pending','paid','cancelled']).optional()
+});
 
 // فاز ۱: Insert Schema برای مدیریت دوره‌ای
 export const insertInvoiceBatchSchema = omitInsert(createInsertSchema(invoiceBatches), "id", "totalInvoices", "totalAmount", "createdAt", "completedAt");
@@ -771,7 +806,16 @@ export type InsertSalesPartner = z.infer<typeof insertSalesPartnerSchema>;
 // Extended SalesPartner with calculated fields (for API responses)
 export interface SalesPartnerWithCount extends SalesPartner {
   representativesCount?: number;
+  totalSales?: number;
+  totalDebt?: number;
+  commissionDue?: number;
+  commissionPaid?: number;
+  commissionOutstanding?: number;
+  lastSettlementAt?: string | null;
 }
+
+export type PartnerCommissionPayment = typeof partnerCommissionPayments.$inferSelect;
+export type InsertPartnerCommissionPayment = z.infer<typeof insertPartnerCommissionPaymentSchema>;
 
 export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
@@ -1056,8 +1100,24 @@ export const portalContentBlocks = pgTable("portal_content_blocks", {
   updatedAt: timestamp("updated_at").defaultNow()
 });
 
-export type PortalContentBlock = typeof portalContentBlocks.$inferSelect;
-export type InsertPortalContentBlock = typeof portalContentBlocks.$inferInsert;
+export const portalContentPublicationState = pgTable('portal_content_publication_state', {
+  id: serial("id").primaryKey(),
+  contentVersion: integer("content_version").notNull().default(1),
+  lastPublishedAt: timestamp("last_published_at"),
+  lastPublishedBy: text("last_published_by"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow()
+});
+
+export const backupAuditLog = pgTable('backup_audit_log', {
+  id: serial('id').primaryKey(),
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
+  performedBy: text('performed_by').notNull(),
+  action: text('action', { enum: ['backup', 'restore'] }).notNull(),
+  status: text('status', { enum: ['success', 'failed'] }).notNull(),
+  fileSize: integer('file_size'), // in bytes
+  checksum: text('checksum'), // e.g., sha256
+  notes: text('notes'),
+});
 
 // App Download Views (آمار بازدید اپلیکیشن‌ها)
 // برای ثبت تاریخچه بازدید و تحلیل رفتار کاربران
@@ -1076,7 +1136,7 @@ export const appDownloadViews = pgTable("app_download_views", {
 // برای مدیریت فایل‌های QR Code و Video
 export const uploadedFiles = pgTable("uploaded_files", {
   id: serial("id").primaryKey(),
-  fileName: text("file_name").notNull(), // نام فایل اصلی
+  fileName: text("fileName").notNull(), // نام فایل اصلی
   storedFileName: text("stored_file_name").notNull().unique(), // نام منحصربفرد فایل در سرور (UUID)
   filePath: text("file_path").notNull(), // مسیر کامل فایل
   fileType: text("file_type").notNull(), // image/png, video/mp4, etc.
@@ -1087,26 +1147,9 @@ export const uploadedFiles = pgTable("uploaded_files", {
   createdAt: timestamp("created_at").defaultNow()
 });
 
-// Import Jobs (پایش فرایند پردازش فایل‌های JSON) - Phase A instrumentation scaffold
-export const importJobs = pgTable('import_jobs', {
-  id: serial('id').primaryKey(),
-  jobCode: text('job_code').notNull().unique(),
-  sourceFileName: text('source_file_name'),
-  status: text('status').notNull().default('pending'), // pending, validating, ingesting, enriching, completed, failed
-  totalRecords: integer('total_records').default(0),
-  processedRecords: integer('processed_records').default(0),
-  errorCount: integer('error_count').default(0),
-  startedAt: timestamp('started_at').defaultNow(),
-  finishedAt: timestamp('finished_at'),
-  lastError: text('last_error'),
-  metadata: json('metadata').default({})
-});
-export type ImportJob = typeof importJobs.$inferSelect;
-export type InsertImportJob = typeof importJobs.$inferInsert;
-// TODO: Add relations if needed and extend services for create/update progress.
+
 
 // ==================== ZOD SCHEMAS ====================
-
 export const insertEmployeeSchema = omitInsert(createInsertSchema(employees), "id", "createdAt", "updatedAt");
 
 export const insertEmployeeTaskSchema = omitInsert(createInsertSchema(employeeTasks), "id", "createdAt", "updatedAt");
@@ -1143,44 +1186,3 @@ export const insertAnnouncementSchema = omitInsert(createInsertSchema(announceme
 export const insertAppDownloadViewSchema = omitInsert(createInsertSchema(appDownloadViews), "id", "createdAt");
 
 export const insertUploadedFileSchema = omitInsert(createInsertSchema(uploadedFiles), "id", "createdAt");
-
-// ==================== TYPES ====================
-
-export type Employee = typeof employees.$inferSelect;
-export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
-
-export type EmployeeTask = typeof employeeTasks.$inferSelect;
-export type InsertEmployeeTask = z.infer<typeof insertEmployeeTaskSchema>;
-
-export type TelegramGroup = typeof telegramGroups.$inferSelect;
-export type InsertTelegramGroup = z.infer<typeof insertTelegramGroupSchema>;
-
-export type TelegramMessage = typeof telegramMessages.$inferSelect;
-export type InsertTelegramMessage = z.infer<typeof insertTelegramMessageSchema>;
-
-export type LeaveRequest = typeof leaveRequests.$inferSelect;
-export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
-
-export type TechnicalReport = typeof technicalReports.$inferSelect;
-export type InsertTechnicalReport = z.infer<typeof insertTechnicalReportSchema>;
-
-export type DailyReport = typeof dailyReports.$inferSelect;
-export type InsertDailyReport = z.infer<typeof insertDailyReportSchema>;
-
-export type Outbox = typeof outbox.$inferSelect;
-export type InsertOutbox = z.infer<typeof insertOutboxSchema>;
-
-export type ThresholdConfig = typeof thresholdConfig.$inferSelect;
-export type InsertThresholdConfig = z.infer<typeof insertThresholdConfigSchema>;
-
-export type AppDownload = typeof appDownloads.$inferSelect;
-export type InsertAppDownload = z.infer<typeof insertAppDownloadSchema>;
-
-export type Announcement = typeof announcements.$inferSelect;
-export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
-
-export type AppDownloadView = typeof appDownloadViews.$inferSelect;
-export type InsertAppDownloadView = z.infer<typeof insertAppDownloadViewSchema>;
-
-export type UploadedFile = typeof uploadedFiles.$inferSelect;
-export type InsertUploadedFile = z.infer<typeof insertUploadedFileSchema>;

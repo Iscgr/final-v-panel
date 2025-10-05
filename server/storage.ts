@@ -1,9 +1,10 @@
 import { InvoiceEditRecord, TransactionRecord, ConfigRecord } from './storage-interfaces.js';
 import {
-  representatives, salesPartners, invoices, payments, activityLogs, settings, adminUsers, invoiceEdits,
+  representatives, salesPartners, partnerCommissionPayments, invoices, payments, activityLogs, settings, adminUsers, invoiceEdits,
   financialTransactions, dataIntegrityConstraints, invoiceBatches, telegramSendHistory,
   type Representative, type InsertRepresentative,
   type SalesPartner, type InsertSalesPartner, type SalesPartnerWithCount,
+  type PartnerCommissionPayment, type InsertPartnerCommissionPayment,
   type Invoice, type InsertInvoice,
   type Payment, type InsertPayment,
   type ActivityLog, type InsertActivityLog,
@@ -18,7 +19,7 @@ import {
   type TelegramSendHistory, type InsertTelegramSendHistory
 } from "@shared/schema";
 import { db, checkDatabaseHealth, executeWithRetry } from "./database-manager.js";
-import { eq, desc, sql, and, or, ilike, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, or, ilike, inArray, gte, lte } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import bcrypt from "bcryptjs";
 
@@ -41,6 +42,19 @@ export interface IStorage {
   deleteSalesPartner(id: number): Promise<void>;
   getSalesPartnersStatistics(): Promise<any>;
   getRepresentativesBySalesPartner(partnerId: number): Promise<Representative[]>;
+  recalculateSalesPartnerFinancials(partnerId: number): Promise<void>;
+  getPartnerCommissionPayments(partnerId: number): Promise<PartnerCommissionPayment[]>;
+  getPartnerCommissionPaymentsFiltered(options: {
+    partnerId?: number;
+    startDate?: Date;
+    endDate?: Date;
+    status?: string;
+  }): Promise<Array<PartnerCommissionPayment & { partnerName: string | null; partnerCode: string | null }>>;
+  createPartnerCommissionPayment(payment: InsertPartnerCommissionPayment): Promise<PartnerCommissionPayment>;
+  updatePartnerCommissionPayment(paymentId: number, payment: Partial<PartnerCommissionPayment>): Promise<PartnerCommissionPayment>;
+  deletePartnerCommissionPayment(paymentId: number): Promise<void>;
+  // Partial Settlement (Phase 2 remaining item)
+  applyPartialSettlement(paymentId: number, amount: number, note?: string, actor?: string): Promise<PartnerCommissionPayment & { remaining: number }>;
 
   // فاز ۱: Invoice Batches - مدیریت دوره‌ای فاکتورها
   getInvoiceBatches(): Promise<InvoiceBatch[]>;
@@ -266,20 +280,64 @@ export class DatabaseStorage implements IStorage {
       relatedId: newRep.id
     });
 
+    if (newRep.salesPartnerId != null) {
+      await this.recalculateSalesPartnerFinancials(newRep.salesPartnerId);
+    }
+
     return newRep;
   }
 
   async updateRepresentative(id: number, rep: Partial<Representative>): Promise<Representative> {
+    const [existing] = await db
+      .select()
+      .from(representatives)
+      .where(eq(representatives.id, id))
+      .limit(1);
+
+    if (!existing) {
+      throw new Error(`Representative with id ${id} not found`);
+    }
+
     const [updated] = await db
       .update(representatives)
       .set({ ...rep, updatedAt: new Date() })
       .where(eq(representatives.id, id))
       .returning();
+    if (!updated) {
+      throw new Error(`Representative with id ${id} not found`);
+    }
+
+    const partnerIds = new Set<number>();
+    if (existing.salesPartnerId != null) {
+      partnerIds.add(existing.salesPartnerId);
+    }
+    if (updated.salesPartnerId != null) {
+      partnerIds.add(updated.salesPartnerId);
+    }
+
+    for (const partnerId of partnerIds) {
+      await this.recalculateSalesPartnerFinancials(partnerId);
+    }
+
     return updated;
   }
 
   async deleteRepresentative(id: number): Promise<void> {
+    const [existing] = await db
+      .select()
+      .from(representatives)
+      .where(eq(representatives.id, id))
+      .limit(1);
+
+    if (!existing) {
+      return;
+    }
+
     await db.delete(representatives).where(eq(representatives.id, id));
+
+    if (existing.salesPartnerId != null) {
+      await this.recalculateSalesPartnerFinancials(existing.salesPartnerId);
+    }
   }
 
   async getSalesPartners(): Promise<SalesPartnerWithCount[]> {
@@ -301,13 +359,32 @@ export class DatabaseStorage implements IStorage {
               .from(representatives)
               .where(eq(representatives.salesPartnerId, partner.id));
 
+            const [commissionAggregates] = await db
+              .select({
+                paid: sql<string>`COALESCE(SUM(CAST(amount AS DECIMAL)), 0)`,
+                lastPaymentAt: sql<string>`MAX(payment_date)`
+              })
+              .from(partnerCommissionPayments)
+              .where(eq(partnerCommissionPayments.salesPartnerId, partner.id));
+
+            const totalSalesValue = Number(aggregateResult?.totalSales || 0);
+            const totalDebtValue = Number(aggregateResult?.totalDebt || 0);
+            const commissionRate = Number(partner.commissionRate || 0);
+            const commissionDue = Number(((totalSalesValue * commissionRate) / 100).toFixed(2));
+            const commissionPaid = Number(commissionAggregates?.paid || 0);
+            const commissionOutstanding = Math.max(commissionDue - commissionPaid, 0);
+
             return {
               ...partner,
               representativesCount: aggregateResult?.count || 0,
-              // S-01 Fix: Add aggregated fields
-              totalSales: Number(aggregateResult?.totalSales || 0),
-              totalDebt: Number(aggregateResult?.totalDebt || 0),
-              lastActivity: aggregateResult?.lastActivity || null
+              totalSales: totalSalesValue,
+              totalDebt: totalDebtValue,
+              commissionDue,
+              commissionPaid,
+              commissionOutstanding,
+              lastSettlementAt: commissionAggregates?.lastPaymentAt || null,
+              lastActivity: aggregateResult?.lastActivity || null,
+              totalCommission: commissionPaid.toString()
             };
           })
         );
@@ -323,6 +400,315 @@ export class DatabaseStorage implements IStorage {
     return partner || undefined;
   }
 
+  async recalculateSalesPartnerFinancials(partnerId: number): Promise<void> {
+    return executeWithRetry(
+      async () => {
+        const [partner] = await db
+          .select({
+            id: salesPartners.id,
+            commissionRate: salesPartners.commissionRate
+          })
+          .from(salesPartners)
+          .where(eq(salesPartners.id, partnerId))
+          .limit(1);
+
+        if (!partner) {
+          return;
+        }
+
+        const [representativeAggregates] = await db
+          .select({
+            totalSales: sql<string>`COALESCE(SUM(CAST(total_sales AS DECIMAL)), 0)`,
+            totalDebt: sql<string>`COALESCE(SUM(CAST(total_debt AS DECIMAL)), 0)`
+          })
+          .from(representatives)
+          .where(eq(representatives.salesPartnerId, partnerId));
+
+        const [commissionAggregates] = await db
+          .select({
+            paid: sql<string>`COALESCE(SUM(CAST(amount AS DECIMAL)), 0)`,
+            lastPaymentAt: sql<string>`MAX(payment_date)`
+          })
+          .from(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.salesPartnerId, partnerId));
+
+        const totalSales = Number(representativeAggregates?.totalSales || 0);
+        const commissionRate = Number(partner.commissionRate || 0);
+        const commissionDue = Number(((totalSales * commissionRate) / 100).toFixed(2));
+        const commissionPaid = Number(commissionAggregates?.paid || 0);
+        const outstanding = Math.max(commissionDue - commissionPaid, 0);
+
+        await db
+          .update(salesPartners)
+          .set({
+            totalCommission: commissionPaid.toString()
+          })
+          .where(eq(salesPartners.id, partnerId));
+
+        console.log('📊 SalesPartner Aggregate Refresh', {
+          partnerId,
+          totalSales,
+          commissionRate,
+          commissionDue,
+          commissionPaid,
+          outstanding
+        });
+      },
+      'recalculateSalesPartnerFinancials'
+    );
+  }
+
+  async getPartnerCommissionPayments(partnerId: number): Promise<PartnerCommissionPayment[]> {
+    return executeWithRetry(
+      () =>
+        db
+          .select()
+          .from(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.salesPartnerId, partnerId))
+          .orderBy(desc(partnerCommissionPayments.paymentDate), desc(partnerCommissionPayments.createdAt)),
+      'getPartnerCommissionPayments'
+    );
+  }
+
+  async getPartnerCommissionPaymentsFiltered(options: {
+    partnerId?: number;
+    startDate?: Date;
+    endDate?: Date;
+    status?: string;
+  }): Promise<Array<PartnerCommissionPayment & { partnerName: string | null; partnerCode: string | null }>> {
+    return executeWithRetry(
+      async () => {
+        const conditions = [] as any[];
+
+        if (options.partnerId != null) {
+          conditions.push(eq(partnerCommissionPayments.salesPartnerId, options.partnerId));
+        }
+
+        if (options.startDate) {
+          conditions.push(gte(partnerCommissionPayments.paymentDate, options.startDate));
+        }
+
+        if (options.endDate) {
+          conditions.push(lte(partnerCommissionPayments.paymentDate, options.endDate));
+        }
+
+        if (options.status && ['pending','paid','cancelled'].includes(options.status)) {
+          conditions.push(eq(partnerCommissionPayments.status, options.status));
+        }
+
+        const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+        let query = db
+          .select({
+            id: partnerCommissionPayments.id,
+            salesPartnerId: partnerCommissionPayments.salesPartnerId,
+            amount: partnerCommissionPayments.amount,
+            settledAmount: partnerCommissionPayments.settledAmount,
+            paymentDate: partnerCommissionPayments.paymentDate,
+            note: partnerCommissionPayments.note,
+            createdBy: partnerCommissionPayments.createdBy,
+            createdAt: partnerCommissionPayments.createdAt,
+            updatedAt: partnerCommissionPayments.updatedAt,
+            status: partnerCommissionPayments.status,
+            lastPartialSettlementAt: partnerCommissionPayments.lastPartialSettlementAt,
+            partnerName: salesPartners.name,
+            partnerCode: salesPartners.code
+          })
+          .from(partnerCommissionPayments)
+          .leftJoin(salesPartners, eq(partnerCommissionPayments.salesPartnerId, salesPartners.id))
+          .orderBy(desc(partnerCommissionPayments.paymentDate), desc(partnerCommissionPayments.createdAt));
+
+        if (whereClause) {
+          query = query.where(whereClause);
+        }
+
+        return query;
+      },
+      'getPartnerCommissionPaymentsFiltered'
+    );
+  }
+
+  async createPartnerCommissionPayment(payment: InsertPartnerCommissionPayment): Promise<PartnerCommissionPayment> {
+    return executeWithRetry(
+      async () => {
+        const timestampedPayment = {
+          ...payment,
+          status: (payment as any).status && ['pending','paid','cancelled'].includes((payment as any).status!) ? (payment as any).status : 'pending',
+          updatedAt: new Date()
+        };
+
+        const [created] = await db
+          .insert(partnerCommissionPayments)
+          .values(timestampedPayment)
+          .returning();
+
+        await this.recalculateSalesPartnerFinancials(created.salesPartnerId);
+
+        await this.createActivityLog({
+          type: 'commission_payment_created',
+          description: `پرداخت پورسانت به مبلغ ${created.amount} برای همکار #${created.salesPartnerId} ثبت شد`,
+          relatedId: created.id,
+          metadata: { partnerId: created.salesPartnerId, amount: created.amount, status: (created as any).status }
+        });
+        return created;
+      },
+      'createPartnerCommissionPayment'
+    );
+  }
+
+  async updatePartnerCommissionPayment(paymentId: number, payment: Partial<PartnerCommissionPayment>): Promise<PartnerCommissionPayment> {
+    return executeWithRetry(
+      async () => {
+        const [existing] = await db
+          .select()
+          .from(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.id, paymentId))
+          .limit(1);
+
+        if (!existing) {
+          throw new Error(`Commission payment with id ${paymentId} not found`);
+        }
+
+        const [updated] = await db
+          .update(partnerCommissionPayments)
+          .set({
+            ...payment,
+            updatedAt: new Date()
+          })
+          .where(eq(partnerCommissionPayments.id, paymentId))
+          .returning();
+
+        await this.recalculateSalesPartnerFinancials(existing.salesPartnerId);
+
+        if (payment.status && payment.status !== (existing as any).status) {
+          await this.createActivityLog({
+            type: 'commission_payment_status_changed',
+            description: `وضعیت پرداخت پورسانت #${paymentId} از ${(existing as any).status || 'pending'} به ${payment.status} تغییر کرد`,
+            relatedId: paymentId,
+            metadata: { from: (existing as any).status || 'pending', to: payment.status }
+          });
+        } else {
+          await this.createActivityLog({
+            type: 'commission_payment_updated',
+            description: `پرداخت پورسانت #${paymentId} بروزرسانی شد`,
+            relatedId: paymentId,
+            metadata: { changes: Object.keys(payment) }
+          });
+        }
+        return updated;
+      },
+      'updatePartnerCommissionPayment'
+    );
+  }
+
+  async deletePartnerCommissionPayment(paymentId: number): Promise<void> {
+    return executeWithRetry(
+      async () => {
+        const [existing] = await db
+          .select()
+          .from(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.id, paymentId))
+          .limit(1);
+
+        if (!existing) {
+          throw new Error(`Commission payment with id ${paymentId} not found`);
+        }
+
+        await db
+          .delete(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.id, paymentId));
+
+        await this.recalculateSalesPartnerFinancials(existing.salesPartnerId);
+
+        await this.createActivityLog({
+          type: 'commission_payment_deleted',
+            description: `پرداخت پورسانت #${paymentId} حذف شد`,
+            relatedId: paymentId,
+            metadata: { partnerId: existing.salesPartnerId, amount: existing.amount, status: (existing as any).status }
+        });
+      },
+      'deletePartnerCommissionPayment'
+    );
+  }
+
+  /**
+   * اعمال تسویه جزئی روی یک پرداخت پورسانت.
+   * قوانین:
+   *  - فقط در وضعیت pending مجاز است.
+   *  - مبلغ باید > 0 و <= مانده باشد.
+   *  - در صورت صفر شدن مانده، وضعیت به paid تغییر می‌کند.
+   */
+  async applyPartialSettlement(paymentId: number, amount: number, note?: string, actor?: string): Promise<PartnerCommissionPayment & { remaining: number }> {
+    return executeWithRetry(
+      async () => {
+        if (!(amount > 0)) {
+          throw new Error('مبلغ تسویه جزئی باید بزرگتر از صفر باشد');
+        }
+
+        const [existing] = await db
+          .select()
+          .from(partnerCommissionPayments)
+          .where(eq(partnerCommissionPayments.id, paymentId))
+          .limit(1);
+
+        if (!existing) {
+          throw new Error(`پرداخت با شناسه ${paymentId} یافت نشد`);
+        }
+
+        const total = Number(existing.amount || 0);
+        const settled = Number((existing as any).settledAmount || 0);
+        const status = (existing as any).status || 'pending';
+
+        if (status !== 'pending') {
+          throw new Error('تسویه جزئی فقط برای پرداخت‌های در انتظار مجاز است');
+        }
+
+        const remainingBefore = Math.max(total - settled, 0);
+        if (amount > remainingBefore) {
+          throw new Error('مبلغ تسویه جزئی از مانده بیشتر است');
+        }
+
+        const newSettled = settled + amount;
+        const remainingAfter = Math.max(total - newSettled, 0);
+        const shouldClose = remainingAfter === 0;
+
+        const [updated] = await db
+          .update(partnerCommissionPayments)
+          .set({
+            settledAmount: newSettled.toFixed(2),
+            lastPartialSettlementAt: new Date(),
+            updatedAt: new Date(),
+            note: note ?? existing.note,
+            status: shouldClose ? 'paid' : status
+          })
+            .where(eq(partnerCommissionPayments.id, paymentId))
+            .returning();
+
+        await this.recalculateSalesPartnerFinancials(updated.salesPartnerId);
+
+        await this.createActivityLog({
+          type: 'commission_payment_partial_settled',
+          description: `تسویه جزئی پرداخت پورسانت #${paymentId} به مبلغ ${amount} انجام شد` + (shouldClose ? ' (تسویه کامل)' : ''),
+            relatedId: paymentId,
+            metadata: {
+              paymentId,
+              partialAmount: amount,
+              beforeSettled: settled,
+              afterSettled: newSettled,
+              total,
+              remainingBefore,
+              remainingAfter,
+              autoStatusChange: shouldClose ? 'paid' : undefined,
+              actor: actor || 'SYSTEM'
+            }
+        });
+
+        return { ...updated, remaining: remainingAfter } as PartnerCommissionPayment & { remaining: number };
+      },
+      'applyPartialSettlement'
+    );
+  }
+
   async createSalesPartner(partner: InsertSalesPartner): Promise<SalesPartner> {
     const [newPartner] = await db
       .insert(salesPartners)
@@ -335,6 +721,7 @@ export class DatabaseStorage implements IStorage {
       relatedId: newPartner.id
     });
 
+    await this.recalculateSalesPartnerFinancials(newPartner.id);
     return newPartner;
   }
 
@@ -344,6 +731,10 @@ export class DatabaseStorage implements IStorage {
       .set(partner)
       .where(eq(salesPartners.id, id))
       .returning();
+    if (!updated) {
+      throw new Error(`Sales partner with id ${id} not found`);
+    }
+    await this.recalculateSalesPartnerFinancials(updated.id);
     return updated;
   }
 
@@ -2432,38 +2823,28 @@ export class DatabaseStorage implements IStorage {
   async getSalesPartnersStatistics(): Promise<any> {
     return executeWithRetry(
       async () => {
-        // S-01 Fix: Enhanced statistics with proper numeric conversion
-        const result = await db
-          .select({
-            totalPartners: sql<number>`count(*)`,
-            totalActivePartners: sql<number>`count(*) filter (where is_active = true)`,
-            totalCommission: sql<string>`COALESCE(SUM(CAST(total_commission as DECIMAL)), 0)`,
-            averageCommissionRate: sql<number>`COALESCE(AVG(commission_rate), 0)`
-          })
-          .from(salesPartners);
+        const partners = await this.getSalesPartners();
 
-        // Calculate financial coupling - total sales from sub-representatives
-        const salesCouplingResult = await db
-          .select({
-            totalCoupledSales: sql<string>`COALESCE(SUM(CAST(total_sales as DECIMAL)), 0)`,
-            totalCoupledDebt: sql<string>`COALESCE(SUM(CAST(total_debt as DECIMAL)), 0)`,
-            coupledRepresentatives: sql<number>`COUNT(*)`
-          })
-          .from(representatives)
-          .where(sql`sales_partner_id IS NOT NULL`);
+        const totalPartners = partners.length;
+        const activePartners = partners.filter((partner) => partner.isActive).length;
+        const totalSales = partners.reduce((sum, partner) => sum + Number(partner.totalSales || 0), 0);
+        const totalDebt = partners.reduce((sum, partner) => sum + Number(partner.totalDebt || 0), 0);
+        const totalCommissionPaid = partners.reduce((sum, partner) => sum + Number(partner.commissionPaid || partner.totalCommission || 0), 0);
+        const totalCommissionDue = partners.reduce((sum, partner) => sum + Number(partner.commissionDue || 0), 0);
+        const totalOutstanding = partners.reduce((sum, partner) => sum + Number(partner.commissionOutstanding || 0), 0);
+        const averageCommissionRate = totalPartners === 0
+          ? 0
+          : partners.reduce((sum, partner) => sum + Number(partner.commissionRate || 0), 0) / totalPartners;
 
-        console.log(`📊 S-01 Fixed: Sales partners statistics - ${result[0].totalPartners} partners, $${salesCouplingResult[0].totalCoupledSales} total sales from ${salesCouplingResult[0].coupledRepresentatives} representatives`);
-
-        // S-01 Fix: Return numeric values, not strings
         return {
-          totalPartners: Number(result[0].totalPartners || 0),
-          activePartners: Number(result[0].totalActivePartners || 0),
-          totalCommission: Number(result[0].totalCommission || 0),
-          totalSales: Number(salesCouplingResult[0].totalCoupledSales || 0), // Numeric
-          averageCommissionRate: Number(result[0].averageCommissionRate || 0),
-          totalCoupledSales: Number(salesCouplingResult[0].totalCoupledSales || 0), // Numeric
-          totalCoupledDebt: Number(salesCouplingResult[0].totalCoupledDebt || 0), // Numeric
-          coupledRepresentatives: Number(salesCouplingResult[0].coupledRepresentatives || 0)
+          totalPartners,
+          activePartners,
+          totalCommission: Number(totalCommissionPaid.toFixed(2)),
+          totalCommissionDue: Number(totalCommissionDue.toFixed(2)),
+          outstandingCommission: Number(totalOutstanding.toFixed(2)),
+          totalCoupledSales: Number(totalSales.toFixed(2)),
+          totalCoupledDebt: Number(totalDebt.toFixed(2)),
+          averageCommissionRate: Number(averageCommissionRate.toFixed(2))
         };
       },
       'getSalesPartnersStatistics'

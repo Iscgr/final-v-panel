@@ -15,12 +15,53 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { createClient } from 'redis';
 import { checkDatabaseHealth, getDatabaseStatus } from './database-manager.js';
 import errorManager, { ErrorSeverity, ErrorCategory } from './unified-error-manager.js';
 
 import os from 'os';
 
 const execAsync = promisify(exec);
+
+type RedisHealthClientType = ReturnType<typeof createClient>;
+
+let redisHealthClient: RedisHealthClientType | null = null;
+let redisBootstrapErrorLogged = false;
+let redisHealthClientPromise: Promise<RedisHealthClientType> | null = null;
+
+async function getRedisHealthClient(redisUrl: string): Promise<RedisHealthClientType> {
+  if (redisHealthClient && redisHealthClient.isOpen) {
+    return redisHealthClient;
+  }
+
+  if (!redisHealthClientPromise) {
+    redisHealthClientPromise = (async () => {
+      const client = createClient({
+        url: redisUrl,
+        socket: {
+          reconnectStrategy: (retries) => Math.min(retries * 100, 1000),
+          // فعال‌سازی TLS برای اتصال‌های rediss:// و پرهیز از ارسال آبجکت خالی که با نوع boolean ناسازگار است
+          tls: redisUrl.startsWith('rediss://') ? true : undefined
+        }
+      });
+
+      client.on('error', (err) => {
+        if (!redisBootstrapErrorLogged) {
+          console.error('Redis health client error:', err.message);
+          redisBootstrapErrorLogged = true;
+        }
+      });
+
+      await client.connect();
+      redisHealthClient = client;
+      return client;
+    })().finally(() => {
+      redisHealthClientPromise = null;
+    });
+  }
+
+  return redisHealthClientPromise!;
+}
 
 // 🏷️ Health Status Types
 export enum HealthStatus {
@@ -225,11 +266,12 @@ class ComprehensiveHealthChecker {
         };
       }
 
-      // Test Redis connection using Docker
-      const { stdout } = await execAsync('docker exec marfanet-redis redis-cli ping');
+      const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+      const client = await getRedisHealthClient(redisUrl);
+      const response = await client.ping();
       const responseTime = Date.now() - startTime;
-      
-      if (stdout.trim().toUpperCase() === 'PONG') {
+
+      if (typeof response === 'string' && response.trim().toUpperCase() === 'PONG') {
         return {
           status: HealthStatus.HEALTHY,
           message: 'Redis connection is healthy',
@@ -237,17 +279,26 @@ class ComprehensiveHealthChecker {
           responseTime,
           timestamp: new Date()
         };
-      } else {
-        return {
-          status: HealthStatus.UNHEALTHY,
-          message: 'Redis ping failed',
-          persianMessage: 'Redis پاسخ نمی‌دهد',
-          responseTime,
-          timestamp: new Date()
-        };
       }
+
+      return {
+        status: HealthStatus.UNHEALTHY,
+        message: 'Redis ping returned unexpected response',
+        persianMessage: 'پاسخ Redis نامعتبر است',
+        responseTime,
+        timestamp: new Date(),
+        metadata: { response }
+      };
     } catch (error) {
-      // در محیط توسعه اگر کانتینر Redis موجود نباشد downgrade کنیم تا CRITICAL دائمی نشود
+      if (redisHealthClient) {
+        try {
+          await redisHealthClient.disconnect();
+        } catch {
+          // ignore
+        }
+        redisHealthClient = null;
+      }
+
       const isDev = process.env.NODE_ENV !== 'production';
       return {
         status: isDev ? HealthStatus.DEGRADED : HealthStatus.CRITICAL,

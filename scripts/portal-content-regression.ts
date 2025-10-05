@@ -1,164 +1,86 @@
-#!/usr/bin/env ts-node
 /**
- * Regression Smoke Script for Portal Content Phase 1
- * اهداف:
- * 1. تایید عدم تغییر خروجی منابع عمومی (/api/portal/resources یا مشابه فعلی)
- * 2. تایید اینکه همه کلیدهای استاندارد portal-content-blocks قابل دسترس‌اند
- * 3. انجام یک upsert آزمایشی و برگشت به مقدار قبلی
+ * Portal Content Regression Script (Phase 4 - Todo 8)
+ * سناریو: Login -> fetch status/full -> create announcement + app -> publish -> verify version bump & cache invalidation.
+ * اجرا: npx ts-node scripts/portal-content-regression.ts
  */
 import fetch from 'node-fetch';
 
-interface Block { blockKey: string; title: string; body: string; }
-import crypto from 'crypto';
+const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000';
+const ADMIN_USER = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASS = process.env.ADMIN_PASSWORD || 'admin';
 
-const REQUIRED_KEYS = [
-  'guidance','contact_info','downloads_intro','support_hours','announcements_title'
-];
-
-async function main() {
-  const base = process.env.BASE_URL || 'http://localhost:3000';
-  const adminCookie = process.env.ADMIN_COOKIE; // نیاز به سشن معتبر اگر auth فعال است
-
-  function authHeaders(): Record<string,string> {
-    return adminCookie ? { 'Cookie': adminCookie } : {};
-  }
-
-  // 1. Fetch portal public (best-effort) - tolerant if 404
-  try {
-    const portalRes = await fetch(base + '/api/portal/resources');
-    if (!portalRes.ok) {
-      console.log('WARN: /api/portal/resources status =', portalRes.status);
-    } else {
-      const json = await portalRes.json();
-      console.log('Public resources keys:', Object.keys(json));
-    }
-  } catch (e) {
-    console.log('WARN: Could not fetch /api/portal/resources', (e as Error).message);
-  }
-
-  // 2. Fetch admin portal content blocks
-  const blocksRes = await fetch(base + '/api/admin/portal-content-blocks', { headers: { ...authHeaders() }});
-  if (!blocksRes.ok) {
-    console.error('FAIL: cannot fetch portal-content-blocks', blocksRes.status);
-    process.exit(1);
-  }
-  // پاسخ انتظار می‌رود شکل { data: Block[] } داشته باشد؛ در صورت تفاوت، ولیدیشن خطا می‌دهد
-  const blocksJson: unknown = await blocksRes.json();
-  if (typeof blocksJson !== 'object' || blocksJson === null) {
-    console.error('FAIL: unexpected JSON shape for portal-content-blocks (not an object)');
-    process.exit(1);
-  }
-  const blocksData = (blocksJson as { data?: unknown }).data;
-  if (!Array.isArray(blocksData)) {
-    console.error('FAIL: expected data to be an array in portal-content-blocks response');
-    process.exit(1);
-  }
-  const blocks: Block[] = blocksData.map((r:any) => ({
-    blockKey: String(r.blockKey),
-    title: typeof r.title === 'string' ? r.title : '',
-    body: typeof r.body === 'string' ? r.body : ''
-  }));
-  const keys = blocks.map(b => b.blockKey);
-  const missing = REQUIRED_KEYS.filter(k => !keys.includes(k));
-  if (missing.length) {
-    console.error('FAIL: missing required block keys:', missing);
-    process.exit(1);
-  }
-  console.log('OK: all required block keys present');
-
-  // اعتبارسنجی بدنه و عنوان غیر خالی (Soft Warning) – عدم توقف اسکریپت مگر همه خالی باشند
-  const emptyBodies = blocks.filter(b => !b.body || !b.body.trim());
-  if (emptyBodies.length) {
-    console.log('WARN:', emptyBodies.length,'blocks have empty body:', emptyBodies.map(b=>b.blockKey));
-  }
-
-  // 3. Upsert test on guidance (if present)
-  const guidance = blocks.find(b => b.blockKey === 'guidance');
-  if (guidance) {
-    const original = guidance.body;
-    const testBody = original + '\n<!-- smoke-test-line -->';
-    const putRes = await fetch(base + '/api/admin/portal-content-blocks/guidance', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ title: guidance.title, body: testBody })
-    });
-    const putJson: unknown = await putRes.json();
-    const putOk = typeof putJson === 'object' && putJson !== null && (putJson as any).success === true;
-    if (!putOk) {
-      console.error('FAIL: could not update guidance block (unexpected response shape)');
-      process.exit(1);
-    }
-    // دریافت مجدد جهت تایید persistence
-    const afterPutRes = await fetch(base + '/api/admin/portal-content-blocks', { headers: { ...authHeaders() }});
-    const afterPutJson: any = await afterPutRes.json();
-    const updatedGuidance = (afterPutJson.data || []).find((b:any)=>b.blockKey==='guidance');
-    if (!updatedGuidance || !String(updatedGuidance.body).includes('smoke-test-line')) {
-      console.error('FAIL: guidance body not updated as expected');
-      process.exit(1);
-    }
-
-    // revert تغییر موقت
-    const revertRes = await fetch(base + '/api/admin/portal-content-blocks/guidance', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ title: guidance.title, body: original })
-    });
-    const revertJson: any = await revertRes.json();
-    if (!(revertJson && revertJson.success)) {
-      console.error('FAIL: revert guidance block failed');
-      process.exit(1);
-    }
-    // تایید revert
-    const afterRevertRes = await fetch(base + '/api/admin/portal-content-blocks', { headers: { ...authHeaders() }});
-    const afterRevertJson: any = await afterRevertRes.json();
-    const reverted = (afterRevertJson.data || []).find((b:any)=>b.blockKey==='guidance');
-    if (!reverted || String(reverted.body).includes('smoke-test-line')) {
-      console.error('FAIL: revert did not restore original content');
-      process.exit(1);
-    }
-    console.log('OK: upsert + verify + revert guidance block');
-  } else {
-    console.log('WARN: guidance block not found unexpectedly');
-  }
-
-  // 4. تولید هش برای وضعیت فعلی بلوک‌ها (شتاب مقایسه آینده / baseline drift)
-  const hash = crypto.createHash('sha256');
-  for (const b of blocks) {
-    hash.update(b.blockKey + '::' + b.title + '::' + b.body + '\n');
-  }
-  const digest = hash.digest('hex');
-  console.log('Snapshot SHA256 of blocks state:', digest);
-
-  // 5. (اختیاری) تست round-trip روی اولین بلوک غیر guidance — ایمن؛ اگر ENV فعال شد
-  if (process.env.EXTRA_ROUND_TRIP === '1') {
-    const target = blocks.find(b=>b.blockKey !== 'guidance');
-    if (target) {
-      const original = target.body;
-      const testBody = original + '\n<!-- extra-round-trip -->';
-      const putRes = await fetch(base + `/api/admin/portal-content-blocks/${target.blockKey}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ title: target.title, body: testBody })
-      });
-      const putJson: any = await putRes.json();
-      if (!(putJson && putJson.success)) {
-        console.error('FAIL: extra round-trip update failed');
-        process.exit(1);
-      }
-      // revert
-      await fetch(base + `/api/admin/portal-content-blocks/${target.blockKey}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ title: target.title, body: original })
-      });
-      console.log('OK: extra round-trip test on', target.blockKey);
-    }
-  }
-
-  console.log('✔ Regression script finished successfully');
+async function login(cookieJar: string[]): Promise<void> {
+  const res = await fetch(BASE + '/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS })
+  });
+  if (!res.ok) throw new Error('login_failed ' + res.status);
+  const setCookie = res.headers.raw()['set-cookie'] || [];
+  cookieJar.push(...setCookie.map(c => c.split(';')[0]));
 }
 
-main().catch(err => {
-  console.error('UNCAUGHT ERROR in regression script:', err);
+async function api(path: string, cookieJar: string[], init: any = {}) {
+  const headers = Object.assign({ 'Content-Type': 'application/json' }, init.headers || {});
+  if (cookieJar.length) headers['Cookie'] = cookieJar.join('; ');
+  const res = await fetch(BASE + path, { ...init, headers });
+  const text = await res.text();
+  let json: any = null;
+  try { json = JSON.parse(text); } catch { /* ignore */ }
+  return { status: res.status, json, text, headers: res.headers };
+}
+
+async function run() {
+  const cookieJar: string[] = [];
+  console.log('🔐 Logging in...');
+  await login(cookieJar);
+  console.log('✅ Logged in');
+
+  console.log('📥 Fetch initial status');
+  const status1 = await api('/api/admin/portal-content-blocks/status', cookieJar);
+  if (!status1.json?.success) throw new Error('failed_status_initial');
+  const initialVersion = status1.json.data.contentVersion;
+  console.log('   Version:', initialVersion);
+
+  console.log('📥 Fetch initial full (expect MISS first call)');
+  const full1 = await api('/api/admin/portal-content-blocks/full', cookieJar);
+  if (!full1.json?.success) throw new Error('failed_full_initial');
+  console.log('   Blocks:', full1.json.data.blocks.length, 'Announcements:', full1.json.data.announcements.length);
+
+  console.log('➕ Create announcement');
+  const newAnn = await api('/api/admin/announcements', cookieJar, { method: 'POST', body: JSON.stringify({ title: 'Test ANN', content: 'Hello', priority: 1 }) });
+  if (!newAnn.json?.success) throw new Error('failed_create_announcement');
+
+  console.log('➕ Create app-download');
+  const newApp = await api('/api/admin/app-downloads', cookieJar, { method: 'POST', body: JSON.stringify({ title: 'App T', downloadLink: 'https://example.com/app.apk', displayOrder: 0 }) });
+  if (!newApp.json?.success) throw new Error('failed_create_app');
+
+  console.log('📥 Fetch full after mutations (should MISS again after invalidation)');
+  const full2 = await api('/api/admin/portal-content-blocks/full', cookieJar);
+  if (!full2.json?.success) throw new Error('failed_full_after_mutations');
+  if (!full2.json.data.announcements.find((a: any) => a.title === 'Test ANN')) throw new Error('announcement_not_present');
+
+  console.log('🚀 Publish content');
+  const pub = await api('/api/admin/portal-content-blocks/publish', cookieJar, { method: 'POST' });
+  if (!pub.json?.success) throw new Error('failed_publish');
+
+  console.log('📥 Fetch status after publish (version should +1)');
+  const status2 = await api('/api/admin/portal-content-blocks/status', cookieJar);
+  const newVersion = status2.json?.data?.contentVersion;
+  if (newVersion !== initialVersion + 1 && !(initialVersion === 0 && newVersion === 1)) {
+    throw new Error(`version_not_incremented initial=${initialVersion} new=${newVersion}`);
+  }
+
+  console.log('📥 Fetch full again (MISS then HIT)');
+  const full3 = await api('/api/admin/portal-content-blocks/full', cookieJar);
+  if (!full3.json?.success) throw new Error('failed_full_post_publish');
+  const full4 = await api('/api/admin/portal-content-blocks/full', cookieJar);
+  if (full4.json?.cache !== 'HIT') console.warn('cache_hit_not_reported');
+
+  console.log('✅ Regression scenario passed.');
+}
+
+run().catch(err => {
+  console.error('❌ REGRESSION FAILED:', err);
   process.exit(1);
 });

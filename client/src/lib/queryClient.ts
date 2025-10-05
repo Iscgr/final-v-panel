@@ -53,9 +53,19 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
       return {} as T;
     }
     
-    // پارس کردن پاسخ JSON
-    const data = await response.json();
-    return data as T;
+    // تلاش برای خواندن متن خام جهت هندل بدنه خالی
+    const rawText = await response.text();
+    if (!rawText) {
+      // پاسخ 200 بدون بدنه: الگوی برخی روت‌های تنظیمات وقتی مقدار وجود ندارد
+      return {} as T;
+    }
+    try {
+      const data = JSON.parse(rawText);
+      return data as T;
+    } catch (parseErr) {
+      console.error(`API parse error for ${endpoint}:`, parseErr, 'raw:', rawText);
+      throw parseErr;
+    }
   } catch (error) {
     console.error(`API request error for ${endpoint}:`, error);
     throw error;

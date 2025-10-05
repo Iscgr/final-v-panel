@@ -1,5 +1,5 @@
 // فاز ۲: Manual Invoice Creation Form
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -39,10 +39,27 @@ export function InvoiceManualForm({ onSuccess, editInvoice }: InvoiceManualFormP
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // دریافت لیست نمایندگان
-  const { data: representatives = [], isLoading: repsLoading } = useQuery({
-    queryKey: ['/api/representatives'],
-    queryFn: () => apiRequest('/api/representatives'),
+  const { data: representativesResponse, isLoading: repsLoading } = useQuery({
+    queryKey: ['/api/representatives', { pageSize: 500, sortBy: 'name', sortOrder: 'asc' }],
+    queryFn: () => apiRequest('/api/representatives?pageSize=500&sortBy=name&sortOrder=asc'),
   });
+
+  const representatives = useMemo(() => {
+    if (!representativesResponse) {
+      return [] as any[];
+    }
+
+    if (Array.isArray(representativesResponse)) {
+      return representativesResponse as any[];
+    }
+
+    if ('representatives' in representativesResponse) {
+      return (representativesResponse as any)?.representatives ?? [];
+    }
+
+    console.warn('⚠️ Unexpected response shape for /api/representatives', representativesResponse);
+    return [] as any[];
+  }, [representativesResponse]);
 
   // دریافت لیست batches برای انتخاب اختیاری
   const { data: batches = [], isLoading: batchesLoading } = useQuery({
@@ -182,7 +199,7 @@ export function InvoiceManualForm({ onSuccess, editInvoice }: InvoiceManualFormP
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {(representatives as any[]).map((rep: any) => (
+                      {representatives.map((rep: any) => (
                         <SelectItem key={rep.id} value={rep.id.toString()}>
                           {rep.name} - {rep.code}
                         </SelectItem>
@@ -285,7 +302,7 @@ export function InvoiceManualForm({ onSuccess, editInvoice }: InvoiceManualFormP
                 <FormItem>
                   <FormLabel>دسته فاکتور (اختیاری)</FormLabel>
                   <Select
-                    onValueChange={(value) => field.onChange(value ? Number(value) : undefined)}
+                    onValueChange={(value) => field.onChange(value === 'none' ? undefined : Number(value))}
                     value={field.value?.toString() || ""}
                     disabled={batchesLoading}
                   >

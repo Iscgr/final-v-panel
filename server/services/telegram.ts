@@ -42,6 +42,8 @@ export interface TelegramMessage {
   
   /** تعداد دفعات ارسال - از invoice.telegramSendCount */
   sendCount?: number;
+    /** هندل تلگرام نماینده - از representative.telegramHandle (بدون یا با @) */
+    telegramHandle?: string | null;
 }
 
 // --- E-C1 Shadow Integration Imports ---
@@ -99,7 +101,8 @@ export async function sendInvoiceToTelegram(
       issue_date: message.issueDate,
       status: message.status,
       portal_link: productionPortalLink,
-      resend_indicator: resendIndicator
+      resend_indicator: resendIndicator,
+      telegram_handle: (message.telegramHandle && message.telegramHandle.trim() !== '') ? (message.telegramHandle.startsWith('@') ? message.telegramHandle : '@'+message.telegramHandle) : 'ثبت نشده'
     };
 
     // Replace all variables in template
@@ -210,7 +213,8 @@ export const TELEGRAM_TEMPLATE_VARIABLES = [
   'issue_date',
   'status',
   'portal_link',
-  'resend_indicator'
+  'resend_indicator',
+  'telegram_handle'
 ] as const;
 
 /**
@@ -223,6 +227,7 @@ export function getDefaultTelegramTemplate(): string {
 🏪 نماینده: {representative_name}
 👤 صاحب فروشگاه: {shop_owner}
 📱 شناسه پنل: {panel_id}
+💬 تلگرام: {telegram_handle}
 💰 مبلغ فاکتور: {amount} تومان
 📅 تاریخ صدور: {issue_date}
 🔍 وضعیت: {status}

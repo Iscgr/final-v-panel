@@ -818,6 +818,42 @@
     }
   }
 
+  /* Shimmer Animation for Progress Bars and Skeletons */
+  @keyframes shimmer {
+    0% {
+      background-position: -1000px 0;
+    }
+    100% {
+      background-position: 1000px 0;
+    }
+  }
+
+  .shimmer-bg {
+    animation: shimmer 2s infinite linear;
+    background: linear-gradient(to right, transparent 0%, #e2e8f0 50%, transparent 100%);
+    background-size: 1000px 100%;
+  }
+
+  .dark .shimmer-bg {
+      background: linear-gradient(to right, transparent 0%, #374151 50%, transparent 100%);
+      background-size: 1000px 100%;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  .animate-shimmer {
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
   /* RTL Support */
   .rtl {
     direction: rtl;

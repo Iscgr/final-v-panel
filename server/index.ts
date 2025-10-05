@@ -5,6 +5,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes.js"; // Correct path
+import ensurePortalContentBootstrap from "./bootstrap/portal-content.js";
 import { setupVite, serveStatic, log } from "./vite.js";
 import { checkDatabaseHealth, closeDatabaseConnection, pool } from "./db.js";
 import { performanceMonitoringMiddleware } from "./middleware/performance.js";
@@ -70,7 +71,7 @@ const sessionMiddleware = session({
   store: new PgSession({
     pool: pool as any, // Type assertion for compatibility
     tableName: 'session',
-    createTableIfMissing: true
+    createTableIfMissing: true,
   }),
   secret: process.env.SESSION_SECRET || 'fallback-secret-key-change-in-production',
   resave: false,
@@ -224,6 +225,12 @@ app.use((req, res, next) => {
     // Continue starting server - will retry connections as needed
   } else {
     log('Database connection successful', 'database');
+  }
+
+  try {
+    await ensurePortalContentBootstrap(console);
+  } catch (error) {
+    log(`Portal content bootstrap failed: ${(error as Error).message}`, 'bootstrap');
   }
 
   const server = await registerRoutes(app);
