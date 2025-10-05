@@ -375,6 +375,7 @@ export async function processUsageDataSequential(
 ): Promise<{
   processedInvoices: ProcessedInvoice[],
   newRepresentatives: any[],
+  placeholderRepresentatives: string[],
   statistics: {
     totalRecords: number,
     uniqueRepresentatives: number,
@@ -412,6 +413,7 @@ export async function processUsageDataSequential(
   // مرحله 3: پردازش sequential هر نماینده با بهینه‌سازی حافظه
   const processedInvoices: ProcessedInvoice[] = [];
   const newRepresentatives: any[] = [];
+  const placeholderRepresentatives: string[] = [];
   const { db: dbInstance } = await import("../db.js");
   const defaultSalesPartnerId = await getOrCreateDefaultSalesPartner(dbInstance);
   
@@ -442,7 +444,28 @@ export async function processUsageDataSequential(
       });
       
       if (validRecords.length === 0) {
-        console.log(`❌ No valid records found for ${adminUsername}, skipping...`);
+        console.log(`❌ No valid records found for ${adminUsername}, creating placeholder representative if missing...`);
+
+        try {
+          let representative = await storage.getRepresentativeByPanelUsername(adminUsername) ||
+                               await storage.getRepresentativeByCode(adminUsername);
+
+          if (!representative) {
+            const newRepData = await createRepresentativeFromUsageData(
+              adminUsername,
+              dbInstance,
+              defaultSalesPartnerId
+            );
+            representative = await storage.createRepresentative(newRepData);
+            newRepresentatives.push(representative);
+          }
+
+          await storage.updateRepresentativeFinancials(representative.id);
+          placeholderRepresentatives.push(adminUsername);
+        } catch (placeholderError) {
+          console.error(`⚠️ Failed to ensure placeholder representative for ${adminUsername}:`, placeholderError);
+        }
+
         processedCount++;
         continue;
       }
@@ -531,6 +554,7 @@ export async function processUsageDataSequential(
   return {
     processedInvoices,
     newRepresentatives,
+    placeholderRepresentatives,
     statistics: {
       totalRecords: usageData.length,
       uniqueRepresentatives: Object.keys(representativeGroups).length,

@@ -70,7 +70,34 @@ export function registerStandardizedInvoiceRoutes(app: any, requireAuth: any, st
 
       console.log(`✅ Validation Results: ${valid.length} valid, ${invalid.length} invalid`);
 
-      if (valid.length === 0) {
+      const normalizedValidRecords = valid.map(record => ({
+        ...record,
+        admin_username: record.admin_username.trim()
+      }));
+
+      const validAdminSet = new Set(normalizedValidRecords.map(record => record.admin_username));
+      const invalidRepresentativeMeta = new Map<string, { reasons: Set<string>; count: number }>();
+
+      invalid.forEach(({ record, errors }) => {
+        const rawAdmin = typeof record?.admin_username === 'string' ? record.admin_username.trim() : '';
+        if (!rawAdmin) {
+          return;
+        }
+
+        const entry = invalidRepresentativeMeta.get(rawAdmin) ?? { reasons: new Set<string>(), count: 0 };
+        errors.forEach(error => entry.reasons.add(error));
+        entry.count += 1;
+        invalidRepresentativeMeta.set(rawAdmin, entry);
+      });
+
+      const invalidOnlyAdminSet = new Set<string>();
+      invalidRepresentativeMeta.forEach((_meta, admin) => {
+        if (!validAdminSet.has(admin)) {
+          invalidOnlyAdminSet.add(admin);
+        }
+      });
+
+      if (normalizedValidRecords.length === 0) {
         return res.status(400).json({ 
           success: false,
           error: "هیچ رکورد معتبری یافت نشد", 
@@ -107,13 +134,17 @@ export function registerStandardizedInvoiceRoutes(app: any, requireAuth: any, st
         : null;
 
       // پردازش استاندارد
-  const processedInvoices = processStandardUsageData(valid, invoiceDate);
+      const processedInvoices = processStandardUsageData(normalizedValidRecords, invoiceDate);
       console.log(`🔄 Processed ${processedInvoices.length} invoices`);
+
+      const { db } = await import("../db.js");
+      const defaultSalesPartnerId = await getOrCreateDefaultSalesPartner(db);
 
       // ایجاد فاکتورها در دیتابیس
       const createdInvoices = [];
       const newRepresentatives = [];
-  const affectedSalesPartnerIds = new Set<number>();
+      const placeholderRepresentatives: Array<{ code: string; reasons: string[]; recordCount: number }> = [];
+      const affectedSalesPartnerIds = new Set<number>();
 
       for (const processedInvoice of processedInvoices) {
         try {
@@ -123,10 +154,6 @@ export function registerStandardizedInvoiceRoutes(app: any, requireAuth: any, st
 
           if (!representative) {
             console.log(`➕ Creating new representative: ${processedInvoice.representativeCode}`);
-
-            // ایجاد نماینده جدید با defaultSalesPartner
-            const { db } = await import("../db.js");
-            const defaultSalesPartnerId = await getOrCreateDefaultSalesPartner(db);
 
             const newRepData = {
               name: `فروشگاه ${processedInvoice.representativeCode}`,
@@ -180,6 +207,49 @@ export function registerStandardizedInvoiceRoutes(app: any, requireAuth: any, st
         }
       }
 
+      if (invalidOnlyAdminSet.size > 0) {
+        console.log(`⚠️ Creating placeholder representatives for ${invalidOnlyAdminSet.size} admin_username(s) with invalid usage totals`);
+      }
+
+      for (const adminUsername of invalidOnlyAdminSet) {
+        try {
+          let representative = await storage.getRepresentativeByPanelUsername(adminUsername) ||
+                               await storage.getRepresentativeByCode(adminUsername);
+
+          if (representative) {
+            continue;
+          }
+
+          console.log(`➕ Creating placeholder representative (no invoice) for: ${adminUsername}`);
+          const newRepData = {
+            name: `فروشگاه ${adminUsername}`,
+            code: adminUsername,
+            panelUsername: adminUsername,
+            publicId: generatePublicId(adminUsername),
+            salesPartnerId: defaultSalesPartnerId,
+            isActive: true
+          };
+
+          representative = await storage.createRepresentative(newRepData);
+          newRepresentatives.push(representative);
+          placeholderRepresentatives.push({
+            code: adminUsername,
+            reasons: Array.from(invalidRepresentativeMeta.get(adminUsername)?.reasons ?? []),
+            recordCount: invalidRepresentativeMeta.get(adminUsername)?.count ?? 0
+          });
+
+          await storage.updateRepresentativeFinancials(representative.id);
+
+          if (representative.salesPartnerId != null) {
+            affectedSalesPartnerIds.add(representative.salesPartnerId);
+          } else {
+            affectedSalesPartnerIds.add(defaultSalesPartnerId);
+          }
+        } catch (error) {
+          console.error(`❌ Error creating placeholder representative for ${adminUsername}:`, error);
+        }
+      }
+
       // بروزرسانی اطلاعات مالی شرکای فروش تحت تأثیر
       for (const partnerId of affectedSalesPartnerIds) {
         try {
@@ -209,10 +279,16 @@ export function registerStandardizedInvoiceRoutes(app: any, requireAuth: any, st
           batchId: currentBatch?.id,
           totalAmount: createdInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount), 0),
           statistics: {
-            totalRecords: valid.length,
+            totalRecords: usageRecords.length,
+            validRecords: normalizedValidRecords.length,
+            invalidRecords: invalid.length,
+            invalidOnlyRepresentatives: invalidOnlyAdminSet.size,
             processedInvoices: processedInvoices.length,
-            successfulInvoices: createdInvoices.length
-          }
+            successfulInvoices: createdInvoices.length,
+            placeholderRepresentatives: placeholderRepresentatives.length,
+            totalUniqueRepresentatives: validAdminSet.size + invalidOnlyAdminSet.size
+          },
+          placeholderRepresentatives
         }
       };
 

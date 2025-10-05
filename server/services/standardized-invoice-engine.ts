@@ -87,23 +87,22 @@ export function parseStandardJsonData(jsonData: string): StandardUsageRecord[] {
 function validateAndCleanRecords(rawRecords: any[]): StandardUsageRecord[] {
   return rawRecords
     .filter(item => {
-      // بررسی‌های اساسی
       if (!item || typeof item !== 'object') return false;
-      if (!item.admin_username || !item.amount || !item.event_timestamp) return false;
-      
-      // بررسی مبلغ
-      const amount = parseFloat(item.amount || '0');
-      if (isNaN(amount) || amount <= 0) return false;
-      
+      if (!item.admin_username || !item.event_timestamp) return false;
       return true;
     })
-    .map(item => ({
-      admin_username: item.admin_username.toString().trim(),
-      amount: parseFloat(item.amount).toString(),
-      event_timestamp: item.event_timestamp,
-      event_type: item.event_type || 'UNKNOWN',
-      description: item.description || 'بدون توضیح'
-    }));
+    .map(item => {
+      const rawAmount = typeof item.amount === 'number' ? item.amount : Number.parseFloat(String(item.amount ?? '0'));
+      const normalizedAmount = Number.isFinite(rawAmount) ? rawAmount : 0;
+
+      return {
+        admin_username: item.admin_username.toString().trim(),
+        amount: normalizedAmount.toString(),
+        event_timestamp: item.event_timestamp,
+        event_type: item.event_type || 'UNKNOWN',
+        description: item.description || 'بدون توضیح'
+      };
+    });
 }
 
 /**
