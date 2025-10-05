@@ -65,7 +65,7 @@ router.put('/draft', async (req: Request, res: Response) => {
     res.json({ success: true, updated: true, draftVersion: nextDraftVersion, status });
   } catch (e) {
     console.error('❌ unified update draft error:', e);
-    res.status(500).json({ success: false, error: 'خطا در ذخیره پیش نویس' });
+    res.status(500).json({ success: false, error: 'خطا در ذخیره پیش\u200cنویس' });
   }
 });
 
