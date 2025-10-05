@@ -42,8 +42,8 @@ RUN npm run build \
 # ==============================================================================
 FROM node:20-alpine AS production
 
-# Install only necessary system dependencies
-RUN apk add --no-cache postgresql-client
+# Install required system dependencies
+RUN apk add --no-cache postgresql-client curl
 
 # Create a non-root user and necessary directories first
 RUN addgroup -S nodejs && adduser -S marfanet -G nodejs && \

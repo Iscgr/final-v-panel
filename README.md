@@ -1,356 +1,218 @@
-﻿# MarFaNet – دفترچه عملیاتی ۲۰۲۵
+﻿## Final V Panel
 
-> این سند تنها منبع رسمی برای راه‌اندازی، بهره‌برداری، نگه‌داری و عیب‌یابی سامانه مالی «MarFaNet» است. متن به گونه‌ای نوشته شده که تیم فنی، عملیات و حتی مدیر محصول بتوانند بدون ارجاع به منبع دیگری به جواب برسند.
+**آخرین به‌روزرسانی:** ۲۰۲۵-۱۰-۰۴  
+**لایه‌های اصلی:** React 18 + Vite (Frontend) · Node.js 20 + Express + Drizzle (Backend) · FastAPI (Drift/تحلیل) · PostgreSQL 14 + Redis · Docker + Nginx (استقرار)
 
-## فهرست سریع
-- [معرفی اجمالی](#معرفی-اجمالی)
-- [اسکن سه‌بعدی سامانه](#اسکن-سه‌بعدی-سامانه)
-- [ساختار دایرکتوری‌ها](#ساختار-دایرکتوریها)
-- [بک‌اند (Node/Express)](#بکاند-nodeexpress)
-- [فرانت‌اند (React/Vite)](#فرانتاند-reactvite)
-- [سرویس پایتونی مکمل](#سرویس-پایتونی-مکمل)
-- [پیکربندی و متغیرهای محیطی](#پیکربندی-و-متغیرهای-محیطی)
-- [راه‌اندازی محلی](#راهاندازی-محلی)
-- [اجرای Docker و Compose](#اجرای-docker-و-compose)
-- [مهاجرت و مدیریت دیتابیس](#مهاجرت-و-مدیریت-دیتابیس)
-- [ویژگی‌های زیرساختی و Feature Flag](#ویژگیهای-زیرساختی-و-feature-flag)
-- [اسکریپت‌ها و اتوماسیون‌ها](#اسکریپتها-و-اتوماسیونها)
-- [تست، مانیتورینگ و سلامت](#تست-مانیتورینگ-و-سلامت)
-- [عیب‌یابی سریع](#عیبیابی-سریع)
-- [پشتیبان‌گیری و Disaster Recovery](#پشتیبانگیری-و-disaster-recovery)
-- [چرخه انتشار و نگه‌داری](#چرخه-انتشار-و-نگهداری)
-- [پیشنهادهای بعدی](#پیشنهادهای-بعدی)
+### نمای کلی سه‌هسته‌ای
+- **Frontend:** پنل ادمین و پورتال عمومی با Tailwind، Radix UI و مدیریت State ایزوله، آماده برای تست کمپوننتی و Playwright.
+- **Backend:** API کاملاً تایپ‌شده با Drizzle ORM، سیستم Outbox، Feature Flags و سرویس پشتیبان‌گیری.
+- **UX & Operations:** تأمین تجربه پایدار، مانیتورینگ SLA، سیاست‌های پشتیبان‌گیری/بازیابی و مسیرهای عیب‌یابی سریع.
 
-## معرفی اجمالی
-سامانه MarFaNet یک پلتفرم یکپارچه برای مدیریت مالی نمایندگان، پایش KPI، تولید و ارسال فاکتور، پورتال عمومی و زیرسیستم‌های مانیتورینگ است. مهم‌ترین فناوری‌ها:
-
-| لایه | فناوری/ابزار | توضیح |
-|------|---------------|-------|
-| Backend | Node.js 20 (TypeScript) + Express | API یکپارچه، احراز هویت، مدیریت Session، Feature Flags |
-| Frontend | React 18 + Vite + Tailwind/Radix UI | پنل مدیریتی، پورتال نمایندگان، روندهای Real-time |
-| Database | PostgreSQL 14 (Drizzle ORM) | ذخیره فاکتورها، پرداخت‌ها، outbox، محتوا |
-| Cache/Session | Redis (alpine) | نگه‌داری Session و کش‌های سبک |
-| Automation | Docker/Docker Compose + npm scripts | استقرار، build و عملیات مداوم |
-| خدمات تکمیلی | FastAPI (Python) | محاسبات Decimal و Drift Detection دقیق |
-
-خروجی نهایی روی پورت 3000 در دسترس است و API و UI را همزمان سرو می‌کند.
-
-## اسکن سه‌بعدی سامانه
-این بخش دید ۳۶۰ درجه‌ای از ارتباط لایه‌ها، داده‌ها و جریان عملیات ارائه می‌کند.
-
-### دید معماری
-```mermaid
-graph TD
-    subgraph Client
-        A[React Admin Panel]
-        B[Public Portal]
-    end
-    subgraph Server
-        C[Express API]
-        D[Unified Auth]
-        E[Outbox Worker]
-        F[Feature Flag Manager]
-    end
-    subgraph Data
-        G[(PostgreSQL)]
-        H[(Redis)]
-        I[(Uploads)]
-    end
-    subgraph Services
-        J[Python Drift Engine]
-        K[Telegram Bot]
-    end
-
-    A -->|REST/JSON| C
-    B -->|REST/JSON| C
-    C -->|Sessions| H
-    C -->|ORM| G
-    C -->|File Links| I
-    C -->|Enqueue| E
-    E -->|Status Updates| G
-    J -->|Read/Write| G
-    E -->|Send| K
-    F --> C
-    D --> C
-```
-
-### لایه‌ها و مسئولیت‌ها
-- **لایه نمایشی**: کامپوننت‌های React با React Query، مدیریت وضعیت احراز هویت، طراحی واکنش‌گرای موبایل.
-- **لایه خدمات HTTP**: Express با middlewareهای امنیتی (Headers، Session)، ثبت وقایع ساختاریافته، مدیریت فایل‌های بارگذاری‌شده.
-- **لایه داده**: PostgreSQL (schema در `shared/schema.ts`) با Drizzle برای migrations، Redis برای session و کش موقت.
-- **لایه یکپارچگی**: Outbox، Drift Job، Feature Flags چندمرحله‌ای، Portal bootstrap.
-- **لایه محاسبات دقیق**: سرویس FastAPI برای عملیات Decimal و مقایسه ledger در سناریوهای drift.
-
-### جریان کلیدی «بارگذاری فاکتور تا ارسال تلگرام»
-1. کاربر فایل JSON را در UI بارگذاری می‌کند (`client/src/components/invoice-upload.tsx`).
-2. API `/api/invoices/generate-standard` فایل را در `uploads/` ذخیره و درون دیتابیس می‌نویسد.
-3. رویداد ثبت‌شده وارد outbox می‌شود؛ Outbox Worker طبق Feature Flag فعال شده یا خیر.
-4. پیام تلگرام از طریق Outbox Worker و سرویس ارسال (REST) به نماینده ارسال و در `telegram_send_history` ثبت می‌شود.
-5. داشبورد لحظه‌ای وضعیت job و ارسال را با APIهای Import Jobs / Outbox رصد می‌کند.
-
-> به‌روزرسانی Phase3: متغیر تازه `telegram_handle` به سیستم قالب پیام تلگرام افزوده شد که از فیلد `telegramId` نماینده (قابل ویرایش در صفحه پروفایل نماینده) استخراج می‌شود. در صورت نبود مقدار، متن «ثبت نشده» جایگزین می‌گردد.
-
-## ساختار دایرکتوری‌ها
-```
-├── client/             # فرانت‌اند React + Vite
+## ساختار مخزن
+```text
+.
+├── client/                # اپ React (پنل ادمین + پورتال)
 │   ├── src/
-│   │   ├── pages/      # صفحات داشبورد و پورتال
-│   │   ├── components/ # UI، فرم‌ها، نمودارها
-│   │   ├── contexts/   # Auth، Sidebar، Theme
-│   │   ├── services/   # لایه ارتباط با API (fetch/query)
-│   │   └── hooks/      # Hookهای سفارشی مانند polling
-├── server/             # بک‌اند Express + TypeScript
-│   ├── routes/         # فایل‌های Route تفکیک‌شده بر اساس دامنه
-│   ├── services/       # Outbox، Drift، Feature Flags، Portal
-│   ├── middleware/     # Performance، Unified Auth
-│   ├── bootstrap/      # Seed اولیه محتوا و تنظیمات پورتال
-│   └── tests/          # تست‌های واحد (مثلاً outbox.spec.ts)
-├── shared/             # اسکیمای Drizzle ORM و انواع مشترک
-├── scripts/            # اسکریپت‌های TypeScript عملیاتی
-├── python-service/     # سرویس FastAPI برای محاسبات Decimal
-├── uploads/            # مسیر فایل‌های بارگذاری‌شده (ویدیو، QR، JSON)
-├── docker-compose.yml  # استقرار چند سرویسه (App + Postgres + Redis)
-├── Dockerfile          # build چندمرحله‌ای (builder + production)
-└── .env.example        # مثال پیکربندی محیط
+│   │   ├── components/    # طراحی ماژولار UI (Radix, Tailwind)
+│   │   ├── contexts/      # State Application و Auth
+│   │   ├── pages/         # صفحات مدیریتی و پورتال
+│   │   ├── services/      # فراخوانی API و کش سمت کلاینت
+│   │   └── tests/         # الگوهای Vitest / RTL / Playwright
+├── server/                # هسته Node 20 + Express
+│   ├── routes/            # ماژول‌های API (Invoices, Portal, System)
+│   ├── services/          # Outbox، Drift Shadow، Feature Flags، Backup
+│   ├── middleware/        # امنیت، عملکرد، سازگاری Android
+│   ├── bootstrap/         # Seed و مقداردهی اولیه
+│   └── tests/             # تست‌های Vitest (نمونه: Outbox)
+├── shared/                # اسکیمای Drizzle و انواع مشترک
+├── scripts/               # اسکریپت‌های عملیاتی و رگرسیون
+├── python-service/        # FastAPI برای Drift و محاسبات دقیق
+├── Dockerfile             # Build چندمرحله‌ای (Builder + Runtime)
+├── docker-compose.yml     # استک توسعه (app + db + redis)
+├── nginx.conf             # کانفیگ Reverse Proxy نمونه
+├── install.sh             # استقرار خودکار روی Ubuntu 22
+├── validate-install.sh    # اعتبارسنجی نصب Production
+├── logs/.gitkeep          # نگه‌دار پوشه لاگ (Volume در Production)
+├── uploads/.gitkeep       # پوشه فایل‌های آپلودی (Volume در Production)
+└── backups/.gitkeep       # مسیر نسخه‌های پشتیبان (Volume در Production)
 ```
-
-## بک‌اند (Node/Express)
-- فایل ورودی: `server/index.ts`
-  - بارگذاری خودکار `.env`
-  - تنظیم CORS و هدرهای امنیتی متفاوت برای پورتال عمومی و پنل ادمین
-  - مدیریت Session با `connect-pg-simple` (جدول `session` در PostgreSQL)
-  - سرو فایل‌های `uploads/` با کنترل نوع محتوا (تصاویر، ویدیو)
-  - آمار عملکرد و لاگ‌های ساختاریافته بر اساس مسیرهای `API/ AUTH`
-  - ثبت و راه‌اندازی سرویس‌های پس‌زمینه (OutboxWorker، OutboxMonitor، DriftJobService)
-  - مسیریابی سلامت (`/health`، `/ready`) و مدیریت خطا
-  - در حالت توسعه Vite Dev server را تزریق می‌کند؛ در production دارایی‌های build شده را سرو می‌کند.
-
-- **مسیرها (Routes)** مهم:
-  - `standardized-invoice-routes.ts`: بارگذاری و تولید فاکتور استاندارد از فایل JSON
-  - `portal-content-routes.ts` + `admin-resources-routes.ts`: مدیریت محتوای پورتال عمومی
-  - `feature-flag-routes.ts` و `multistage-flag-routes.ts`: مدیریت فلگ‌ها در حالت چندمرحله‌ای (off/shadow/on)
-  - `outbox-routes.ts`: مانیتورینگ و کنترل صف پیام‌های تلگرام (E-C1)
-  - `kpi-metrics-routes.ts`, `guard-metrics-routes.ts`: گزارش‌های عملیاتی و SLA
-
-- **سرویس‌ها (Services)**
-  - `feature-flag-manager.ts`: ذخیره وضعیت فلگ‌ها (حالت چند مرحله‌ای)، API برای خواندن/نوشتن، پشتیبانی default fallback
-  - `outbox.ts`, `outbox-worker.ts`, `outbox-monitor.ts`: الگوی Outbox با retry و متریک‌های لغزش
-  - `drift-job-service.ts`: اجرای دوره‌ای آشتی داده و هماهنگی با سرویس پایتون برای محاسبه دقیق
-  - `portal-content.ts`: bootstrap اولیه محتوا و fallback برای پورتال
-
-- **مدیریت دیتابیس**
-  - اتصال با `pg` و Drizzle ORM (`db.ts`, `database-manager.ts`)
-  - `shared/schema.ts` حاوی تمامی جداول (invoices, payments, representatives, outbox, ...)
-  - مایگریشن‌ها در `migrations/` و `server/migrations/`
-
-## فرانت‌اند (React/Vite)
-- نقطه ورود: `client/src/main.tsx` → `App.tsx`
-- Routing با `wouter`، مدیریت Auth یکپارچه از طریق `UnifiedAuthProvider`
-- React Query (`queryClient`) برای cache داده و polling هوشمند
-- UI بر پایه Radix UI + Tailwind + Shadcn الگوهای ترکیبی (components/ui)
-- صفحات کلیدی:
-  - `pages/dashboard.tsx`: داشبورد جامع با KPI و نمودارها
-  - `pages/invoices.tsx` و `pages/InvoiceManagement.tsx`: مدیریت فاکتور، بارگذاری و پیشرفت
-  - `pages/portal.tsx`: نمایش محتوای عمومی برای نمایندگان با دسترسی publicId
-  - `pages/admin/DebugActionsPanel.tsx`: عملیات مهندسی (Retry outbox، پاک‌سازی cache و ...)
-  - `pages/admin/PortalContentManager.tsx`: UI چهار تبه برای مدیریت محتوا، اطلاعیه‌ها، دانلودها و پیش‌نمایش
-- Components مهم:
-  - `components/invoice-upload.tsx`: بارگذاری JSON، ساخت FormData، کنترل خطاها و تعامل با API
-  - `components/dashboard/LiveProcessingMonitor.tsx`: پایش real-time پردازش فایل و import jobs
-  - `components/system/ErrorBoundary.tsx`: مدیریت خطاهای React و نمایش fallback بومی برای فارسی
-- Contexts:
-  - `unified-auth-context`, `sidebar-context`, `theme` (در صورت نیاز) برای مدیریت وضعیت جهانی UI
-- تست‌ها: فولدر `client/src/tests/` برای تست‌های React Testing Library (محیط آماده است، نیازمند گسترش بیشتر)
-
-## سرویس پایتونی مکمل
-- مسیر: `python-service/`
-- فناوری: FastAPI + Psycopg2 + Decimal با دقت ۲۸ رقم
-- کاربرد:
-  - `/calculate/bulk-debt`: محاسبه سریع مجموع بدهی نمایندگان به صورت batched و بدون خطای شناور
-  - `/reconcile/drift-detection`: مقایسه Legacy Debt، Ledger Allocation و Cache برای یافتن Drift و ارائه متادیتا
-  - `/reconcile/drift-detection-legacy`: سازگاری با نسخه‌های قبلی
-- اجرای محلی: `uvicorn main:app --host 0.0.0.0 --port 8001`
-- اتصال به PostgreSQL با متغیرهای محیطی مستقل (`DB_HOST`, `DB_NAME`, ...)
-- در Compose پیش‌فرض فعال نشده؛ می‌توان برای استقرارهای پیشرفته به `docker-compose.yml` افزود.
 
 ## پیکربندی و متغیرهای محیطی
-مقداردهی از `.env` (نمونه در `.env.example`). مهم‌ترین متغیرها:
+نمونهٔ پایه در `.env.example` قرار دارد. کلیدهای حیاتی:
 
-| متغیر | توضیح | وضعیت |
-|--------|-------|--------|
-| `DATABASE_URL` | URL اتصال PostgreSQL | الزامی (در Compose نیز override شده) |
-| `SESSION_SECRET` | کلید رمزنگاری Session | الزامی (در production حتماً تصادفی) |
-| `PORT` | پورت سرویس Node | پیش‌فرض 3000 |
-| `APP_URL` | آدرس عمومی سرویس | برای لینک‌سازی پورتال |
-| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | کاربر اولیه پنل | برای bootstrap و seed |
-| `TELEGRAM_BOT_TOKEN` | ارسال پیام تلگرام | ضروری برای Outbox Worker |
-| `OPENAI_API_KEY`, `GOOGLE_GEMINI_API_KEY` | قابلیت‌های هوش مصنوعی | اختیاری؛ در صورت عدم تنظیم، API مربوط خاموش است |
-| `SMTP_*` | ارسال ایمیل‌های اطلاع‌رسانی | اختیاری |
-| `WEBHOOK_URL` | اعلان رویدادها | اختیاری |
-| `LOG_LEVEL`, `ENABLE_PERFORMANCE_MONITORING` | کنترل لاگ | گزینه‌های عیب‌یابی |
+| کلید | توضیح | یادداشت |
+|------|-------|---------|
+| `DATABASE_URL` | اتصال PostgreSQL | در Docker → `postgresql://postgres:postgres@db:5432/marfanet` |
+| `SESSION_SECRET` | کلید رمزنگاری Session | در Production طولانی، تصادفی، همراه با HTTPS (`secure=true`) |
+| `PORT` | پورت اپلیکیشن | پیش‌فرض `3000` |
+| `ADMIN_USERNAME`/`ADMIN_PASSWORD` | حساب اولیهٔ ادمین | توسط `install.sh` نیز تولید می‌شود |
+| `TELEGRAM_BOT_TOKEN` | ارسال هشدار تلگرام | برای Worker Outbox ضروری |
+| `REDIS_URL` | اتصال Redis | در Compose تنظیم شده |
+| `APP_URL` / `PUBLIC_PORTAL_BASE_URL` | نشانی عمومی پنل و پورتال | برای لینک‌سازی ایمیل و Portal |
+| `LOG_DIRECTORY` | مسیر لاگ ساختاریافته | در Docker روی `/app/logs` پیکربندی شود |
 
-> در Docker Compose مقدار `DATABASE_URL` و `REDIS_URL` مستقیماً داخل سرویس `app` override می‌شوند.
+کلیدهای اختیاری: `OPENAI_API_KEY`, `SMTP_*`, `WEBHOOK_URL`, `ENABLE_PERFORMANCE_MONITORING` و Feature Flagهای فعال‌سازی سرویس‌ها.
 
-## راه‌اندازی محلی
-۱. پیش‌نیازها: Node.js 20، PostgreSQL، Redis.
-۲. نصب وابستگی‌ها: `npm install`
-۳. اعمال اسکیمای دیتابیس: `npm run db:push`
-۴. اجرای سرور توسعه: `npm run dev`
-   - API و UI در http://localhost:3000
-   - Vite Hot Reload فعال است.
-۵. اجرای تنها فرانت‌اند (برای توسعه UI): `npm run dev:client`
-   - سرور در پورتی که Vite تعیین می‌کند بالا می‌آید (معمولاً 5173)، نیازمند پراکسی یا تنظیم CORS است.
+> **امنیت:** فایل `.env` در Production با سطح دسترسی `600` نگهداری و از نسخه‌سازی حذف شود.
 
-## اجرای Docker و Compose
-### ساخت تصویر تولیدی (Dockerfile چند مرحله‌ای)
-- Stage `builder`: نصب کامل وابستگی‌ها، build سرور (`tsc`) و فرانت (`vite`)، پاک‌سازی devDependencies.
-- Stage `production`: تصویر node:20-alpine با کاربر غیر ریشه (`marfanet`)، کپی `dist/` و `node_modules`، آماده اجرا با `start-server.cjs`.
+## راه‌اندازی محلی (Dev / Test)
+1. **پیش‌نیازها:** Node.js 20، npm 10، PostgreSQL و Redis محلی.
+2. **نصب وابستگی‌ها:**
+   ```bash
+   npm install
+   ```
+3. **همگام‌سازی دیتابیس (Drizzle):**
+   ```bash
+   npm run db:push
+   ```
+4. **اجرای هم‌زمان API + UI:**
+   ```bash
+   npm run dev
+   ```
+   - اپلیکیشن روی `http://localhost:3000`؛ HMR فعال است.
+5. **اجرای صرفاً Frontend (در صورت نیاز):**
+   ```bash
+   npm run dev:client
+   ```
+   - Vite روی `http://localhost:5173`؛ نیازمند CORS یا Proxy.
+6. **اسکریپت‌های پرکاربرد:**
+   - `npm run check` → بررسی TypeScript.
+   - `npm run test:outbox` → تست واحد Outbox.
+   - `npx ts-node scripts/seed-portal-settings.ts` → Seed اولیهٔ محتوا.
 
-### اجرای تک‌سرویسی
-```bash
-docker build -t marfanet:local .
-docker run --rm -p 3000:3000 --name marfanet \
-  -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/marfanet \
-  -e SESSION_SECRET=$(openssl rand -hex 32) \
-  -v $(pwd)/logs:/app/logs \
-  --add-host=host.docker.internal:host-gateway \
-  marfanet:local
+## استقرار بر Ubuntu 22 + Docker
+### پیش‌نیازها
+- Ubuntu 22.04 با دسترسی sudo.
+- Docker Engine، Docker Compose Plugin و Nginx (SSL از طریق Certbot).
+- حداقل ۱۰GB فضای دیسک و ۲GB RAM.
+
+### فرآیند استاندارد
+1. اجرای `sudo bash install.sh` (پیش از اجرا URL مخزن/برنچ را به‌روز کنید).
+2. تولید تصویر تولیدی:
+   - **Builder:** `npm ci` → `npm run build` → خروجی `dist` → `npm prune --omit=dev`.
+   - **Runtime:** کاربر غیرریشه `marfanet`، کپی آرتیفکت‌ها، نصب `postgresql-client` و `curl` برای Healthcheck پیش‌فرض.
+3. سازوکار Compose (توسعه): `app`, `db (postgres:14)`, `redis`.
+4. استقرار بدون Downtime:
+   ```bash
+   git pull
+   docker compose build --no-cache app
+   docker compose up -d app
+   ```
+
+### توصیه‌های Production
+- فایل `docker-compose.prod.yml` خروجی نصب را بازبینی و متناسب با محیط تنظیم کنید.
+- Volumeهای پایدار:
+  ```yaml
+  volumes:
+    - ./logs:/app/logs
+    - ./uploads:/app/uploads
+    - ./backups:/app/backups
+  ```
+- در صورت نیاز به سرویس Drift Python:
+  ```yaml
+  python:
+    build: ./python-service
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+  ```
+- `nginx.conf` نمونهٔ Reverse Proxy است؛ SSL را با Certbot فعال کنید.
+- Rollback سریع:
+  ```bash
+  git checkout <PREVIOUS_COMMIT>
+  docker compose build app && docker compose up -d app
+  ```
+
+## استراتژی تست سه‌محوری
+### ۱) Frontend
+- Vitest + React Testing Library برای کمپوننت‌های بحرانی (`invoice-upload`, `LiveProcessingMonitor`, `SystemSettingsPage`).
+- Playwright/Cypress برای سناریوهای کامل (آپلود فاکتور → Outbox، مدیریت محتوا، Flowهای موبایل).
+- سنجش دسترس‌پذیری با `axe-core` و هدف Lighthouse ≥ 90.
+
+### ۲) Backend و سرویس‌ها
+- Vitest واحد برای `feature-flag-manager`, `portalContentCache`, `backup-service`.
+- Integration با Supertest روی مسیرهای `/api/invoices`, `/api/portal`, `/api/outbox`, `/api/system`, `/api/auth`.
+- سناریوهای سرتاسری روی استک Compose (Node + Postgres + Redis + Python) و پایش عملکرد با k6/Artillery.
+
+### ۳) UX و عملیات
+- Smoke Test پس از استقرار (`scripts/financial-e2e-smoke.ts`).
+- تست پیمایش کیبورد در Dialogها (Playwright).
+- بررسی هدرهای امنیتی، Session Hijacking کنترل‌شده و Rate Limiting پیشنهادی.
+
+### اسکریپت‌های پیشنهادی در `package.json`
+```jsonc
+"scripts": {
+  "test:unit": "vitest",
+  "test:api": "tsx server/tests/api-suite.ts",
+  "test:e2e": "playwright test",
+  "test:smoke": "npx ts-node scripts/financial-e2e-smoke.ts",
+  "lint": "eslint ."
+}
 ```
+Pipeline پیشنهادی: Unit → Integration → E2E + Accessibility؛ گزارش‌ها به عنوان آرتیفکت ذخیره شوند.
 
-### Docker Compose (توصیه‌شده برای Production)
-`docker-compose.yml` سه سرویس را بالا می‌آورد:
-- `app`: تصویر ساخته‌شده از همین مخزن، وابسته به `db` و `redis`
-- `db`: PostgreSQL 14 با healthcheck `pg_isready`
-- `redis`: Redis Alpine با healthcheck `redis-cli ping`
+## عملیات، مانیتورینگ و سلامت
+- **Endpointها:** `GET /health` (وابستگی‌ها + حافظه + uptime)، `GET /ready` (آمادگی Load Balancer).
+- **لاگ‌ها:** فرمت ساختاریافته با پیشوند `STRUCT_LOG`؛ مسیر پیش‌فرض `logs/` (در Docker حتماً Volume).
+- **Outbox Metrics:** مسیر `/api/outbox/metrics` پس از فعال‌سازی `guard_metrics_alerts`؛ پایش SLA و هشدار تلگرام.
+- **پیشنهاد مانیتورینگ:** اتصال لاگ‌ها به ELK/Loki و ساخت داشبورد Grafana سبک.
 
-دستورات کلیدی:
-```bash
-docker compose build
-docker compose up -d
-docker compose logs -f app
-```
-به‌روزرسانی بدون downtime:
-```bash
-git pull
-docker compose build --no-cache app
-docker compose up -d app
-```
-Rollback سریع:
-```bash
-git checkout <PREVIOUS_COMMIT>
-docker compose build app && docker compose up -d app
-```
-
-## مهاجرت و مدیریت دیتابیس
-- ORM اصلی: Drizzle
-- فایل پیکربندی: `drizzle.config.ts`
-- پوشه مایگریشن‌ها: `migrations/` (اصلی) و `server/migrations/` (ویژه سرویس)
-- دستورات متداول:
-  - `npm run db:push`: اعمال مایگریشن به دیتابیس فعلی
-  - `npm run check`: اطمینان از سالم بودن TypeScript
-  - اسکریپت‌های تخصصی (مانند `scripts/drift-shadow.ts`) وضعیت داده را تحلیل و گزارش می‌کنند.
-
-### جداول حیاتی
-- `representatives`, `invoices`, `payments`, `payment_allocations`, `invoice_balance_cache`
-- `outbox`, `guard_metrics_events`, `reconciliation_runs`
-- `portal_content_blocks`, `announcements`, `app_downloads`
-
-## ویژگی‌های زیرساختی و Feature Flag
-- مدیریت فلگ چندمرحله‌ای (off → shadow → on) در `featureFlagManager`
-- فلگ‌های نمونه:
-  - `outbox_enabled`: فعال‌سازی ارسال تلگرام و مانیتور
-  - `guard_metrics_alerts`: روشن کردن مانیتور SLA و هشدارها
-  - `portal_content_read_switch`: سوئیچ تدریجی از تنظیمات legacy به بلوک‌های جدید محتوا
-- API مدیریت فلگ: `/api/feature-flags/multi-stage/update`
-  - Payload نمونه: `{ "feature": "portal_content_read_switch", "state": "shadow" }`
-
-## اسکریپت‌ها و اتوماسیون‌ها
-| فایل | هدف |
-|------|------|
-| `scripts/seed-portal-settings.ts` | مقداردهی اولیه بلوک محتوا، اطلاعیه‌ها و لینک‌های دانلود |
-| `scripts/portal-content-regression.ts` | تست رگرسیونی محتوای پورتال پس از تغییرات |
-| `scripts/drift-shadow.ts` | اجرای حالت سایه‌ای Drift و گزارش تفاوت‌ها |
-| `scripts/backfill-dry-run.ts` | اجرای Dry-run برای Backfill بدون تغییر داده |
-| `scripts/payments-cast-shadow.ts` | بررسی تخصیص پرداخت‌ها و سازگاری Decimal |
-| `scripts/ingest-real-sample.ts` | تزریق فایل نمونه واقع‌گرایانه برای تست پذیرش |
-| `scripts/test-telegram-template-validation.ts` | بررسی قالب پیام تلگرام قبل از انتشار |
-
-## تست، مانیتورینگ و سلامت
-- تست واحد Outbox: `npm run test:outbox`
-  - اسکریپت `server/tests/outbox.spec.ts` enqueue، retry و متریک‌های Outbox را پوشش می‌دهد.
-- مسیرهای پایش:
-  - `GET /health`: وضعیت کلی، حافظه، uptime و اتصال دیتابیس
-  - `GET /ready`: آمادگی سرویس برای Load Balancer
-  - `GET /api/outbox/metrics`: نرخ شکست و جزئیات صف (در صورت فعال بودن فلگ)
-- لاگ‌ها:
-  - مسیر پیش‌فرض: `logs/server.log` (Mount شده در Docker)
-  - لاگ‌های ساختاریافته با پیشوند `STRUCT_LOG`
-
-## عیب‌یابی سریع
-| سناریو | بررسی سریع | راه‌حل پیشنهادی |
-|--------|-------------|------------------|
-| خطای «can’t access lexical declaration» هنگام بارگذاری JSON | نسخه build شده فرانت‌اند را بررسی کنید (متغیرهای تعریف‌نشده) | `client/src/components/invoice-upload.tsx` باید قبل از استفاده متغیر `jobCode` را تعریف کند → build مجدد |
-| عدم ارسال پیام تلگرام | وضعیت فلگ `outbox_enabled` و مقدار `TELEGRAM_BOT_TOKEN` | فعال‌سازی فلگ → بررسی جدول `outbox` برای خطاها |
-| Timeout در پورتال | بررسی هدرهای Android-specific در `server/index.ts` | آزادسازی cache و اطمینان از تنظیم هدرها |
-| اختلاف آمار بدهی | اجرای `/reconcile/drift-detection` در سرویس پایتونی | مقایسه sums و ثبت anomalies |
-| session منقضی سریع | بررسی تنظیمات cookie در `server/index.ts` | تغییر `maxAge` یا فعال کردن HTTPS/secure cookie |
-
-## پشتیبان‌گیری و Disaster Recovery
-- ایجاد بکاپ کامل دیتابیس:
+## پشتیبان‌گیری و بازیابی فاجعه
+- **PostgreSQL:**
   ```bash
   mkdir -p backups
   docker compose exec -T db pg_dump -U postgres marfanet > backups/$(date +%F-%H%M).sql
   ```
-- بازیابی:
   ```bash
   cat backups/FILE.sql | docker compose exec -T db psql -U postgres -d marfanet
   ```
-- پاک‌سازی لاگ‌ها جهت جلوگیری از پر شدن دیسک: `find logs -type f -mtime +15 -delete`
-- برای نگه‌داری Session پس از بازیابی، از جدول `session` نسخه پشتیبان بگیرید (اختیاری).
+- **API Backup:**
+  - `/api/system/backup` → تولید فایل tar.gz شامل NDJSON جداول اصلی.
+  - `/api/system/restore` → بازگردانی کامل (دادهٔ فعلی حذف می‌شود) و ثبت در `backup_audit_log`.
+- **حفظ لاگ‌ها و سشن‌ها:** Volume `./backups` و در صورت نیاز بکاپ از جدول `session`.
+- **پاک‌سازی دوره‌ای:** `find logs -type f -mtime +15 -delete` (خارج از مخزن اجرا شود).
 
-## چرخه انتشار و نگه‌داری
-1. ایجاد شاخه جدید و اعمال تغییرات.
-2. اجرای محلی `npm run check` و تست‌های موردنیاز.
-3. build تصویر جدید: `docker compose build app`
-4. استقرار: `docker compose up -d app`
-5. پایش لاگ‌ها حداقل ۱۵ دقیقه.
-6. در صورت مشاهده خطا: بازگشت به نسخه قبل با checkout commit قبلی.
+## عیب‌یابی سریع
+| سناریو | بررسی سریع | اقدام اصلاحی |
+|--------|-------------|---------------|
+| عدم ارسال پیام تلگرام | بررسی `outbox_enabled` و `TELEGRAM_BOT_TOKEN`، لاگ Outbox | فعال‌سازی Flag، رفع خطاهای صف |
+| خطای آپلود JSON | اعتبارسنجی Build UI و مقداردهی `jobCode` | Build مجدد Frontend، اصلاح داده ورودی |
+| Timeout در پورتال موبایل | هدرهای مخصوص Android در `server/index.ts` | تنظیم مجدد Proxy و Cache |
+| Drift ناهماهنگ | اجرای `/reconcile/drift-detection` در سرویس Python | بررسی آستانه‌های Drift و داده Legacy |
+| Session کوتاه | تنظیم `cookie.secure`, `maxAge`, اجبار HTTPS | بازآرایی Session Store |
 
-### Phase 4 – Portal Content Enhancements
-| قابلیت | توضیح | فایل‌های کلیدی |
-|--------|-------|-----------------|
-| Publication Workflow | singleton state با نسخه‌دهی انتشار (`contentVersion`) + endpoints: `/status`, `/publish` | `migrations/0003_portal_publication_state.sql`, `server/routes/portal-content-routes.ts`, `shared/schema.ts` |
-| Backend Cache (30s TTL) | کش درون‌حافظه‌ای `/full` و `/status` + اینوالیدیشن پس از Mutation | `server/utils/portalContentCache.ts`, `server/routes/portal-content-routes.ts` |
-| Unified Client Invalidation | helper و query keys متمرکز | `client/src/services/portal-content.ts` |
-| Preview Warning Banner | هشدار تغییرات منتشرنشده | `client/src/pages/admin/PortalContentManager.tsx` |
-| Multi-Select & Bulk Delete | حذف گروهی اعلان‌ها/دانلودها (batch UI) | `PortalContentManager.tsx`, `server/routes/admin-resources-routes.ts` |
-| i18n Placeholder & Locale Badge | وضعیت موقت زبان و badge | `PortalContentManager.tsx` |
-| Responsiveness Improvements | بهبود grid/spacing/overflow موبایل | `PortalContentManager.tsx` |
-| Regression Script | سناریوی CRUD + Publish + Cache HIT/MISS | `scripts/portal-content-regression.ts` |
+## Feature Flagهای کلیدی
+| فلگ | هدف | توضیح حالت‌ها |
+|------|-----|---------------|
+| `outbox_enabled` | فعال‌سازی صف تلگرام | `off` / `shadow` / `active` |
+| `guard_metrics_alerts` | مانیتورینگ SLA | ارسال هشدار براساس متریک Outbox |
+| `portal_content_read_switch` | مهاجرت محتوا | `legacy` → `shadow` → `live` |
 
-اجرای اسکریپت رگرسیون:
-```bash
-TEST_BASE_URL=http://localhost:3000 ADMIN_USERNAME=admin ADMIN_PASSWORD=admin npx ts-node scripts/portal-content-regression.ts
-```
+## اسکریپت‌ها و اتوماسیون‌ها
+| فایل | کاربرد |
+|------|--------|
+| `scripts/seed-portal-settings.ts` | Seed اولیهٔ محتوای پورتال |
+| `scripts/portal-content-regression.ts` | سناریوی CRUD + Publish + Cache HIT/MISS |
+| `scripts/drift-shadow.ts` | مقایسه Drift در حالت Shadow |
+| `scripts/backfill-dry-run.ts` | بررسی Backfill بدون تغییر واقعی |
+| `scripts/payments-cast-shadow.ts` | صحت تخصیص پرداخت‌ها و Decimal |
+| `scripts/ingest-real-sample.ts` | تزریق نمونهٔ واقعی برای تست پذیرش |
+| `scripts/test-telegram-template-validation.ts` | اعتبارسنجی قالب پیام تلگرام |
 
-### Phase 5 – Backup & Disaster Recovery
-| قابلیت | توضیح | فایل‌های کلیدی |
-|--------|-------|-----------------|
-| Backup Creation | ایجاد پشتیبان کامل از داده‌های حیاتی به فرمت `.tar.gz` شامل فایل‌های NDJSON و متادیتا. | `server/services/backup-service.ts`, `server/routes/system-routes.ts` |
-| Backup Restoration | بازیابی اطلاعات از یک فایل پشتیبان آپلود شده. عملیات تمام داده‌های فعلی را حذف می‌کند. | `backup-service.ts`, `system-routes.ts` (با استفاده از `multer`) |
-| Audit Logging | ثبت تمام عملیات‌های موفق و ناموفق پشتیبان‌گیری و بازیابی در جدول `backup_audit_log`. | `shared/schema.ts`, `migrations/0004_backup_audit_log.sql` |
-| Admin UI | صفحه جدید در پنل ادمین برای ایجاد، بازیابی، مشاهده تاریخچه و دانلود فایل‌های پشتیبان. | `client/src/pages/admin/SystemSettingsPage.tsx`, `client/src/services/system.ts` |
+## نگه‌داری مخزن
+- پوشه‌های تولیدی (`dist/`, `node_modules/`, `logs/`, `uploads/`, `backups/`) در نسخه نگهداری نشوند؛ Volume در Production الزامی است.
+- از `npm ci` در CI/CD استفاده کنید تا قفل نسخه‌ها پایدار بماند.
+- اسکریپت `fix-imports.sh` پس از Build سرور اجرا شود تا مشکلات پسوند (`.js.js`) رفع گردد.
+- هر Commit شامل به‌روزرسانی README در صورت تغییر معماری یا وابستگی‌های حیاتی باشد.
 
-**نکات مهم:**
-- **محتوای پشتیبان:** شامل جداول اصلی مانند نمایندگان، فاکتورها، پرداخت‌ها و محتوای پورتال است. جداول موقتی مانند `outbox` و لاگ‌ها به صورت عمدی حذف شده‌اند.
-- **امنیت:** اندپوینت‌های پشتیبان‌گیری نیازمند احراز هویت ادمین هستند. فایل‌های پشتیبان روی سرور ذخیره می‌شوند و باید به صورت دوره‌ای به یک فضای ذخیره‌سازی امن منتقل شوند.
-
-## پیشنهادهای بعدی
-- تکمیل پوشش تست کلاینت (React Testing Library) و API (Jest/TSX).
-- افزودن سرویس پایتونی به Compose با healthcheck جهت پایش مداوم drift.
-- پیاده‌سازی داشبورد Grafana سبک با استفاده از لاگ‌های `STRUCT_LOG` برای مانیتورینگ real-time.
-- مستندسازی API با ابزارهای خودکار (مانند `ts-rest` یا `openapi-generator`).
+## نقشهٔ راه کوتاه‌مدت
+1. تکمیل پوشش Vitest/RTL روی کمپوننت‌های حیاتی و افزودن تست‌های API.
+2. افزودن سرویس Python به Compose Production با Healthcheck و پایش Drift مداوم.
+3. استقرار داشبورد Grafana/Prometheus بر پایه لاگ‌های `STRUCT_LOG`.
+4. تولید خودکار مستندات API (OpenAPI یا `ts-rest`).
+5. اعمال Rate Limiting و تقویت هدرهای امنیتی (CSP, HSTS).
 
 ---
 
-**آخرین به‌روزرسانی:** {{ تاریخ انتشار این نسخه را قبل از انتشار رسمی تکمیل کنید }}. در صورت تغییر معماری یا افزودن سرویس جدید، این README باید به‌روزرسانی شود.
+اگر تغییر معماری یا سرویس جدیدی معرفی شد، این سند را به‌روز کنید تا تطابق کامل بین کد، عملیات و تجربهٔ کاربر حفظ گردد.

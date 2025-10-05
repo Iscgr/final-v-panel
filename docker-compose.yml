@@ -16,6 +16,8 @@ services:
       - .env
     volumes:
       - ./logs:/app/logs
+      - ./uploads:/app/uploads
+      - ./backups:/app/backups
     networks:
       - marfanet-network
     environment:
