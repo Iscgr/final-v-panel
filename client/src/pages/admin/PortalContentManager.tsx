@@ -82,7 +82,16 @@ export default function PortalContentManager() {
   };
 
   const handleSave = () => { if(!isDirty || saveMutation.isPending) return; saveMutation.mutate(); };
-  useEffect(()=>{ const h=(e:KeyboardEvent)=>{ if((e.ctrlKey||e.metaKey)&& e.key==='s'){ e.preventDefault(); handleSave(); }}; window.addEventListener('keydown',h); return ()=> window.removeEventListener('keydown',h); }, [handleSave, isDirty, saveMutation.isPending]);
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [handleSave, isDirty, saveMutation.isPending]);
 
   const loading = draftQuery.isLoading || !localDraft;
   const unifiedPreview = localDraft;
