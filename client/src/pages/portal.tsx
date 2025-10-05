@@ -400,7 +400,6 @@ export default function PublicPortal() {
     sectionTitle: isMobile ? 20 : 24,
     statValue: isMobile ? 32 : 36,
     gridMin: isMobile ? 180 : 250,
-    downloadGridMin: isMobile ? 200 : 280,
     cardGap: isMobile ? 16 : 20,
     headerGridGap: isMobile ? 12 : 20,
     headerInfoPadding: isMobile ? 12 : 16,
@@ -633,7 +632,7 @@ export default function PublicPortal() {
           <h3 style={{ 
             fontSize: layout.sectionTitle, 
             fontWeight: 'bold', 
-            marginBottom: '20px',
+            marginBottom: isMobile ? 16 : 20,
             display: 'flex',
             alignItems: 'center',
             gap: '10px'
@@ -716,7 +715,7 @@ export default function PublicPortal() {
           <h3 style={{ 
             fontSize: layout.sectionTitle, 
             fontWeight: 'bold', 
-            marginBottom: '20px',
+            marginBottom: isMobile ? 16 : 20,
             display: 'flex',
             alignItems: 'center',
             gap: '10px'
@@ -751,7 +750,7 @@ export default function PublicPortal() {
           <h3 style={{ 
             fontSize: layout.sectionTitle, 
             fontWeight: 'bold', 
-            marginBottom: '20px',
+            marginBottom: isMobile ? 16 : 20,
             display: 'flex',
             alignItems: 'center',
             gap: '10px'
@@ -813,7 +812,7 @@ export default function PublicPortal() {
             <h3 style={{ 
               fontSize: layout.sectionTitle, 
               fontWeight: 'bold', 
-              marginBottom: '20px',
+              marginBottom: isMobile ? 16 : 20,
               display: 'flex',
               alignItems: 'center',
               gap: '10px'
@@ -849,18 +848,18 @@ export default function PublicPortal() {
         {/* ===== 7. FOOTER - اطلاعات تماس ===== */}
         <div style={{ 
           background: 'rgba(15, 23, 42, 0.6)', 
-          padding: '24px', 
-          borderRadius: '12px',
+          padding: layout.cardPadding, 
+          borderRadius: layout.cardRadius,
           border: '1px solid rgba(71, 85, 105, 0.5)',
           textAlign: 'center'
         }}>
-          <h4 style={{ fontSize: '18px', marginBottom: '16px', fontWeight: 'bold' }}>اطلاعات تماس و پشتیبانی</h4>
+          <h4 style={{ fontSize: isMobile ? 16 : 18, marginBottom: isMobile ? 12 : 16, fontWeight: 'bold' }}>اطلاعات تماس و پشتیبانی</h4>
           
           <div style={{ 
             display: 'flex', 
             justifyContent: 'center', 
             flexWrap: 'wrap',
-            gap: '24px',
+            gap: layout.cardGap,
             fontSize: '14px',
             opacity: 0.9
           }}>

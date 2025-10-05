@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { 
   FileText, 
   Search, 
-  Filter, 
   Send, 
   Download, 
   Eye, 
@@ -325,28 +324,28 @@ export default function Invoices() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="stack-responsive">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">فاکتورها</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">فاکتورها</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base">
             مدیریت فاکتورها (نمایش: جدیدترین ابتدا، پرداخت: FIFO) و ارسال به تلگرام
           </p>
         </div>
 
-        <div className="flex items-center space-x-4 space-x-reverse">
+        <div className="action-group justify-end">
           <Button 
             onClick={handleSendToTelegram}
             disabled={selectedInvoices.length === 0 || sendToTelegramMutation.isPending}
-            className="bg-primary text-white hover:bg-primary/90"
+            className="bg-primary text-white hover:bg-primary/90 w-full sm:w-auto"
           >
-            <Send className="w-4 h-4 mr-2" />
+            <Send className="w-4 h-4 ml-2" />
             ارسال {toPersianDigits(selectedInvoices.length.toString())} فاکتور به تلگرام
           </Button>
         </div>
       </div>
 
       {/* Stats Cards - SHERLOCK v11.5: Enhanced with partial payment tracking */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -434,9 +433,9 @@ export default function Invoices() {
 
       {/* Filters */}
       <Card>
-        <CardContent className="p-4">
-          <div className="flex items-center space-x-4 space-x-reverse">
-            <div className="relative flex-1">
+        <CardContent className="p-4 space-y-4">
+          <div className="filters-responsive">
+            <div className="relative flex-1 w-full">
               <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <Input
                 placeholder="جستجو بر اساس شماره فاکتور، نماینده..."
@@ -449,35 +448,37 @@ export default function Invoices() {
               />
             </div>
 
-            <Select value={statusFilter} onValueChange={(value) => {
-              setStatusFilter(value);
-              setCurrentPage(1);
-            }}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="وضعیت فاکتور" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">همه وضعیت‌ها</SelectItem>
-                <SelectItem value="unpaid">پرداخت نشده</SelectItem>
-                <SelectItem value="paid">پرداخت شده</SelectItem>
-                <SelectItem value="partial">تسویه جزئی</SelectItem>
-                <SelectItem value="overdue">سررسید گذشته</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <Select value={statusFilter} onValueChange={(value) => {
+                setStatusFilter(value);
+                setCurrentPage(1);
+              }}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="وضعیت فاکتور" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">همه وضعیت‌ها</SelectItem>
+                  <SelectItem value="unpaid">پرداخت نشده</SelectItem>
+                  <SelectItem value="paid">پرداخت شده</SelectItem>
+                  <SelectItem value="partial">تسویه جزئی</SelectItem>
+                  <SelectItem value="overdue">سررسید گذشته</SelectItem>
+                </SelectContent>
+              </Select>
 
-            <Select value={telegramFilter} onValueChange={(value) => {
-              setTelegramFilter(value);
-              setCurrentPage(1);
-            }}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="وضعیت تلگرام" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">همه</SelectItem>
-                <SelectItem value="sent">ارسال شده</SelectItem>
-                <SelectItem value="unsent">ارسال نشده</SelectItem>
-              </SelectContent>
-            </Select>
+              <Select value={telegramFilter} onValueChange={(value) => {
+                setTelegramFilter(value);
+                setCurrentPage(1);
+              }}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="وضعیت تلگرام" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">همه</SelectItem>
+                  <SelectItem value="sent">ارسال شده</SelectItem>
+                  <SelectItem value="unsent">ارسال نشده</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -485,13 +486,13 @@ export default function Invoices() {
       {/* Invoices Table */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="stack-responsive">
             <CardTitle className="flex items-center">
               <FileText className="w-5 h-5 ml-2" />
               فاکتورها ({toPersianDigits(filteredInvoices.length.toString())} - صفحه {toPersianDigits(currentPage.toString())} از {toPersianDigits(totalPages.toString())})
             </CardTitle>
-            <div className="flex items-center space-x-4 space-x-reverse">
-              <div className="flex items-center space-x-2 space-x-reverse">
+            <div className="action-group">
+              <div className="flex items-center gap-2 justify-between sm:justify-start">
                 <Checkbox
                   checked={
                     filteredInvoices.length > 0 &&
@@ -505,7 +506,7 @@ export default function Invoices() {
               </div>
 
               {selectedInvoices.length > 0 && (
-                <div className="flex items-center space-x-2 space-x-reverse">
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                   <Button
                     size="sm"
                     onClick={() => setIsSendDialogOpen(true)}
@@ -530,9 +531,10 @@ export default function Invoices() {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
+        <CardContent className="p-0">
+          <div className="table-scroll-wrapper">
+            <Table>
+              <TableHeader>
               <TableRow>
                 <TableHead className="w-12">انتخاب</TableHead>
                 <TableHead>شماره فاکتور</TableHead>
@@ -544,8 +546,8 @@ export default function Invoices() {
                 <TableHead>تلگرام</TableHead>
                 <TableHead>عملیات</TableHead>
               </TableRow>
-            </TableHeader>
-            <TableBody>
+              </TableHeader>
+              <TableBody>
               {paginatedInvoices.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-8 text-gray-500">
@@ -557,111 +559,112 @@ export default function Invoices() {
                 </TableRow>
               ) : (
                 paginatedInvoices.map((invoice: Invoice) => (
-                <TableRow key={invoice.id}>
-                  <TableCell>
-                    <Checkbox
-                      checked={selectedInvoices.includes(invoice.id)}
-                      onCheckedChange={(checked) => 
-                        handleInvoiceSelect(invoice.id, checked as boolean)
-                      }
-                    />
-                  </TableCell>
+                  <TableRow key={invoice.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedInvoices.includes(invoice.id)}
+                        onCheckedChange={(checked) => 
+                          handleInvoiceSelect(invoice.id, checked as boolean)
+                        }
+                      />
+                    </TableCell>
 
-                  <TableCell className="font-medium">
-                    {invoice.invoiceNumber}
-                  </TableCell>
+                    <TableCell className="font-medium whitespace-nowrap">
+                      {invoice.invoiceNumber}
+                    </TableCell>
 
-                  <TableCell>
-                    <div>
-                      <div className="font-medium text-gray-900 dark:text-white">
-                        {invoice.representativeName || 'نامشخص'}
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {invoice.representativeCode}
-                      </div>
-                      {invoice.panelUsername && (
-                        <div className="text-sm text-gray-500 dark:text-gray-400 font-mono">
-                          {invoice.panelUsername}
+                    <TableCell>
+                      <div className="space-y-1">
+                        <div className="font-medium text-gray-900 dark:text-white">
+                          {invoice.representativeName || 'نامشخص'}
                         </div>
-                      )}
-                    </div>
-                  </TableCell>
-
-                  <TableCell className="font-medium">
-                    {formatCurrency(invoice.amount)} تومان
-                  </TableCell>
-
-                  <TableCell>
-                    <div className="flex items-center text-sm">
-                      <Calendar className="w-4 h-4 ml-1 text-gray-400" />
-                      {invoice.issueDate}
-                    </div>
-                  </TableCell>
-
-                  <TableCell>
-                    {invoice.dueDate ? (
-                      <div className={`text-sm ${
-                        isOverdue(invoice.dueDate) 
-                          ? 'text-red-600 dark:text-red-400 font-medium' 
-                          : 'text-gray-900 dark:text-white'
-                      }`}>
-                        {invoice.dueDate}
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {invoice.representativeCode}
+                        </div>
+                        {invoice.panelUsername && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                            {invoice.panelUsername}
+                          </div>
+                        )}
                       </div>
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
+                    </TableCell>
 
-                  <TableCell>
-                    {getInvoiceStatusBadge(invoice)}
-                  </TableCell>
+                    <TableCell className="font-medium whitespace-nowrap">
+                      {formatCurrency(invoice.amount)} تومان
+                    </TableCell>
 
-                  <TableCell>
-                    <div className="flex flex-col space-y-1">
-                      <Badge variant={invoice.sentToTelegram ? "default" : "secondary"}>
-                        {invoice.sentToTelegram 
-                          ? `ارسال شده ${invoice.telegramSendCount ? `(${toPersianDigits(invoice.telegramSendCount.toString())} بار)` : ''}`
-                          : "ارسال نشده"
-                        }
-                      </Badge>
-                      {invoice.telegramSentAt && (
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          آخرین ارسال: {new Date(invoice.telegramSentAt).toLocaleString('fa-IR')}
-                        </span>
+                    <TableCell>
+                      <div className="flex items-center text-sm whitespace-nowrap">
+                        <Calendar className="w-4 h-4 ml-1 text-gray-400" />
+                        {invoice.issueDate}
+                      </div>
+                    </TableCell>
+
+                    <TableCell>
+                      {invoice.dueDate ? (
+                        <div className={`text-sm ${
+                          isOverdue(invoice.dueDate) 
+                            ? 'text-red-600 dark:text-red-400 font-medium' 
+                            : 'text-gray-900 dark:text-white'
+                        }`}>
+                          {invoice.dueDate}
+                        </div>
+                      ) : (
+                        "-"
                       )}
-                    </div>
-                  </TableCell>
+                    </TableCell>
 
-                  <TableCell>
-                    <div className="flex items-center space-x-2 space-x-reverse">
-                      <Button size="sm" variant="ghost">
-                        <Eye className="w-4 h-4" />
-                      </Button>
+                    <TableCell>
+                      {getInvoiceStatusBadge(invoice)}
+                    </TableCell>
 
-                      <Button
-                        size="sm"
-                        variant={invoice.sentToTelegram ? "secondary" : "outline"}
-                        onClick={() => handleSingleInvoiceSend(invoice.id)}
-                        disabled={sendToTelegramMutation.isPending}
-                        className={invoice.sentToTelegram ? 
-                          "border-orange-200 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-950" : 
-                          ""
-                        }
-                      >
-                        <Send className="w-4 h-4 ml-1" />
-                        {invoice.sentToTelegram ? "ارسال مجدد" : "ارسال"}
-                      </Button>
+                    <TableCell>
+                      <div className="flex flex-col space-y-1">
+                        <Badge variant={invoice.sentToTelegram ? "default" : "secondary"}>
+                          {invoice.sentToTelegram 
+                            ? `ارسال شده ${invoice.telegramSendCount ? `(${toPersianDigits(invoice.telegramSendCount.toString())} بار)` : ''}`
+                            : "ارسال نشده"
+                          }
+                        </Badge>
+                        {invoice.telegramSentAt && (
+                          <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap">
+                            آخرین ارسال: {new Date(invoice.telegramSentAt).toLocaleString('fa-IR')}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
 
-                      <Button size="sm" variant="ghost">
-                        <Download className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button size="sm" variant="ghost">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant={invoice.sentToTelegram ? "secondary" : "outline"}
+                          onClick={() => handleSingleInvoiceSend(invoice.id)}
+                          disabled={sendToTelegramMutation.isPending}
+                          className={invoice.sentToTelegram ? 
+                            "border-orange-200 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300 dark:hover:bg-orange-950" : 
+                            ""
+                          }
+                        >
+                          <Send className="w-4 h-4 ml-1" />
+                          {invoice.sentToTelegram ? "ارسال مجدد" : "ارسال"}
+                        </Button>
+
+                        <Button size="sm" variant="ghost">
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </TableBody>
-          </Table>
+              </TableBody>
+            </Table>
+          </div>
 
           {/* Pagination Controls with Statistics */}
           {totalPages > 1 && (
