@@ -246,9 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use('/api/representatives', authMiddleware, representativesRoutes);
   console.log('✅ Representatives routes registered with authentication');
 
-  // 🔷 Admin Resources Routes - App Downloads & Announcements Management (Admin Panel Only)
-  app.use('/api/admin', authMiddleware, adminResourcesRoutes);
-  console.log('✅ Admin resources routes registered (app-downloads, announcements)');
+  // مسیرهای legacy مدیریت App Downloads و Announcements حذف شد (جایگزین: سند یکپارچه + announcements مستقل)
 
   // 🔷 Phase 1: Portal Content Blocks (Modular public portal textual blocks - additive, not yet consumed by portal UI)
   app.use('/api/admin/portal-content-blocks', authMiddleware, portalContentRoutes);

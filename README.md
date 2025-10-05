@@ -1,6 +1,6 @@
 ﻿## Final V Panel
 
-**آخرین به‌روزرسانی:** ۲۰۲۵-۱۰-۰۴  
+**آخرین به‌روزرسانی:** ۲۰۲۵-۱۰-۰۵  
 **لایه‌های اصلی:** React 18 + Vite (Frontend) · Node.js 20 + Express + Drizzle (Backend) · FastAPI (Drift/تحلیل) · PostgreSQL 14 + Redis · Docker + Nginx (استقرار)
 
 ### نمای کلی سه‌هسته‌ای
@@ -50,6 +50,8 @@
 | `REDIS_URL` | اتصال Redis | در Compose تنظیم شده |
 | `APP_URL` / `PUBLIC_PORTAL_BASE_URL` | نشانی عمومی پنل و پورتال | برای لینک‌سازی ایمیل و Portal |
 | `LOG_DIRECTORY` | مسیر لاگ ساختاریافته | در Docker روی `/app/logs` پیکربندی شود |
+| `PORTAL_CONTENT_FLAG_BOOT` | مقدار اولیه فلگ محتوای پرتال | اختیاری: off|shadow|full (پیش‌فرض off) |
+| `KPI_METRICS_WINDOW_DEFAULT` | پنجره پیش‌فرض KPI | مثلا 24h؛ اختیاری |
 
 کلیدهای اختیاری: `OPENAI_API_KEY`, `SMTP_*`, `WEBHOOK_URL`, `ENABLE_PERFORMANCE_MONITORING` و Feature Flagهای فعال‌سازی سرویس‌ها.
 
@@ -124,6 +126,65 @@
   docker compose build app && docker compose up -d app
   ```
 
+## محتوای یکپارچه پرتال (Unified Portal Content)
+این سیستم جایگزین مسیرهای legacy (app-downloads + announcements پراکنده) شده و همه‌ی محتوا را در یک سند نسخه‌دار (`portal_content_documents`) نگهداری می‌کند.
+
+### چرخه حیات
+1. Draft ویرایش در پنل: مسیر `/api/admin/portal-content-unified/draft` (GET/PUT)
+2. انتشار: `/api/admin/portal-content-unified/publish` → محاسبه diff و به‌روزرسانی `publishedJson`
+3. Public Read: `/api/portal/:publicId/resources` فقط اگر فلگ `portal_content_read_switch=full` باشد unified را برمی‌گرداند؛ در `shadow` صرفاً لاگ سایز و خروجی legacy.
+
+### Feature Flag Migration Stages
+| حالت | رفتار | توضیح |
+|------|-------|-------|
+| off | فقط legacy (announcements + appDownloads) | مسیر unified نادیده گرفته می‌شود |
+| shadow | unified واکشی و لاگ، خروجی هنوز legacy | برای مقایسه بی‌خطر |
+| full | ارائه کامل unified | نقطه برش نهایی |
+
+### اسکریپت‌های مرتبط
+| اسکریپت | کاربرد |
+|---------|-------|
+| `scripts/unified-portal-health.ts` | بررسی سلامت draft/status/public و ساختار JSON |
+| `scripts/portal-unified-sync-check.ts` | مقایسه active items بین published unified و خروجی public (Fail در mismatch) |
+
+### نکات اجرایی
+- در UI جدید (PortalContentManager) هشدار وضعیت فلگ و نیاز به انتشار نمایش داده می‌شود.
+- حذف صفحات legacy مدیریت دانلود توصیه می‌شود پس از full.
+- برای CI: اجرای `npx ts-node scripts/portal-unified-sync-check.ts` پس از انتشار.
+
+## KPI Metrics (E-B5 Stage 3)
+Endpointهای KPI برای مانیتورینگ کیفیت تخصیص و ثبات داده:
+
+| Endpoint | توضیح | پارامترها |
+|----------|-------|-----------|
+| `GET /api/allocations/kpi-metrics` | مجموعه شاخص‌ها (drift ppm, allocation latency, partial ratio, overpayment buffer) | `window=6h|24h|7d|30d` |
+| `GET /api/allocations/kpi-metrics/export` | خروجی CSV/JSON خلاصه | `window`, `format=csv|json` |
+| `GET /api/allocations/kpi-metrics/trends` | روند یک متریک | `metric=debt_drift|allocation_latency` + `window` |
+
+Instrumentation داخلی زمان اجرای هر زیربخش را در پاسخ `meta.perf` درج می‌کند (کلاینت یا مانیتورینگ می‌تواند لاگ کند).
+
+### بهینه‌سازی‌های اخیر
+- محدودسازی کوئری drift و buffer به بازه زمان (`windowMinutes`).
+- حذف regex تکراری با helper و کاهش اسکن سراسری.
+- Parallel execution + اندازه‌گیری زمان.
+
+### ایندکس‌های پیشنهادی (Migration آتی)
+```
+payments(representative_id, created_at)
+invoices(representative_id, created_at)
+payment_allocations(invoice_id), payment_allocations(created_at)
+invoice_balance_cache(updated_at)
+guard_metrics_events(created_at, event_type)
+```
+
+## تغییرات در اسکریپت‌ها (جدید)
+| فایل | توضیح افزوده شده |
+|------|------------------|
+| `scripts/portal-unified-sync-check.ts` | Fail در صورت mismatch unified published با public (در full) |
+| `scripts/unified-portal-health.ts` | بررسی پایه‌ای سلامت انتشار |
+| (موجود) `scripts/portal-content-regression.ts` | Regression CRUD + Publish + Cache |
+
+
 ## استراتژی تست سه‌محوری
 ### ۱) Frontend
 - Vitest + React Testing Library برای کمپوننت‌های بحرانی (`invoice-upload`, `LiveProcessingMonitor`, `SystemSettingsPage`).
@@ -183,17 +244,22 @@ Pipeline پیشنهادی: Unit → Integration → E2E + Accessibility؛ گزا
 | Session کوتاه | تنظیم `cookie.secure`, `maxAge`, اجبار HTTPS | بازآرایی Session Store |
 
 ## Feature Flagهای کلیدی
-| فلگ | هدف | توضیح حالت‌ها |
-|------|-----|---------------|
-| `outbox_enabled` | فعال‌سازی صف تلگرام | `off` / `shadow` / `active` |
-| `guard_metrics_alerts` | مانیتورینگ SLA | ارسال هشدار براساس متریک Outbox |
-| `portal_content_read_switch` | مهاجرت محتوا | `legacy` → `shadow` → `live` |
+| فلگ | هدف | حالت‌ها | توضیحات |
+|------|-----|---------|----------|
+| `portal_content_read_switch` | کنترل ارائه unified portal | `off` / `shadow` / `full` | فقط در full محتوای یکپارچه به کاربر نمایش داده می‌شود |
+| `guard_metrics_persistence` | ذخیره رویداد‌های Guard Metrics | `off` / `on` | پیش‌نیاز KPI metrics |
+| `guard_metrics_alerts` | هشدار SLA Outbox/Latency | `off` / `on` | وابسته به persistence |
+| `outbox_enabled` | پردازش صف پیام | `off` / `shadow` / `active` | shadow: مانیتور بدون ارسال واقعی (در صورت پیاده‌سازی) |
+| `allocation_runtime_guards` | فعال‌سازی چک‌های زمان اجرا تخصیص | `off` / `on` | جلوگیری از حالات ناسازگار |
+| `allocation_partial_mode` | پشتیبانی تخصیص جزئی | `off` / `on` | فعال شدن مسیرهای partial |
 
 ## اسکریپت‌ها و اتوماسیون‌ها
 | فایل | کاربرد |
 |------|--------|
 | `scripts/seed-portal-settings.ts` | Seed اولیهٔ محتوای پورتال |
 | `scripts/portal-content-regression.ts` | سناریوی CRUD + Publish + Cache HIT/MISS |
+| `scripts/unified-portal-health.ts` | سلامت سند یکپارچه (draft/status/public) |
+| `scripts/portal-unified-sync-check.ts` | تشخیص عدم تطابق public vs unified (در full) |
 | `scripts/drift-shadow.ts` | مقایسه Drift در حالت Shadow |
 | `scripts/backfill-dry-run.ts` | بررسی Backfill بدون تغییر واقعی |
 | `scripts/payments-cast-shadow.ts` | صحت تخصیص پرداخت‌ها و Decimal |
