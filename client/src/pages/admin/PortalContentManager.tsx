@@ -30,7 +30,10 @@ export default function PortalContentManager() {
 
   // Queries
   const draftQuery = useQuery({ queryKey: ['unified-portal-draft'], queryFn: () => PortalContentUnifiedService.getDraft() });
-  const statusQuery = useQuery({ queryKey: ['unified-portal-status'], queryFn: () => PortalContentUnifiedService.getStatus(), enabled: activeTab === 'preview' || activeTab === 'diff' });
+  const statusQuery = useQuery({ queryKey: ['unified-portal-status'], queryFn: () => PortalContentUnifiedService.getStatus(), enabled: true });
+  const flagQuery = useQuery({ queryKey: ['portal-content-flag-state'], queryFn: async ()=> {
+    try { const r = await fetch('/api/admin/portal-content-flag/state',{ credentials:'include' }); if(!r.ok) throw new Error('flag_state_fetch'); return (await r.json())?.data?.state || 'off'; } catch { return 'off'; }
+  }, staleTime: 15_000 });
   const diffQuery = useQuery({ queryKey: ['unified-portal-diff'], queryFn: () => PortalContentUnifiedService.getDiff(), enabled: activeTab === 'diff' });
 
   const draft = draftQuery.data?.data?.draftJson as PortalUnifiedDraft | undefined;
@@ -78,6 +81,9 @@ export default function PortalContentManager() {
   const loading = draftQuery.isLoading || !localDraft;
   const unifiedPreview = localDraft;
 
+  const flagState = flagQuery.data as string | undefined;
+  const isUnifiedLive = flagState === 'full';
+  const isPublishedBehind = publishedVersion < draftVersion;
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto">
       <div className="mb-6 flex flex-col gap-2">
@@ -87,11 +93,18 @@ export default function PortalContentManager() {
             <span className="px-2 py-1 rounded bg-gray-100 border">published v{publishedVersion}</span>
             <span className={`px-2 py-1 rounded border ${docStatus==='published' ? 'bg-emerald-50 border-emerald-300 text-emerald-700':'bg-amber-50 border-amber-300 text-amber-700'}`}>وضعیت: {docStatus}</span>
             {isDirty && <span className="px-2 py-1 rounded bg-amber-100 border border-amber-300 text-amber-800">تغییرات ذخیره نشده</span>}
+            {flagState && <span className="px-2 py-1 rounded bg-indigo-50 border border-indigo-300 text-indigo-700">flag: {flagState}</span>}
+            {!isUnifiedLive && <span className="px-2 py-1 rounded bg-rose-50 border border-rose-300 text-rose-700">⚠ public هنوز legacy است</span>}
+            {isUnifiedLive && isPublishedBehind && <span className="px-2 py-1 rounded bg-amber-50 border border-amber-300 text-amber-700">⚠ انتشار لازم است</span>}
         </div>
         <div className="flex gap-2 flex-wrap">
           <button onClick={()=> draftQuery.refetch()} className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border flex items-center gap-1"><RefreshCcw className="w-3 h-3"/>بارگذاری مجدد</button>
           <button disabled={!isDirty || saveMutation.isPending} onClick={handleSave} className="px-3 py-1 text-xs rounded bg-blue-600 text-white flex items-center gap-1 disabled:opacity-40"><Save className="w-3 h-3" />{saveMutation.isPending? 'در حال ذخیره...' : 'ذخیره پیش‌نویس'}</button>
           <button disabled={publishMutation.isPending || (publishedVersion>0 && !isDirty && docStatus==='published')} onClick={()=> publishMutation.mutate()} className="px-3 py-1 text-xs rounded bg-emerald-600 text-white flex items-center gap-1 disabled:opacity-40"><Rocket className="w-3 h-3" />{publishMutation.isPending? 'انتشار...' : 'انتشار'}</button>
+        </div>
+        <div className="text-[11px] text-gray-500 flex flex-col gap-1">
+          {!isUnifiedLive && <div>در حالت <b>{flagState}</b> محتوای عمومی هنوز از مسیر legacy سرو می‌شود. برای مشاهده تغییرات در پرتال عمومی، flag را به <code className="px-1 bg-gray-100 rounded">full</code> ببرید.</div>}
+          {isUnifiedLive && isPublishedBehind && <div>نسخه پیش‌نویس از نسخه منتشر شده جلوتر است. برای اعمال در پرتال عمومی دکمه انتشار را بزنید.</div>}
         </div>
       </div>
 
