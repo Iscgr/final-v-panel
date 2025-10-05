@@ -69,8 +69,9 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     // اگر هدر content-type JSON نیست ولی بدنه داریم، یک پیام هشدار ثبت کنیم (ممکن است HTML خطای reverse proxy باشد)
     const contentType = response.headers.get('content-type') || '';
     if (!/application\/json/i.test(contentType)) {
-      // تلاش برای parse مگر این که مشکوک به HTML باشد
-      if (/^</.test(trimmed)) {
+      // اگر هدر HTML است، یا بدنه شبیه HTML است، هشدار بده و آبجکت خالی برگردان
+      if (/text\/html|application\/xhtml\+xml/i.test(contentType) ||
+          /^\s*(<!DOCTYPE html>|<html[\s>]|<body[\s>])/i.test(trimmed)) {
         console.warn(`⚠️ Non-JSON response (HTML-like) دریافت شد از ${endpoint}. بدنه کوتاه شده:`, trimmed.slice(0,120));
         return {} as T; // عدم پرتاب خطا برای پایداری UI؛ می‌توان بعداً مسیر خاص افزود
       }
