@@ -2741,7 +2741,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/settings/:key", authMiddleware, async (req, res) => {
     try {
       const setting = await storage.getSetting(req.params.key);
-      res.json(setting);
+      // نرمال سازی پاسخ: جلوگیری از بدنه خالی برای undefined
+      if (!setting) {
+        return res.json({ key: req.params.key, value: null, exists: false });
+      }
+      return res.json({ key: setting.key, value: setting.value, exists: true, updatedAt: setting.updatedAt });
     } catch (error) {
       res.status(500).json({ error: "خطا در دریافت تنظیمات" });
     }
