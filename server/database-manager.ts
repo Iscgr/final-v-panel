@@ -161,8 +161,7 @@ class IntelligentDatabaseManager {
       maxUses: this.config.poolConfig.maxUses
     });
 
-    this.db = drizzle({
-      client: this.pool as NeonPool,
+    this.db = drizzle(this.pool as NeonPool, {
       schema,
       logger: process.env.NODE_ENV === 'development'
     });

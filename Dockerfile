@@ -27,8 +27,8 @@ COPY shared/ ./shared/
 COPY types/ ./types/
 COPY start-server.cjs ./
 
-# Install ALL dependencies (including devDependencies for building)
-RUN npm ci
+# Remove lock file to ensure a fresh dependency tree, then install
+RUN rm -f package-lock.json && npm install --legacy-peer-deps
 
 # Run the unified build script and validate build artifacts exist
 RUN npm run build \

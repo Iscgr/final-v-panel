@@ -1,0 +1,223 @@
+
+> rest-express@1.0.0 start
+> NODE_ENV=production node start-server.cjs
+
+Startup error: Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/root/final-v-panel/dist/server/index.js' imported from /root/final-v-panel/start-server.cjs
+    at finalizeResolution (node:internal/modules/esm/resolve:274:11)
+    at moduleResolve (node:internal/modules/esm/resolve:859:10)
+    at defaultResolve (node:internal/modules/esm/resolve:983:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:731:20)
+    at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)
+    at onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:664:36)
+    at TracingChannel.tracePromise (node:diagnostics_channel:344:14)
+    at ModuleLoader.import (node:internal/modules/esm/loader:663:21)
+    at defaultImportModuleDynamicallyForScript (node:internal/modules/esm/utils:235:31) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///root/final-v-panel/dist/server/index.js'
+}
+
+> rest-express@1.0.0 start
+> NODE_ENV=production node start-server.cjs
+
+Startup error: Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/root/final-v-panel/dist/server/index.js' imported from /root/final-v-panel/start-server.cjs
+    at finalizeResolution (node:internal/modules/esm/resolve:274:11)
+    at moduleResolve (node:internal/modules/esm/resolve:859:10)
+    at defaultResolve (node:internal/modules/esm/resolve:983:11)
+    at #cachedDefaultResolve (node:internal/modules/esm/loader:731:20)
+    at ModuleLoader.resolve (node:internal/modules/esm/loader:708:38)
+    at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:310:38)
+    at onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:664:36)
+    at TracingChannel.tracePromise (node:diagnostics_channel:344:14)
+    at ModuleLoader.import (node:internal/modules/esm/loader:663:21)
+    at defaultImportModuleDynamicallyForScript (node:internal/modules/esm/utils:235:31) {
+  code: 'ERR_MODULE_NOT_FOUND',
+  url: 'file:///root/final-v-panel/dist/server/index.js'
+}
+
+> rest-express@1.0.0 start
+> NODE_ENV=production node start-server.cjs
+
+🔧 Database Environment Detected: postgres
+📡 Connection String: postgresql://postgres:***@db:5432/marfanet
+🚀 Initializing postgres database connection...
+🚩 ATOMOS Feature Flag Manager v1.0 initialized with safe defaults
+💗 Periodic health monitoring started (every 30s)
+✅ PHASE 9: Integration health routes registered
+[dotenv@17.2.3] injecting env (9) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+✅ Static file serving enabled for /uploads directory
+1:47:24 AM [express] Checking database connection...
+✅ Database connection initialized successfully
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+1:47:24 AM [database] Warning: Database connection failed during startup
+📝 Log directory initialized: /root/final-v-panel/logs
+❌ Failed to bootstrap portal content blocks DrizzleQueryError: Failed query: 
+CREATE TABLE IF NOT EXISTS portal_content_blocks (
+  id SERIAL PRIMARY KEY,
+  block_key TEXT UNIQUE NOT NULL,
+  title TEXT,
+  body TEXT NOT NULL DEFAULT '',
+  updated_by TEXT,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+COMMENT ON TABLE portal_content_blocks IS 'بلوک‌های متنی قابل ویرایش پرتال عمومی (فاز مقدماتی)';
+COMMENT ON COLUMN portal_content_blocks.block_key IS 'شناسه منطقی بلوک (enum منطقی)';
+
+CREATE INDEX IF NOT EXISTS idx_portal_content_blocks_key ON portal_content_blocks(block_key);
+
+params: 
+    at NodePgPreparedQuery.queryWithCache (file:///root/final-v-panel/node_modules/drizzle-orm/pg-core/session.js:41:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async ensurePortalContentBootstrap (file:///root/final-v-panel/dist/server/bootstrap/portal-content.js:52:9)
+    at async file:///root/final-v-panel/dist/server/index.js:209:9 {
+  query: '\n' +
+    'CREATE TABLE IF NOT EXISTS portal_content_blocks (\n' +
+    '  id SERIAL PRIMARY KEY,\n' +
+    '  block_key TEXT UNIQUE NOT NULL,\n' +
+    '  title TEXT,\n' +
+    "  body TEXT NOT NULL DEFAULT '',\n" +
+    '  updated_by TEXT,\n' +
+    '  updated_at TIMESTAMP DEFAULT NOW()\n' +
+    ');\n' +
+    '\n' +
+    "COMMENT ON TABLE portal_content_blocks IS 'بلوک‌های متنی قابل ویرایش پرتال عمومی (فاز مقدماتی)';\n" +
+    "COMMENT ON COLUMN portal_content_blocks.block_key IS 'شناسه منطقی بلوک (enum منطقی)';\n" +
+    '\n' +
+    'CREATE INDEX IF NOT EXISTS idx_portal_content_blocks_key ON portal_content_blocks(block_key);\n',
+  params: [],
+  cause: Error: getaddrinfo EAI_AGAIN db
+      at /root/final-v-panel/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async file:///root/final-v-panel/node_modules/drizzle-orm/node-postgres/session.js:113:20
+      at async NodePgPreparedQuery.queryWithCache (file:///root/final-v-panel/node_modules/drizzle-orm/pg-core/session.js:39:16)
+      at async ensurePortalContentBootstrap (file:///root/final-v-panel/dist/server/bootstrap/portal-content.js:52:9)
+      at async file:///root/final-v-panel/dist/server/index.js:209:9 {
+    errno: -3001,
+    code: 'EAI_AGAIN',
+    syscall: 'getaddrinfo',
+    hostname: 'db'
+  }
+}
+1:47:24 AM [bootstrap] Portal content bootstrap failed: Failed query: 
+CREATE TABLE IF NOT EXISTS portal_content_blocks (
+  id SERIAL PRIMARY KEY,
+  block_key TEXT UNIQUE NOT NULL,
+  title TEXT,
+  body TEXT NOT NULL DEFAULT '',
+  updated_by TEXT,
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+COMMENT ON TABLE portal_content_blocks IS 'بلوک‌های متنی قابل ویرایش پرتال عمومی (فاز مقدماتی)';
+COMMENT ON COLUMN portal_content_blocks.block_key IS 'شناسه منطقی بلوک (enum منطقی)';
+
+CREATE INDEX IF NOT EXISTS idx_portal_content_blocks_key ON portal_content_blocks(block_key);
+
+params: 
+Error initializing default admin user: DrizzleQueryError: Failed query: select "id", "username", "password_hash", "role", "permissions", "is_active", "last_login_at", "created_at" from "admin_users" where "admin_users"."username" = $1 limit $2
+params: admin,1
+    at NodePgPreparedQuery.queryWithCache (file:///root/final-v-panel/node_modules/drizzle-orm/pg-core/session.js:41:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async file:///root/final-v-panel/node_modules/drizzle-orm/node-postgres/session.js:117:22
+    ... 2 lines matching cause stack trace ...
+    at async file:///root/final-v-panel/dist/server/index.js:214:20 {
+  query: 'select "id", "username", "password_hash", "role", "permissions", "is_active", "last_login_at", "created_at" from "admin_users" where "admin_users"."username" = $1 limit $2',
+  params: [ 'admin', 1 ],
+  cause: Error: getaddrinfo EAI_AGAIN db
+      at /root/final-v-panel/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async file:///root/final-v-panel/node_modules/drizzle-orm/node-postgres/session.js:124:18
+      at async NodePgPreparedQuery.queryWithCache (file:///root/final-v-panel/node_modules/drizzle-orm/pg-core/session.js:39:16)
+      at async file:///root/final-v-panel/node_modules/drizzle-orm/node-postgres/session.js:117:22
+      at async DatabaseStorage.initializeDefaultAdminUser (file:///root/final-v-panel/dist/server/storage.js:1284:34)
+      at async registerRoutes (file:///root/final-v-panel/dist/server/routes.js:146:9)
+      at async file:///root/final-v-panel/dist/server/index.js:214:20 {
+    errno: -3001,
+    code: 'EAI_AGAIN',
+    syscall: 'getaddrinfo',
+    hostname: 'db'
+  }
+}
+Failed to initialize default admin user: DrizzleQueryError: Failed query: select "id", "username", "password_hash", "role", "permissions", "is_active", "last_login_at", "created_at" from "admin_users" where "admin_users"."username" = $1 limit $2
+params: admin,1
+    at NodePgPreparedQuery.queryWithCache (file:///root/final-v-panel/node_modules/drizzle-orm/pg-core/session.js:41:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async file:///root/final-v-panel/node_modules/drizzle-orm/node-postgres/session.js:117:22
+    ... 2 lines matching cause stack trace ...
+    at async file:///root/final-v-panel/dist/server/index.js:214:20 {
+  query: 'select "id", "username", "password_hash", "role", "permissions", "is_active", "last_login_at", "created_at" from "admin_users" where "admin_users"."username" = $1 limit $2',
+  params: [ 'admin', 1 ],
+  cause: Error: getaddrinfo EAI_AGAIN db
+      at /root/final-v-panel/node_modules/pg-pool/index.js:45:11
+      at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+      at async file:///root/final-v-panel/node_modules/drizzle-orm/node-postgres/session.js:124:18
+      at async NodePgPreparedQuery.queryWithCache (file:///root/final-v-panel/node_modules/drizzle-orm/pg-core/session.js:39:16)
+      at async file:///root/final-v-panel/node_modules/drizzle-orm/node-postgres/session.js:117:22
+      at async DatabaseStorage.initializeDefaultAdminUser (file:///root/final-v-panel/dist/server/storage.js:1284:34)
+      at async registerRoutes (file:///root/final-v-panel/dist/server/routes.js:146:9)
+      at async file:///root/final-v-panel/dist/server/index.js:214:20 {
+    errno: -3001,
+    code: 'EAI_AGAIN',
+    syscall: 'getaddrinfo',
+    hostname: 'db'
+  }
+}
+💗 Registering health check routes...
+✅ Health check routes registered successfully
+✅ Standardized Invoice Routes Registered
+✅ Integration health routes registered for Phase 9
+✅ Sales partners routes registered
+✅ Representatives routes registered with authentication
+✅ Phase 1: Portal content blocks routes registered
+✅ Unified portal content document routes registered
+✅ Portal content flag routes registered
+✅ Portal resources routes registered (public access)
+✅ System routes registered (backup/restore)
+✅ Import jobs routes registered
+✅ File upload and view tracking routes registered
+✅ E-B6: Usage Line Visibility routes registered
+✅ E-B5 Stage 3: KPI Metrics routes registered
+✅ Batch Rollback Routes Registered
+✅ E-C5: SLA Dashboard routes registered
+⏰ Scheduling first overdue check in 1333 minutes (at midnight)
+✅ Overdue invoice auto-update job scheduled (daily at midnight)
+✅ Dashboard real-time events routes registered
+E-C1: OutboxWorker not started (outbox_enabled=off)
+Starting server on port 3000
+DriftJobService not started (active_reconciliation=off)
+🚀 MarFaNet Server started on port 3000
+✅ API accessible at /api/dashboard
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+💗 Starting comprehensive health check...
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+Redis health client error: getaddrinfo EAI_AGAIN redis
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+💗 Starting comprehensive health check...
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+💗 Starting comprehensive health check...
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+💗 Starting comprehensive health check...
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+1:49:49 AM [error] Error 500: getaddrinfo EAI_AGAIN db - GET /representatives/Abedmb
+1:49:52 AM [error] Error 500: getaddrinfo EAI_AGAIN db - GET /assets/index-B6HfLrfT.js
+1:49:53 AM [error] Error 500: getaddrinfo EAI_AGAIN db - GET /assets/index-DOpdFTBn.css
+💗 Starting comprehensive health check...
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+1:50:01 AM [error] Error 500: getaddrinfo EAI_AGAIN db - GET /representatives/Abedmb
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+💗 Starting comprehensive health check...
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+1:50:54 AM [error] Error 500: getaddrinfo EAI_AGAIN db - GET /assets/index-B6HfLrfT.js
+1:50:54 AM [error] Error 500: getaddrinfo EAI_AGAIN db - GET /assets/index-DOpdFTBn.css
+💗 Starting comprehensive health check...
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+❌ Database health check failed: getaddrinfo EAI_AGAIN db
+Killed
